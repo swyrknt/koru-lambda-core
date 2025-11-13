@@ -5,6 +5,7 @@
 use distinction_engine::Distinction;
 
 /// Test helper utilities
+#[allow(dead_code)]
 pub mod helpers {
     use super::*;
 

@@ -13,7 +13,6 @@
 
 use distinction_engine::DistinctionEngine;
 use petgraph::graph::{Graph, NodeIndex};
-use petgraph::algo::connected_components;
 use petgraph::visit::IntoNodeIdentifiers;
 use rand::prelude::*;
 use std::collections::HashMap;
@@ -30,13 +29,13 @@ mod graph_helpers {
         let mut node_map: HashMap<String, NodeIndex> = HashMap::new();
 
         // Add all distinction nodes
-        for distinction in distinctions {
+        for distinction in &distinctions {
             let node_idx = graph.add_node(distinction.id().to_string());
             node_map.insert(distinction.id().to_string(), node_idx);
         }
 
         // Add all relationship edges
-        for (id_a, id_b) in relationships {
+        for (id_a, id_b) in &relationships {
             if let (Some(&idx_a), Some(&idx_b)) = (node_map.get(id_a), node_map.get(id_b)) {
                 graph.add_edge(idx_a, idx_b, ());
             }
@@ -119,7 +118,7 @@ fn test_falsify_uniform_vulnerability() {
     println!("\nTest: Uniform Vulnerability Falsification");
     println!("  Testing for emergent scale-free topology...");
 
-    let mut engine = DistinctionEngine::new();
+    let engine = DistinctionEngine::new();
     let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
 
     // ============================================================
@@ -132,7 +131,6 @@ fn test_falsify_uniform_vulnerability() {
             .get_state_snapshot()
             .0
             .iter()
-            .cloned()
             .cloned()
             .collect();
 
@@ -339,7 +337,7 @@ fn test_falsify_random_degree_distribution() {
     println!("\nTest: Random Degree Distribution Falsification");
     println!("  Testing for power-law degree concentration...");
 
-    let mut engine = DistinctionEngine::new();
+    let engine = DistinctionEngine::new();
     let mut rng = StdRng::seed_from_u64(123);
 
     // ============================================================
@@ -352,7 +350,6 @@ fn test_falsify_random_degree_distribution() {
             .get_state_snapshot()
             .0
             .iter()
-            .cloned()
             .cloned()
             .collect();
 
