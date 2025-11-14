@@ -8,6 +8,7 @@ pub use subsystems::{
     CompactionAction, CompactionStats, StructuralCompactor, ThermalState,
     ConsensusValidator, TransactionAction, TransactionBatch, BatchValidationResult,
     LocalCausalAgent, synthesize_causal_action,
+    NetworkAction, NetworkAgent, NetworkStats, PeerIdentity,
 };
 
 #[cfg(test)]

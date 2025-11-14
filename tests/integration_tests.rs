@@ -26,6 +26,9 @@ mod conscious_dynamics;
 #[path = "falsification/compaction.rs"]
 mod compaction;
 
+#[path = "falsification/network_consensus.rs"]
+mod network_consensus;
+
 #[test]
 fn test_spacetime_coherence() {
     let _engine = DistinctionEngine::new();

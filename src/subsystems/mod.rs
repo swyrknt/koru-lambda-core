@@ -8,6 +8,7 @@
 
 pub mod compactor;
 pub mod local_agent;
+pub mod network;
 pub mod validator;
 
 // Re-export key types
@@ -15,6 +16,9 @@ pub use compactor::{
     CompactionAction, CompactionStats, StructuralCompactor, ThermalState,
 };
 pub use local_agent::{synthesize_causal_action, LocalCausalAgent};
+pub use network::{
+    NetworkAction, NetworkAgent, NetworkStats, PeerIdentity,
+};
 pub use validator::{
     BatchValidationResult, ConsensusValidator, TransactionAction, TransactionBatch,
 };
