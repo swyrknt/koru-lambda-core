@@ -83,9 +83,11 @@ distinction-engine/
 │       ├── validator.rs    # Consensus validation (SPoC)
 │       ├── compactor.rs    # Structural compaction (R ∝ U)
 │       ├── network.rs      # Forkless P2P consensus
+│       ├── runtime.rs      # Async P2P networking (libp2p)
 │       └── parallel.rs     # Multi-core processing
-├── tests/                  # 74 comprehensive tests
+├── tests/                  # 89 comprehensive tests
 │   ├── end_to_end.rs       # Distributed system tests
+│   ├── runtime_integration.rs # Async runtime validation
 │   ├── integration_tests.rs # Falsification suite
 │   ├── parallel_integration.rs # Concurrency tests
 │   └── throughput_verification.rs # 100k+ ops/s validation

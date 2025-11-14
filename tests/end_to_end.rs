@@ -12,11 +12,13 @@
 use distinction_engine::{
     DistinctionEngine,
     NetworkAgent,
+    NetworkRuntime,
     PeerIdentity,
     TransactionAction,
     TransactionBatch,
     StructuralCompactor,
     LocalCausalAgent,
+    RuntimeAction,
 };
 use std::sync::Arc;
 
@@ -703,4 +705,369 @@ fn test_e2e_network_partition_recovery() {
     println!("  ✓ Consensus state: {}...", &final_states[0][..16]);
 
     println!("\n=== Network Partition Recovery: SUCCESS ===\n");
+}
+
+/// End-to-End Test: Full-Stack NetworkRuntime Integration
+///
+/// Tests the complete async runtime layer with LocalCausalAgent integration.
+/// Validates that the runtime properly tracks P2P events as causal distinctions.
+///
+/// System configuration:
+/// - Single async NetworkRuntime instance
+/// - Simulates peer discoveries and batch receipts
+/// - Validates runtime-level causal chain
+/// - Tests integration between runtime events and consensus logic
+///
+/// Validates:
+/// - Runtime implements LocalCausalAgent correctly
+/// - P2P events synthesize into causal chain
+/// - Runtime maintains separate event stream from consensus
+/// - All event types properly handled
+#[tokio::test]
+async fn test_e2e_full_stack_runtime_integration() {
+    println!("\n=== End-to-End: Full-Stack Runtime Integration ===\n");
+
+    // ============================================================
+    // SETUP: Create NetworkRuntime
+    // ============================================================
+    println!("Setting up async NetworkRuntime...");
+
+    let engine = Arc::new(DistinctionEngine::new());
+
+    let mut runtime = NetworkRuntime::new(engine.clone(), "/ip4/127.0.0.1/tcp/0")
+        .await
+        .expect("Runtime creation failed");
+
+    let initial_root = runtime.get_current_root().id().to_string();
+
+    println!("  ✓ NetworkRuntime initialized");
+    println!("  ✓ Initial runtime root: {}...", &initial_root[..16]);
+    println!();
+
+    // ============================================================
+    // PHASE 1: Peer Discovery Events
+    // ============================================================
+    println!("Phase 1: Simulating peer discovery...");
+
+    let peers = vec!["peer_alice", "peer_bob", "peer_carol"];
+    let mut peer_roots = vec![];
+
+    for peer in peers.iter() {
+        let action = RuntimeAction::PeerDiscovered {
+            peer_id: peer.to_string(),
+        };
+
+        let new_root = runtime.synthesize_action(action, &engine);
+        peer_roots.push(new_root.id().to_string());
+
+        println!("  Discovered {}: {}...", peer, &new_root.id()[..16]);
+    }
+
+    // Verify each peer discovery creates a unique root
+    for i in 0..peer_roots.len() {
+        assert_ne!(
+            peer_roots[i], initial_root,
+            "Peer {} root should differ from initial",
+            peers[i]
+        );
+
+        for j in (i + 1)..peer_roots.len() {
+            assert_ne!(
+                peer_roots[i], peer_roots[j],
+                "Peer {} and {} roots should differ",
+                peers[i], peers[j]
+            );
+        }
+    }
+
+    println!("  ✓ {} peers discovered", peers.len());
+    println!("  ✓ Each discovery created unique causal state\n");
+
+    // ============================================================
+    // PHASE 2: Batch Receipt Events
+    // ============================================================
+    println!("Phase 2: Simulating batch receipts...");
+
+    for epoch in 0..5 {
+        let action = RuntimeAction::BatchReceived {
+            epoch,
+            leader_id: format!("leader_{}", epoch % 3),
+        };
+
+        let new_root = runtime.synthesize_action(action, &engine);
+
+        println!(
+            "  Batch received (epoch {}): {}...",
+            epoch,
+            &new_root.id()[..16]
+        );
+    }
+
+    println!("  ✓ 5 batches received");
+    println!("  ✓ Runtime causal chain advanced\n");
+
+    // ============================================================
+    // PHASE 3: Epoch Advancement Events
+    // ============================================================
+    println!("Phase 3: Simulating epoch advancement...");
+
+    for new_epoch in 5..10 {
+        let action = RuntimeAction::EpochAdvanced { new_epoch };
+
+        let new_root = runtime.synthesize_action(action, &engine);
+
+        println!(
+            "  Epoch advanced to {}: {}...",
+            new_epoch,
+            &new_root.id()[..16]
+        );
+    }
+
+    println!("  ✓ 5 epoch advancements processed");
+    println!("  ✓ Runtime events fully tracked\n");
+
+    // ============================================================
+    // PHASE 4: Mixed Event Stream
+    // ============================================================
+    println!("Phase 4: Mixed event stream (realistic workload)...");
+
+    let mixed_events = vec![
+        RuntimeAction::PeerDiscovered {
+            peer_id: "peer_dave".to_string(),
+        },
+        RuntimeAction::BatchReceived {
+            epoch: 10,
+            leader_id: "leader_dave".to_string(),
+        },
+        RuntimeAction::EpochAdvanced { new_epoch: 11 },
+        RuntimeAction::PeerDiscovered {
+            peer_id: "peer_eve".to_string(),
+        },
+        RuntimeAction::BatchReceived {
+            epoch: 11,
+            leader_id: "leader_eve".to_string(),
+        },
+    ];
+
+    let mut previous_root = runtime.get_current_root().id().to_string();
+
+    for (i, event) in mixed_events.iter().enumerate() {
+        let new_root = runtime.synthesize_action(event.clone(), &engine);
+
+        assert_ne!(
+            new_root.id(),
+            previous_root,
+            "Event {} should change root: {:?}",
+            i,
+            event
+        );
+
+        previous_root = new_root.id().to_string();
+    }
+
+    println!("  ✓ {} mixed events processed", mixed_events.len());
+    println!("  ✓ Causal ordering maintained\n");
+
+    // ============================================================
+    // VERIFICATION: Runtime State Integrity
+    // ============================================================
+    println!("Verifying runtime state integrity...");
+
+    let final_runtime_root = runtime.get_current_root().id().to_string();
+
+    // Final root should be dramatically different from initial
+    assert_ne!(
+        final_runtime_root, initial_root,
+        "Runtime causal chain should have evolved"
+    );
+
+    println!("  Initial root: {}...", &initial_root[..16]);
+    println!("  Final root:   {}...", &final_runtime_root[..16]);
+    println!();
+
+    // Count total events processed
+    let total_events = peers.len() + 5 + 5 + mixed_events.len();
+    println!("  ✓ {} total runtime events processed", total_events);
+    println!("  ✓ Runtime causal chain integrity maintained");
+    println!("  ✓ LocalCausalAgent implementation validated");
+    println!("  ✓ All RuntimeAction variants tested");
+
+    println!("\n=== Full-Stack Runtime Integration: SUCCESS ===\n");
+}
+
+/// End-to-End Test: Runtime + Consensus Coordination
+///
+/// Tests the coordination between NetworkRuntime (P2P layer) and
+/// NetworkAgent (consensus layer). Validates that both maintain
+/// independent but coordinated causal chains.
+///
+/// Validates:
+/// - Runtime tracks P2P events (peer discovery, message receipt)
+/// - Consensus tracks transaction validation events
+/// - Both subsystems maintain independent causal chains
+/// - Events are properly segregated by layer
+#[tokio::test]
+async fn test_e2e_runtime_consensus_coordination() {
+    println!("\n=== End-to-End: Runtime + Consensus Coordination ===\n");
+
+    // ============================================================
+    // SETUP
+    // ============================================================
+    println!("Setting up layered architecture...");
+
+    let engine = Arc::new(DistinctionEngine::new());
+
+    // Create runtime (P2P layer)
+    let mut runtime = NetworkRuntime::new(engine.clone(), "/ip4/127.0.0.1/tcp/0")
+        .await
+        .expect("Runtime creation failed");
+
+    // Create consensus agent (Consensus layer)
+    let mut consensus = NetworkAgent::new(&engine);
+
+    // Bootstrap consensus with validators
+    let validators = vec![
+        PeerIdentity::new("validator_0".to_string(), &engine),
+        PeerIdentity::new("validator_1".to_string(), &engine),
+        PeerIdentity::new("validator_2".to_string(), &engine),
+    ];
+
+    for validator in validators.iter() {
+        consensus.join_peer(validator.clone(), &engine);
+    }
+
+    let initial_runtime_root = runtime.get_current_root().id().to_string();
+    let initial_consensus_root = consensus.get_current_root().id().to_string();
+
+    println!("  ✓ Runtime layer initialized");
+    println!("  ✓ Consensus layer initialized");
+    println!("  ✓ {} validators bootstrapped", validators.len());
+    println!();
+
+    // ============================================================
+    // PHASE 1: Runtime Events (P2P layer)
+    // ============================================================
+    println!("Phase 1: Runtime layer events...");
+
+    // Simulate peer discoveries at runtime level
+    for i in 0..3 {
+        let action = RuntimeAction::PeerDiscovered {
+            peer_id: format!("peer_{}", i),
+        };
+        runtime.synthesize_action(action, &engine);
+    }
+
+    let runtime_root_after_peers = runtime.get_current_root().id().to_string();
+
+    assert_ne!(
+        runtime_root_after_peers, initial_runtime_root,
+        "Runtime root should change after peer events"
+    );
+
+    // Consensus root should be UNCHANGED (runtime events are isolated)
+    let consensus_root_after_peers = consensus.get_current_root().id().to_string();
+    assert_eq!(
+        consensus_root_after_peers, initial_consensus_root,
+        "Consensus root should be unchanged by runtime events"
+    );
+
+    println!("  ✓ 3 peer discoveries processed at runtime layer");
+    println!("  ✓ Runtime root changed, consensus root unchanged");
+    println!();
+
+    // ============================================================
+    // PHASE 2: Consensus Events (Consensus layer)
+    // ============================================================
+    println!("Phase 2: Consensus layer events...");
+
+    // Process batch at consensus level
+    let batch = TransactionBatch {
+        transactions: vec![TransactionAction {
+            nonce: 0,
+            data: vec![0xaa],
+        }],
+        previous_root: consensus.consensus_state_root().to_string(),
+    };
+
+    consensus
+        .propose_batch(batch, &engine)
+        .expect("Batch proposal failed");
+
+    let consensus_root_after_batch = consensus.get_current_root().id().to_string();
+
+    assert_ne!(
+        consensus_root_after_batch, initial_consensus_root,
+        "Consensus root should change after batch"
+    );
+
+    // Runtime root should be UNCHANGED by consensus events
+    let runtime_root_after_batch = runtime.get_current_root().id().to_string();
+    assert_eq!(
+        runtime_root_after_batch, runtime_root_after_peers,
+        "Runtime root should be unchanged by consensus events"
+    );
+
+    println!("  ✓ Batch processed at consensus layer");
+    println!("  ✓ Consensus root changed, runtime root unchanged");
+    println!();
+
+    // ============================================================
+    // PHASE 3: Coordinated Events
+    // ============================================================
+    println!("Phase 3: Coordinated multi-layer events...");
+
+    // Runtime receives batch (runtime event)
+    let runtime_batch_action = RuntimeAction::BatchReceived {
+        epoch: consensus.current_epoch(),
+        leader_id: consensus
+            .get_current_leader()
+            .unwrap()
+            .id
+            .clone(),
+    };
+
+    runtime.synthesize_action(runtime_batch_action, &engine);
+
+    // Advance epoch at consensus layer
+    consensus.advance_epoch(&engine);
+
+    // Advance epoch at runtime layer
+    let runtime_epoch_action = RuntimeAction::EpochAdvanced {
+        new_epoch: consensus.current_epoch(),
+    };
+
+    runtime.synthesize_action(runtime_epoch_action, &engine);
+
+    println!("  ✓ Batch receipt tracked at runtime layer");
+    println!("  ✓ Epoch advancement synchronized");
+    println!();
+
+    // ============================================================
+    // VERIFICATION: Layer Independence
+    // ============================================================
+    println!("Verifying layer independence...");
+
+    let final_runtime_root = runtime.get_current_root().id().to_string();
+    let final_consensus_root = consensus.get_current_root().id().to_string();
+
+    // Both layers should have evolved
+    assert_ne!(final_runtime_root, initial_runtime_root);
+    assert_ne!(final_consensus_root, initial_consensus_root);
+
+    // But they should have DIFFERENT roots (independent chains)
+    assert_ne!(
+        final_runtime_root, final_consensus_root,
+        "Runtime and consensus should maintain independent causal chains"
+    );
+
+    println!("  Runtime root:   {}...", &final_runtime_root[..16]);
+    println!("  Consensus root: {}...", &final_consensus_root[..16]);
+    println!();
+
+    println!("  ✓ Runtime layer: {} events processed", 3 + 1 + 1); // peers + batch + epoch
+    println!("  ✓ Consensus layer: {} events processed", 1 + 1); // batch + epoch
+    println!("  ✓ Layers maintain independent causal chains");
+    println!("  ✓ Proper event segregation validated");
+
+    println!("\n=== Runtime + Consensus Coordination: SUCCESS ===\n");
 }

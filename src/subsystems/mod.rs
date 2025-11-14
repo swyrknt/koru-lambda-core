@@ -9,6 +9,7 @@ pub mod compactor;
 pub mod local_agent;
 pub mod network;
 pub mod parallel;
+pub mod runtime;
 pub mod validator;
 
 // Re-export key types
@@ -21,6 +22,9 @@ pub use network::{
 };
 pub use parallel::{
     ParallelAction, ParallelBatchProcessor, ParallelSynthesizer, ProcessingStrategy,
+};
+pub use runtime::{
+    DistinctionBehaviour, NetworkMessage, NetworkRuntime, RuntimeAction,
 };
 pub use validator::{
     BatchValidationResult, ConsensusValidator, TransactionAction, TransactionBatch,
