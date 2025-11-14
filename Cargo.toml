@@ -11,6 +11,11 @@ readme = "DESIGN_DOC.md"
 sha2 = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
+dashmap = "6.0"
+tokio = { version = "1.40", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+rayon = "1.10"
 
 [dev-dependencies]
 criterion = "0.5"

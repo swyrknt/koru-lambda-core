@@ -34,7 +34,7 @@ fn test_falsify_determinism_across_engines() {
     // ============================================================
     // ENGINE 1: First synthesis sequence
     // ============================================================
-    let mut engine1 = DistinctionEngine::new();
+    let engine1 = DistinctionEngine::new();
     let d0_1 = engine1.d0().clone();
     let d1_1 = engine1.d1().clone();
 
@@ -48,7 +48,7 @@ fn test_falsify_determinism_across_engines() {
     // ============================================================
     // ENGINE 2: Identical synthesis sequence
     // ============================================================
-    let mut engine2 = DistinctionEngine::new();
+    let engine2 = DistinctionEngine::new();
     let d0_2 = engine2.d0().clone();
     let d1_2 = engine2.d1().clone();
 

@@ -30,7 +30,7 @@ fn test_falsify_commutativity() {
     // ============================================================
     println!("\nTest: Commutativity Falsification");
 
-    let mut engine = DistinctionEngine::new();
+    let engine = DistinctionEngine::new();
     let d0 = engine.d0().clone();
     let d1 = engine.d1().clone();
 

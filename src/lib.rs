@@ -1,8 +1,16 @@
 pub mod engine;
 pub mod primitives;
+pub mod subsystems;
 
-pub use engine::{Distinction, DistinctionEngine, Relationship, StateSnapshot};
+pub use engine::{Distinction, DistinctionEngine, Relationship};
 pub use primitives::{ByteMapping, Canonicalizable};
+pub use subsystems::{
+    CompactionAction, CompactionStats, StructuralCompactor, ThermalState,
+    ConsensusValidator, TransactionAction, TransactionBatch, BatchValidationResult,
+    LocalCausalAgent, synthesize_causal_action,
+    NetworkAction, NetworkAgent, NetworkStats, PeerIdentity,
+    ParallelAction, ParallelBatchProcessor, ParallelSynthesizer, ProcessingStrategy,
+};
 
 #[cfg(test)]
 mod tests {
@@ -10,7 +18,7 @@ mod tests {
 
     #[test]
     fn test_axiom_irreflexivity() {
-        let mut engine = DistinctionEngine::new();
+        let engine = DistinctionEngine::new();
         let d1 = engine.d1().clone();
 
         let result = engine.synthesize(&d1, &d1);
@@ -23,8 +31,8 @@ mod tests {
 
     #[test]
     fn test_axiom_symmetry() {
-        let mut engine1 = DistinctionEngine::new();
-        let mut engine2 = DistinctionEngine::new();
+        let engine1 = DistinctionEngine::new();
+        let engine2 = DistinctionEngine::new();
 
         let d0_1 = engine1.d0().clone();
         let d1_1 = engine1.d1().clone();
@@ -40,7 +48,7 @@ mod tests {
 
     #[test]
     fn test_axiom_synthesis() {
-        let mut engine = DistinctionEngine::new();
+        let engine = DistinctionEngine::new();
 
         assert_eq!(engine.relationship_count(), 1);
         assert_eq!(engine.distinction_count(), 2);
@@ -78,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_axiom_idempotency() {
-        let mut engine = DistinctionEngine::new();
+        let engine = DistinctionEngine::new();
 
         let d0 = engine.d0().clone();
         let d1 = engine.d1().clone();
@@ -98,26 +106,26 @@ mod tests {
 
     #[test]
     fn test_byte_mapping() {
-        let mut engine = DistinctionEngine::new();
+        let engine = DistinctionEngine::new();
 
         // Test that same byte produces same distinction
-        let d1 = ByteMapping::map_byte_to_distinction(42, &mut engine);
-        let d2 = ByteMapping::map_byte_to_distinction(42, &mut engine);
+        let d1 = ByteMapping::map_byte_to_distinction(42, &engine);
+        let d2 = ByteMapping::map_byte_to_distinction(42, &engine);
         assert_eq!(d1.id(), d2.id());
 
         // Test that different bytes produce different distinctions
-        let d3 = ByteMapping::map_byte_to_distinction(43, &mut engine);
+        let d3 = ByteMapping::map_byte_to_distinction(43, &engine);
         assert_ne!(d1.id(), d3.id());
     }
 
     #[test]
     fn test_canonicalizable_trait() {
-        let mut engine = DistinctionEngine::new();
+        let engine = DistinctionEngine::new();
 
         // Test the Canonicalizable trait implementation for u8
         let byte: u8 = 255;
-        let d1 = byte.to_canonical_structure(&mut engine);
-        let d2 = ByteMapping::map_byte_to_distinction(255, &mut engine);
+        let d1 = byte.to_canonical_structure(&engine);
+        let d2 = ByteMapping::map_byte_to_distinction(255, &engine);
 
         // Should produce the same distinction
         assert_eq!(d1.id(), d2.id());

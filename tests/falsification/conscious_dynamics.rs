@@ -26,12 +26,12 @@ mod conscious_helpers {
         let mut graph = Graph::new_undirected();
         let mut node_map: HashMap<String, NodeIndex> = HashMap::new();
 
-        for distinction in distinctions {
+        for distinction in &distinctions {
             let node_idx = graph.add_node(distinction.id().to_string());
             node_map.insert(distinction.id().to_string(), node_idx);
         }
 
-        for (id_a, id_b) in relationships {
+        for (id_a, id_b) in &relationships {
             if let (Some(&idx_a), Some(&idx_b)) = (node_map.get(id_a), node_map.get(id_b)) {
                 graph.add_edge(idx_a, idx_b, ());
             }
@@ -134,7 +134,6 @@ fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng
             .0
             .iter()
             .cloned()
-            .cloned()
             .collect();
 
         if distinctions.len() < 2 {
@@ -209,7 +208,6 @@ fn evolve_subprocess(
             .get_state_snapshot()
             .0
             .iter()
-            .cloned()
             .cloned()
             .collect();
 

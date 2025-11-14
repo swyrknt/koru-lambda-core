@@ -38,8 +38,8 @@ fn test_falsify_unintended_associativity() {
     println!("\nTest: Non-Associativity Verification (Documented Behavior)");
     println!("  Testing that construction history is preserved...");
 
-    let mut engine1 = DistinctionEngine::new();
-    let mut engine2 = DistinctionEngine::new();
+    let engine1 = DistinctionEngine::new();
+    let engine2 = DistinctionEngine::new();
 
     let d0 = engine1.d0().clone();
     let d1 = engine1.d1().clone();
@@ -119,11 +119,11 @@ fn test_falsify_construction_history_loss() {
     println!("  Testing multiple construction sequences...");
 
     let d0 = {
-        let mut engine = DistinctionEngine::new();
+        let engine = DistinctionEngine::new();
         engine.d0().clone()
     };
     let d1 = {
-        let mut engine = DistinctionEngine::new();
+        let engine = DistinctionEngine::new();
         engine.d1().clone()
     };
 
@@ -132,19 +132,19 @@ fn test_falsify_construction_history_loss() {
     // ============================================================
 
     // Sequence 1: ((d0⊕d1)⊕d0)⊕d1
-    let mut engine1 = DistinctionEngine::new();
+    let engine1 = DistinctionEngine::new();
     let step1_a = engine1.synthesize(&d0, &d1);
     let step2_a = engine1.synthesize(&step1_a, &d0);
     let result_a = engine1.synthesize(&step2_a, &d1);
 
     // Sequence 2: ((d0⊕d1)⊕d1)⊕d0
-    let mut engine2 = DistinctionEngine::new();
+    let engine2 = DistinctionEngine::new();
     let step1_b = engine2.synthesize(&d0, &d1);
     let step2_b = engine2.synthesize(&step1_b, &d1);
     let result_b = engine2.synthesize(&step2_b, &d0);
 
     // Sequence 3: (d0⊕d1)⊕(d0⊕d1) - uses same base twice
-    let mut engine3 = DistinctionEngine::new();
+    let engine3 = DistinctionEngine::new();
     let step1_c = engine3.synthesize(&d0, &d1);
     let result_c = engine3.synthesize(&step1_c, &step1_c);
 
