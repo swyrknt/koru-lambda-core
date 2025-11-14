@@ -4,6 +4,11 @@ pub mod subsystems;
 
 pub use engine::{Distinction, DistinctionEngine, Relationship};
 pub use primitives::{ByteMapping, Canonicalizable};
+pub use subsystems::{
+    CompactionAction, CompactionStats, StructuralCompactor, ThermalState,
+    ConsensusValidator, TransactionAction, TransactionBatch, BatchValidationResult,
+    LocalCausalAgent, synthesize_causal_action,
+};
 
 #[cfg(test)]
 mod tests {

@@ -23,6 +23,9 @@ mod information_dynamics;
 #[path = "falsification/conscious_dynamics.rs"]
 mod conscious_dynamics;
 
+#[path = "falsification/compaction.rs"]
+mod compaction;
+
 #[test]
 fn test_spacetime_coherence() {
     let _engine = DistinctionEngine::new();
