@@ -10,6 +10,7 @@ pub use subsystems::{
     LocalCausalAgent, synthesize_causal_action,
     NetworkAction, NetworkAgent, NetworkStats, PeerIdentity,
     ParallelAction, ParallelBatchProcessor, ParallelSynthesizer, ProcessingStrategy,
+    RuntimeAction, NetworkMessage, NetworkRuntime, DistinctionBehaviour,
 };
 
 #[cfg(test)]

@@ -447,7 +447,7 @@ fn bench_multi_batch_parallel(c: &mut Criterion) {
 
                 b.iter(|| {
                     let initial_root = processor.get_current_root().id().to_string();
-                    let mut current_root = initial_root.clone();
+                    let current_root = initial_root.clone();
 
                     // Create batches
                     let batches: Vec<TransactionBatch> = (0..batches_per_action)
@@ -486,6 +486,79 @@ fn bench_multi_batch_parallel(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_runtime_event_synthesis(c: &mut Criterion) {
+    use distinction_engine::{Canonicalizable, DistinctionEngine, RuntimeAction};
+    use std::sync::Arc;
+
+    let engine = Arc::new(DistinctionEngine::new());
+
+    let mut group = c.benchmark_group("runtime_events");
+
+    // Benchmark peer discovery canonicalization
+    group.bench_function("peer_discovered_canonical", |b| {
+        let action = RuntimeAction::PeerDiscovered {
+            peer_id: "12D3KooWTest123456789".to_string(),
+        };
+        b.iter(|| black_box(action.to_canonical_structure(&engine)));
+    });
+
+    // Benchmark batch receipt canonicalization
+    group.bench_function("batch_received_canonical", |b| {
+        let action = RuntimeAction::BatchReceived {
+            epoch: 42,
+            leader_id: "node_1".to_string(),
+        };
+        b.iter(|| black_box(action.to_canonical_structure(&engine)));
+    });
+
+    // Benchmark epoch advancement canonicalization
+    group.bench_function("epoch_advanced_canonical", |b| {
+        let action = RuntimeAction::EpochAdvanced { new_epoch: 100 };
+        b.iter(|| black_box(action.to_canonical_structure(&engine)));
+    });
+
+    group.finish();
+}
+
+fn bench_network_message_serialization(c: &mut Criterion) {
+    use distinction_engine::{NetworkMessage, TransactionAction, TransactionBatch};
+
+    let batch = TransactionBatch {
+        transactions: vec![
+            TransactionAction {
+                nonce: 0,
+                data: vec![1, 2, 3, 4, 5],
+            },
+            TransactionAction {
+                nonce: 1,
+                data: vec![6, 7, 8, 9, 10],
+            },
+        ],
+        previous_root: "root_abc123".to_string(),
+    };
+
+    let msg = NetworkMessage::BatchProposal {
+        epoch: 42,
+        batch: batch.clone(),
+        leader_id: "node_1".to_string(),
+    };
+
+    let mut group = c.benchmark_group("network_messages");
+
+    group.bench_function("serialize_batch_proposal", |b| {
+        b.iter(|| black_box(serde_json::to_vec(&msg).unwrap()));
+    });
+
+    let json = serde_json::to_vec(&msg).unwrap();
+    group.bench_function("deserialize_batch_proposal", |b| {
+        b.iter(|| {
+            black_box(serde_json::from_slice::<NetworkMessage>(&json).unwrap())
+        });
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_core_synthesis,
@@ -499,6 +572,8 @@ criterion_group!(
     bench_parallel_byte_canonicalization,
     bench_parallel_synthesis,
     bench_multi_batch_parallel,
+    bench_runtime_event_synthesis,
+    bench_network_message_serialization,
 );
 
 criterion_main!(benches);

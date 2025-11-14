@@ -19,7 +19,7 @@ use std::sync::Arc;
 ///
 /// Transactions are canonicalized into distinctions for structural validation.
 /// The nonce ensures causal ordering, preventing replay attacks.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TransactionAction {
     /// Sequential number ensuring causal ordering
     pub nonce: u64,
@@ -56,7 +56,7 @@ impl Canonicalizable for TransactionAction {
 ///
 /// The batch is the fundamental unit of consensus - it represents a single
 /// causal event in the system's evolution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TransactionBatch {
     /// Transactions in canonical order
     pub transactions: Vec<TransactionAction>,
