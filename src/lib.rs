@@ -9,6 +9,7 @@ pub use subsystems::{
     ConsensusValidator, TransactionAction, TransactionBatch, BatchValidationResult,
     LocalCausalAgent, synthesize_causal_action,
     NetworkAction, NetworkAgent, NetworkStats, PeerIdentity,
+    ParallelAction, ParallelBatchProcessor, ParallelSynthesizer, ProcessingStrategy,
 };
 
 #[cfg(test)]
