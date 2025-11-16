@@ -29,6 +29,9 @@ mod compaction;
 #[path = "falsification/network_consensus.rs"]
 mod network_consensus;
 
+#[path = "falsification/wasm_consistency.rs"]
+mod wasm_consistency;
+
 #[test]
 fn test_spacetime_coherence() {
     let _engine = DistinctionEngine::new();

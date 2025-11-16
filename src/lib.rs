@@ -3,6 +3,10 @@ pub mod primitives;
 pub mod subsystems;
 pub mod ffi;
 
+// WASM bindings (universal platform support)
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
 pub use engine::{Distinction, DistinctionEngine, Relationship};
 pub use primitives::{ByteMapping, Canonicalizable};
 pub use subsystems::{

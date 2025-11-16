@@ -18,6 +18,15 @@ thiserror = "1.0"
 dashmap = "6.0"
 rayon = "1.10"
 
+# WASM support
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+js-sys = { version = "0.3", optional = true }
+
+[features]
+default = []
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys"]
+
 [build-dependencies]
 cbindgen = "0.26"
 
