@@ -17,10 +17,12 @@
 /// by construction (Axiom: Symmetry).
 
 use crate::primitives::Canonicalizable;
+use crate::subsystems::commitment::{BatchCommitment, CommitmentAgent};
 use crate::subsystems::local_agent::LocalCausalAgent;
 use crate::subsystems::validator::{ConsensusValidator, TransactionBatch, BatchValidationResult};
 use crate::{Distinction, DistinctionEngine};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Peer identity in the network
@@ -121,6 +123,8 @@ pub struct NetworkAgent {
     local_root: Distinction,
     /// Validator for batch verification
     validator: ConsensusValidator,
+    /// Commitment agent for two-stage gossip
+    commitment_agent: CommitmentAgent,
     /// Ordered set of validator peers
     validator_set: Vec<PeerIdentity>,
     /// Current consensus epoch
@@ -129,6 +133,8 @@ pub struct NetworkAgent {
     ftw_duration_ms: u64,
     /// Number of network events processed
     events_processed: u64,
+    /// Pending commitments awaiting finalization
+    pending_commitments: HashMap<[u8; 32], BatchCommitment>,
 }
 
 impl NetworkAgent {
@@ -144,10 +150,12 @@ impl NetworkAgent {
         Self {
             local_root: genesis,
             validator: ConsensusValidator::new(engine),
+            commitment_agent: CommitmentAgent::new(engine),
             validator_set: Vec::new(),
             current_epoch: 0,
             ftw_duration_ms: 2000, // 2 seconds per design doc
             events_processed: 0,
+            pending_commitments: HashMap::new(),
         }
     }
 
@@ -155,16 +163,19 @@ impl NetworkAgent {
     pub fn from_state(
         root: Distinction,
         validator: ConsensusValidator,
+        commitment_agent: CommitmentAgent,
         validator_set: Vec<PeerIdentity>,
         epoch: u64,
     ) -> Self {
         Self {
             local_root: root,
             validator,
+            commitment_agent,
             validator_set,
             current_epoch: epoch,
             ftw_duration_ms: 2000,
             events_processed: 0,
+            pending_commitments: HashMap::new(),
         }
     }
 
@@ -189,10 +200,101 @@ impl NetworkAgent {
         self.synthesize_action(action, engine)
     }
 
-    /// Propose a batch for validation (only valid if caller is current leader)
+    /// **STAGE 1: Propose Commitment** (Two-Stage Gossip Protocol)
     ///
-    /// In production, this would check leader authority. For now, we demonstrate
-    /// the structural validation mechanism.
+    /// Leader computes lightweight commitment hash, caches the batch data,
+    /// and returns the commitment for gossiping.
+    ///
+    /// **Returns:** BatchCommitment (80 bytes to gossip)
+    ///
+    /// The runtime (Go/Kotlin/Swift) broadcasts this commitment to all nodes.
+    /// Light nodes verify via `check_commitment()` without downloading batch.
+    /// Full nodes fetch batch via Stage 2 when needed.
+    pub fn propose_commitment(
+        &mut self,
+        batch: TransactionBatch,
+        _engine: &Arc<DistinctionEngine>,
+    ) -> Result<BatchCommitment, String> {
+        // Compute commitment hash
+        let nonce = self.validator.expected_nonce();
+        let epoch = self.current_epoch;
+        let leader_id = self.get_current_leader()
+            .map(|p| p.id.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let commitment = BatchCommitment::compute(&batch, nonce, epoch, leader_id);
+
+        // Cache batch data for Stage 2 fetches
+        self.commitment_agent.cache_batch(batch.clone(), commitment.clone());
+        self.pending_commitments.insert(commitment.commitment_hash, commitment.clone());
+
+        Ok(commitment)
+    }
+
+    /// **STAGE 1: Check Commitment** (Light Node "Ping" Check)
+    ///
+    /// Verifies commitment against expected nonce/epoch WITHOUT downloading batch.
+    ///
+    /// This is how light clients achieve consensus participation:
+    /// - Receive 80-byte commitment via gossip
+    /// - Verify nonce/epoch match local expectations
+    /// - Accept/reject without bandwidth cost
+    ///
+    /// **Returns:** true if commitment is valid for current state
+    pub fn check_commitment(&self, commitment: &BatchCommitment) -> bool {
+        let expected_nonce = self.validator.expected_nonce();
+        let expected_epoch = self.current_epoch;
+
+        commitment.verify(expected_nonce, expected_epoch)
+    }
+
+    /// **STAGE 2: Finalize Batch** (Full Validator Execution)
+    ///
+    /// Applies the full batch after fetching data and verifying it matches commitment.
+    ///
+    /// Called by full validators who need to execute transactions.
+    /// Runtime fetches batch data from peers, verifies hash matches commitment,
+    /// then calls this to finalize state transition.
+    ///
+    /// **Returns:** New network root on success
+    pub fn finalize_batch(
+        &mut self,
+        batch: TransactionBatch,
+        commitment_hash: [u8; 32],
+        engine: &Arc<DistinctionEngine>,
+    ) -> Result<Distinction, String> {
+        // Verify we have pending commitment
+        let commitment = self.pending_commitments.get(&commitment_hash)
+            .ok_or_else(|| "No pending commitment for hash".to_string())?;
+
+        // Verify batch data matches commitment
+        if !commitment.verify_batch(&batch, self.validator.expected_nonce(), self.current_epoch) {
+            return Err("Batch data does not match commitment hash".to_string());
+        }
+
+        // Validate batch structurally
+        let result = self.validator.validate_batch(batch.clone(), engine);
+
+        match result {
+            BatchValidationResult::Valid(_new_state_root) => {
+                // Batch is valid - synthesize into network state
+                let action = NetworkAction::BatchProposed { batch };
+                let new_network_root = self.synthesize_action(action, engine);
+
+                // Remove from pending
+                self.pending_commitments.remove(&commitment_hash);
+
+                Ok(new_network_root)
+            }
+            BatchValidationResult::Rejected(reason) => Err(reason),
+        }
+    }
+
+    /// **DEPRECATED: Old synchronous propose_batch**
+    ///
+    /// Use `propose_commitment()` + `finalize_batch()` for two-stage protocol.
+    /// This method bypasses commitment gossip and is only for backward compatibility.
+    #[deprecated(note = "Use propose_commitment() and finalize_batch() instead")]
     pub fn propose_batch(
         &mut self,
         batch: TransactionBatch,

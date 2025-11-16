@@ -1,16 +1,17 @@
 pub mod engine;
 pub mod primitives;
 pub mod subsystems;
+pub mod ffi;
 
 pub use engine::{Distinction, DistinctionEngine, Relationship};
 pub use primitives::{ByteMapping, Canonicalizable};
 pub use subsystems::{
+    BatchCommitment, BatchDataRequest, BatchDataResponse, CommitmentAgent, CommitmentCache,
     CompactionAction, CompactionStats, StructuralCompactor, ThermalState,
     ConsensusValidator, TransactionAction, TransactionBatch, BatchValidationResult,
     LocalCausalAgent, synthesize_causal_action,
     NetworkAction, NetworkAgent, NetworkStats, PeerIdentity,
     ParallelAction, ParallelBatchProcessor, ParallelSynthesizer, ProcessingStrategy,
-    RuntimeAction, NetworkMessage, NetworkRuntime, DistinctionBehaviour,
 };
 
 #[cfg(test)]

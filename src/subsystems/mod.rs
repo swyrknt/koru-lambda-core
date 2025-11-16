@@ -5,14 +5,17 @@
 /// - Locality (anchored to local Δ root)
 /// - Causality (ΔNew = ΔLocal ⊕ ΔAction)
 /// - Determinism (all inputs canonicalizable)
+pub mod commitment;
 pub mod compactor;
 pub mod local_agent;
 pub mod network;
 pub mod parallel;
-pub mod runtime;
 pub mod validator;
 
 // Re-export key types
+pub use commitment::{
+    BatchCommitment, BatchDataRequest, BatchDataResponse, CommitmentAgent, CommitmentCache,
+};
 pub use compactor::{
     CompactionAction, CompactionStats, StructuralCompactor, ThermalState,
 };
@@ -22,9 +25,6 @@ pub use network::{
 };
 pub use parallel::{
     ParallelAction, ParallelBatchProcessor, ParallelSynthesizer, ProcessingStrategy,
-};
-pub use runtime::{
-    DistinctionBehaviour, NetworkMessage, NetworkRuntime, RuntimeAction,
 };
 pub use validator::{
     BatchValidationResult, ConsensusValidator, TransactionAction, TransactionBatch,
