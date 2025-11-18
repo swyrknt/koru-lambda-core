@@ -58,8 +58,9 @@ mod coherence_helpers {
 
             if current_distance < radius {
                 for neighbor in graph.neighbors(current) {
-                    if !distances.contains_key(&neighbor) {
-                        distances.insert(neighbor, current_distance + 1);
+                    if let std::collections::hash_map::Entry::Vacant(e) = distances.entry(neighbor)
+                    {
+                        e.insert(current_distance + 1);
                         result.insert(neighbor);
                         queue.push_back(neighbor);
                     }
@@ -122,7 +123,7 @@ mod coherence_helpers {
 /// Evolve universe with local selection bias
 fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng) {
     for _step in 0..steps {
-        let distinctions: Vec<_> = engine.get_state_snapshot().0.iter().cloned().collect();
+        let distinctions = engine.get_state_snapshot().0;
 
         if distinctions.len() < 2 {
             continue;
@@ -192,7 +193,7 @@ fn evolve_subprocess(
     rng: &mut StdRng,
 ) {
     for _step in 0..steps {
-        let all_distinctions: Vec<_> = engine.get_state_snapshot().0.iter().cloned().collect();
+        let all_distinctions = engine.get_state_snapshot().0;
 
         let subprocess_distinctions: Vec<_> = all_distinctions
             .iter()

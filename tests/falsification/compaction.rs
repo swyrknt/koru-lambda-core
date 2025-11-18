@@ -216,7 +216,7 @@ fn test_falsify_compaction_causality_loss() {
     let mut compactor2 = StructuralCompactor::new(&engine2);
 
     // Same initial state
-    let _a2 = engine2.synthesize(&engine2.d0(), &engine2.d1());
+    let _a2 = engine2.synthesize(engine2.d0(), engine2.d1());
 
     // Same action parameters
     let action_deterministic =

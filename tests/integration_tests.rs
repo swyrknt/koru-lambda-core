@@ -1,5 +1,3 @@
-use koru_lambda_core::DistinctionEngine;
-
 // Falsification test suite
 mod falsification;
 

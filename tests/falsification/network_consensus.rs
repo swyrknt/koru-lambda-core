@@ -51,7 +51,7 @@ fn test_falsify_non_deterministic_convergence() {
     println!("  Phase 1: Peer discovery events...");
 
     // Both agents discover same peers in same order
-    let peers = vec![
+    let peers = [
         PeerIdentity::new("validator_alpha".to_string(), &engine),
         PeerIdentity::new("validator_beta".to_string(), &engine),
         PeerIdentity::new("validator_gamma".to_string(), &engine),
@@ -171,7 +171,7 @@ fn test_falsify_leader_election_ambiguity() {
     // ============================================================
     println!("  Configuring identical validator sets...");
 
-    let validators = vec![
+    let validators = [
         PeerIdentity::new("node_1".to_string(), &engine),
         PeerIdentity::new("node_2".to_string(), &engine),
         PeerIdentity::new("node_3".to_string(), &engine),
@@ -282,7 +282,7 @@ fn test_falsify_fork_possibility() {
     // ============================================================
     println!("  Building canonical chain...");
 
-    let peers = vec![
+    let peers = [
         PeerIdentity::new("peer_A".to_string(), &engine),
         PeerIdentity::new("peer_B".to_string(), &engine),
         PeerIdentity::new("peer_C".to_string(), &engine),

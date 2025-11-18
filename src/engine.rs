@@ -22,6 +22,9 @@ impl Distinction {
 /// Type alias for a canonical relationship between two distinctions.
 pub type Relationship = (String, String);
 
+/// Type alias for a complete state snapshot.
+pub type StateSnapshot = (Vec<Distinction>, Vec<Relationship>);
+
 /// The core engine implementing the five axioms of distinction calculus:
 /// 1. Identity: A distinction is defined solely by its unique identifier
 /// 2. Nontriviality: The system initializes with two primordial distinctions (Δ₀, Δ₁)
@@ -138,7 +141,7 @@ impl DistinctionEngine {
     /// Warning: This method is less efficient than the individual snapshot
     /// methods as it allocates temporary vectors. Consider using direct iteration
     /// in performance-critical code.
-    pub fn get_state_snapshot(&self) -> (Vec<Distinction>, Vec<Relationship>) {
+    pub fn get_state_snapshot(&self) -> StateSnapshot {
         (self.get_distinctions_snapshot(), self.get_relationships_snapshot())
     }
 

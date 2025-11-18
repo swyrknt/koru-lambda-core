@@ -249,15 +249,15 @@ fn test_parallel_batch_large_workload() {
     let mut processor = ParallelBatchProcessor::new(&engine);
 
     // Create 1000 batches of 10 transactions each
-    let num_batches = 1_000;
-    let tx_per_batch = 10;
+    let num_batches: u64 = 1_000;
+    let tx_per_batch: u64 = 10;
 
     let mut current_root = processor.get_current_root().id().to_string();
 
     for batch_idx in 0..num_batches {
         let transactions: Vec<TransactionAction> = (0..tx_per_batch)
             .map(|tx_idx| TransactionAction {
-                nonce: (batch_idx * tx_per_batch + tx_idx) as u64,
+                nonce: batch_idx * tx_per_batch + tx_idx,
                 data: vec![batch_idx as u8, tx_idx as u8],
             })
             .collect();
@@ -273,7 +273,7 @@ fn test_parallel_batch_large_workload() {
 
     // Verify final state
     assert_eq!(processor.batches_processed(), num_batches);
-    assert_eq!(processor.expected_nonce(), (num_batches * tx_per_batch) as u64);
+    assert_eq!(processor.expected_nonce(), num_batches * tx_per_batch);
 }
 
 #[test]

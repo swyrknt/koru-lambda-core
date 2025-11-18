@@ -124,7 +124,7 @@ fn test_falsify_uniform_vulnerability() {
     println!("  Executing 3000 synthesis operations with degree bias...");
 
     for step in 0..3000 {
-        let distinctions: Vec<_> = engine.get_state_snapshot().0.iter().cloned().collect();
+        let distinctions = engine.get_state_snapshot().0;
 
         if distinctions.len() < 2 {
             continue;
@@ -330,7 +330,7 @@ fn test_falsify_random_degree_distribution() {
     println!("  Executing 2000 synthesis operations with degree bias...");
 
     for _step in 0..2000 {
-        let distinctions: Vec<_> = engine.get_state_snapshot().0.iter().cloned().collect();
+        let distinctions = engine.get_state_snapshot().0;
 
         if distinctions.len() < 2 {
             continue;

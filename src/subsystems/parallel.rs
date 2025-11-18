@@ -279,7 +279,7 @@ mod tests {
         let initial_root = processor.state_root_id().to_string();
 
         // Create sequential batches
-        let batches = vec![
+        let batches = [
             TransactionBatch {
                 transactions: vec![TransactionAction { nonce: 0, data: vec![1, 2, 3] }],
                 previous_root: initial_root.clone(),

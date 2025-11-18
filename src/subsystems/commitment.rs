@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
+/// Type alias for batch cache: commitment hash -> (batch, commitment)
+type BatchCache = LruCache<[u8; 32], (TransactionBatch, BatchCommitment)>;
+
 /// Lightweight batch commitment (Stage 1 of two-stage protocol).
 ///
 /// Broadcast to all nodes for consensus. Approximately 80 bytes.
@@ -46,7 +49,7 @@ impl BatchCommitment {
 
         // Deterministic commitment: SHA256(batch_root || nonce || epoch)
         let mut hasher = Sha256::new();
-        hasher.update(&batch_root);
+        hasher.update(batch_root);
         hasher.update(nonce.to_le_bytes());
         hasher.update(epoch.to_le_bytes());
         let commitment_hash: [u8; 32] = hasher.finalize().into();
@@ -152,7 +155,7 @@ pub struct CommitmentAgent {
     local_root: Distinction,
 
     /// Cache of batch data for Stage 2 fetches (LRU handles capacity internally)
-    cache: LruCache<[u8; 32], (TransactionBatch, BatchCommitment)>,
+    cache: BatchCache,
 
     /// Number of commitments processed
     commitments_processed: u64,
