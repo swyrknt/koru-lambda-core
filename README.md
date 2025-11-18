@@ -24,26 +24,52 @@ A minimal axiomatic system for computation based on distinction calculus. This e
 koru-lambda-core = "0.1.0"
 ```
 
-### Basic Usage
+### Basic Usage (Rust)
 
 ```rust
 use koru_lambda_core::{DistinctionEngine, Distinction};
 
 fn main() {
     let mut engine = DistinctionEngine::new();
-    
+
     // Synthesize the primordial distinctions
     let existence = engine.synthesize(engine.d0(), engine.d1());
     println!("Created distinction: {}", existence.id());
-    
+
     // Build complex structures
     let order = engine.synthesize(&existence, engine.d0());
     let chaos = engine.synthesize(&existence, engine.d1());
     let nature = engine.synthesize(&order, &chaos);
-    
+
     println!("Nature distinction: {}", nature.id());
 }
 ```
+
+### Basic Usage (JavaScript/WASM)
+
+```javascript
+import { Engine, NetworkAgent } from './koru-wrapper.js';
+
+const engine = new Engine();
+
+// Synthesize distinctions
+const d2 = engine.synthesize(engine.d0Id(), engine.d1Id());
+console.log(`Created distinction: ${d2}`);
+
+// Network consensus
+const agent = new NetworkAgent(engine);
+agent.joinPeer('validator_0');
+agent.joinPeer('validator_1');
+console.log(`Leader: ${agent.getLeader()}`);
+```
+
+Build the universal WASM artifact:
+
+```bash
+./scripts/build_universal.sh
+```
+
+This produces a single artifact that runs on browsers, Node.js, Deno, Bun, Go, Kotlin, Swift, Python, and embedded systems.
 
 ## 🧠 Core Concepts
 
@@ -78,6 +104,7 @@ koru-lambda-core/
 ├── src/
 │   ├── engine.rs           # Core synthesis (265 lines)
 │   ├── primitives.rs       # Data canonicalization
+│   ├── wasm.rs             # WASM bindings with binary marshalling
 │   ├── lib.rs              # Public API
 │   └── subsystems/
 │       ├── validator.rs    # Consensus validation (SPoC)
@@ -85,6 +112,8 @@ koru-lambda-core/
 │       ├── network.rs      # Forkless P2P consensus
 │       ├── runtime.rs      # Async P2P networking (libp2p)
 │       └── parallel.rs     # Multi-core processing
+├── scripts/
+│   └── build_universal.sh  # Universal WASM artifact builder
 ├── tests/                  # Comprehensive test suite
 │   ├── end_to_end.rs       # Distributed system tests
 │   ├── runtime_integration.rs # Async runtime validation
@@ -156,6 +185,13 @@ cargo bench
 - **3.85x compression** - Via structural compaction
 - **O(log n) growth** - Logarithmic storage with compaction
 - **14ms compaction** - For 10,000 node graphs
+
+**WASM (Universal Artifact):**
+- **1,500,000 ops/s** - Core synthesis throughput
+- **880,000 ops/s** - Leader election (7 validators)
+- **47,000 tx/s** - Batch validation throughput
+- **Binary marshalling** - Zero-copy Uint8Array returns eliminate FFI overhead
+- **Structural batching** - Bulk operations run entirely inside WASM
 
 ## 🎯 Use Cases
 

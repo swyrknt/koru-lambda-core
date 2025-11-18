@@ -51,22 +51,24 @@ impl WasmEngine {
         self.inner.relationship_count()
     }
 
-    /// Get primordial distinction Δ₀ ID
+    /// Get primordial distinction Δ₀ ID as raw bytes
+    /// Note: Primordial IDs ("0", "1") return as UTF-8 bytes, synthesized IDs return as binary
     #[wasm_bindgen(js_name = d0Id)]
-    pub fn d0_id(&self) -> String {
-        self.inner.d0().id().to_string()
+    pub fn d0_id(&self) -> Vec<u8> {
+        id_to_bytes(self.inner.d0().id())
     }
 
-    /// Get primordial distinction Δ₁ ID
+    /// Get primordial distinction Δ₁ ID as raw bytes
+    /// Note: Primordial IDs ("0", "1") return as UTF-8 bytes, synthesized IDs return as binary
     #[wasm_bindgen(js_name = d1Id)]
-    pub fn d1_id(&self) -> String {
-        self.inner.d1().id().to_string()
+    pub fn d1_id(&self) -> Vec<u8> {
+        id_to_bytes(self.inner.d1().id())
     }
 
-    /// Synthesize two distinctions by their IDs
-    /// Returns the ID of the resulting distinction
+    /// Synthesize two distinctions by their IDs (as strings)
+    /// Returns the ID of the resulting distinction as raw bytes
     #[wasm_bindgen]
-    pub fn synthesize(&self, id_a: &str, id_b: &str) -> Result<String, JsValue> {
+    pub fn synthesize(&self, id_a: &str, id_b: &str) -> Result<Vec<u8>, JsValue> {
         let distinctions = self.inner.get_distinctions_snapshot();
 
         let a = distinctions
@@ -80,7 +82,22 @@ impl WasmEngine {
             .ok_or_else(|| JsValue::from_str(&format!("Distinction not found: {}", id_b)))?;
 
         let result = self.inner.synthesize(a, b);
-        Ok(result.id().to_string())
+        Ok(id_to_bytes(result.id()))
+    }
+
+    /// Batch synthesis benchmark - runs n iterations inside WASM
+    /// Eliminates FFI overhead by keeping the loop in Rust
+    /// Returns number of completed operations
+    #[wasm_bindgen(js_name = benchmarkSynthesis)]
+    pub fn benchmark_synthesis(&self, iterations: u32) -> u32 {
+        let d0 = self.inner.d0();
+        let d1 = self.inner.d1();
+
+        for _ in 0..iterations {
+            let _ = self.inner.synthesize(d0, d1);
+        }
+
+        iterations
     }
 }
 
@@ -108,35 +125,45 @@ impl WasmNetworkAgent {
         }
     }
 
-    /// Get network agent's current root (from LocalCausalAgent trait)
+    /// Get network agent's current root as raw bytes (from LocalCausalAgent trait)
     #[wasm_bindgen(js_name = currentRoot)]
-    pub fn current_root(&self) -> String {
-        self.inner.get_current_root().id().to_string()
+    pub fn current_root(&self) -> Vec<u8> {
+        id_to_bytes(self.inner.get_current_root().id())
     }
 
-    /// Get consensus state root (managed by validator inside agent)
+    /// Get consensus state root as raw bytes (managed by validator inside agent)
     #[wasm_bindgen(js_name = consensusRoot)]
-    pub fn consensus_root(&self) -> String {
-        self.inner.consensus_state_root().to_string()
+    pub fn consensus_root(&self) -> Vec<u8> {
+        id_to_bytes(&self.inner.consensus_state_root())
     }
 
     /// Join peer - agent synthesizes NetworkAction::PeerJoined
-    /// The NetworkAgent subsystem handles causal synthesis internally
+    /// Returns new root as raw bytes
     #[wasm_bindgen(js_name = joinPeer)]
-    pub fn join_peer(&mut self, peer_id: &str) -> Result<String, JsValue> {
+    pub fn join_peer(&mut self, peer_id: &str) -> Result<Vec<u8>, JsValue> {
         let peer = PeerIdentity::new(peer_id.to_string(), &self.engine);
-        // Subsystem performs: ΔNew = ΔNetwork_Root ⊕ ΔPeerJoined
         let new_root = self.inner.join_peer(peer, &self.engine);
-        Ok(new_root.id().to_string())
+        Ok(id_to_bytes(new_root.id()))
+    }
+
+    /// Bulk join multiple peers - eliminates FFI overhead for batch operations
+    /// Returns final root as raw bytes
+    #[wasm_bindgen(js_name = joinPeers)]
+    pub fn join_peers(&mut self, peer_ids: Vec<String>) -> Result<Vec<u8>, JsValue> {
+        let mut new_root = self.inner.get_current_root().clone();
+        for peer_id in peer_ids {
+            let peer = PeerIdentity::new(peer_id, &self.engine);
+            new_root = self.inner.join_peer(peer, &self.engine);
+        }
+        Ok(id_to_bytes(new_root.id()))
     }
 
     /// Advance epoch - agent synthesizes NetworkAction::EpochAdvanced
-    /// The NetworkAgent subsystem handles causal synthesis internally
+    /// Returns new root as raw bytes
     #[wasm_bindgen(js_name = advanceEpoch)]
-    pub fn advance_epoch(&mut self) -> Result<String, JsValue> {
-        // Subsystem performs: ΔNew = ΔNetwork_Root ⊕ ΔEpochAdvanced
+    pub fn advance_epoch(&mut self) -> Result<Vec<u8>, JsValue> {
         let new_root = self.inner.advance_epoch(&self.engine);
-        Ok(new_root.id().to_string())
+        Ok(id_to_bytes(new_root.id()))
     }
 
     /// Get current epoch
@@ -157,9 +184,19 @@ impl WasmNetworkAgent {
         self.inner.get_current_leader().map(|p| p.id.clone())
     }
 
-    /// Propose commitment (Stage 1) - returns commitment hash as hex string
+    /// Batch leader election benchmark - runs n iterations inside WASM
+    /// Eliminates FFI overhead by keeping the loop in Rust
+    #[wasm_bindgen(js_name = benchmarkLeaderElection)]
+    pub fn benchmark_leader_election(&self, iterations: u32) -> u32 {
+        for _ in 0..iterations {
+            let _ = self.inner.get_current_leader();
+        }
+        iterations
+    }
+
+    /// Propose commitment (Stage 1) - returns commitment hash as raw bytes
     #[wasm_bindgen(js_name = proposeCommitment)]
-    pub fn propose_commitment(&mut self, batch_json: &str) -> Result<String, JsValue> {
+    pub fn propose_commitment(&mut self, batch_json: &str) -> Result<Vec<u8>, JsValue> {
         let batch: TransactionBatch = serde_json::from_str(batch_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid batch JSON: {}", e)))?;
 
@@ -168,27 +205,24 @@ impl WasmNetworkAgent {
             .propose_commitment(batch, &self.engine)
             .map_err(|e| JsValue::from_str(&e))?;
 
-        // Return hex-encoded hash (the "truth")
-        Ok(hex::encode(commitment.commitment_hash))
+        Ok(commitment.commitment_hash.to_vec())
     }
 
     /// Check commitment (Light node verification)
+    /// Accepts hash as raw bytes (Uint8Array)
     #[wasm_bindgen(js_name = checkCommitment)]
     pub fn check_commitment(
         &self,
-        hash_hex: &str,
+        hash_bytes: &[u8],
         nonce: u64,
         epoch: u64,
     ) -> Result<bool, JsValue> {
-        let hash_bytes =
-            hex::decode(hash_hex).map_err(|e| JsValue::from_str(&format!("Invalid hex: {}", e)))?;
-
         if hash_bytes.len() != 32 {
             return Err(JsValue::from_str("Hash must be 32 bytes"));
         }
 
         let mut hash = [0u8; 32];
-        hash.copy_from_slice(&hash_bytes);
+        hash.copy_from_slice(hash_bytes);
 
         let commitment = BatchCommitment {
             commitment_hash: hash,
@@ -202,29 +236,29 @@ impl WasmNetworkAgent {
     }
 
     /// Finalize batch (Stage 2)
-    /// The NetworkAgent subsystem synthesizes NetworkAction::BatchProposed
+    /// Accepts hash as raw bytes, returns new root as raw bytes
     #[wasm_bindgen(js_name = finalizeBatch)]
-    pub fn finalize_batch(&mut self, batch_json: &str, hash_hex: &str) -> Result<String, JsValue> {
+    pub fn finalize_batch(
+        &mut self,
+        batch_json: &str,
+        hash_bytes: &[u8],
+    ) -> Result<Vec<u8>, JsValue> {
         let batch: TransactionBatch = serde_json::from_str(batch_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid batch JSON: {}", e)))?;
-
-        let hash_bytes =
-            hex::decode(hash_hex).map_err(|e| JsValue::from_str(&format!("Invalid hex: {}", e)))?;
 
         if hash_bytes.len() != 32 {
             return Err(JsValue::from_str("Hash must be 32 bytes"));
         }
 
         let mut hash = [0u8; 32];
-        hash.copy_from_slice(&hash_bytes);
+        hash.copy_from_slice(hash_bytes);
 
-        // Subsystem performs: ΔNew = ΔNetwork_Root ⊕ ΔBatchProposed
         let result = self
             .inner
             .finalize_batch(batch, hash, &self.engine)
             .map_err(|e| JsValue::from_str(&e))?;
 
-        Ok(result.id().to_string())
+        Ok(id_to_bytes(result.id()))
     }
 }
 
@@ -252,10 +286,10 @@ impl WasmValidator {
         }
     }
 
-    /// Get validator's current root (from LocalCausalAgent trait)
+    /// Get validator's current root as raw bytes (from LocalCausalAgent trait)
     #[wasm_bindgen(js_name = currentRoot)]
-    pub fn current_root(&self) -> String {
-        self.inner.get_current_root().id().to_string()
+    pub fn current_root(&self) -> Vec<u8> {
+        id_to_bytes(self.inner.get_current_root().id())
     }
 
     /// Get expected nonce for next transaction
@@ -265,21 +299,37 @@ impl WasmValidator {
     }
 
     /// Validate batch - validator performs atomic causal synthesis
-    /// The ConsensusValidator subsystem handles validation internally
+    /// Returns new root as raw bytes
     #[wasm_bindgen(js_name = validateBatch)]
-    pub fn validate_batch(&mut self, batch_json: &str) -> Result<String, JsValue> {
+    pub fn validate_batch(&mut self, batch_json: &str) -> Result<Vec<u8>, JsValue> {
         let batch: TransactionBatch = serde_json::from_str(batch_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid batch JSON: {}", e)))?;
 
-        // Subsystem performs: ΔNew = ΔState_Root ⊕ ΔTransaction (for each tx)
         match self.inner.validate_batch(batch, &self.engine) {
             crate::subsystems::BatchValidationResult::Valid(new_root) => {
-                Ok(new_root.id().to_string())
+                Ok(id_to_bytes(new_root.id()))
             },
             crate::subsystems::BatchValidationResult::Rejected(reason) => {
                 Err(JsValue::from_str(&reason))
             },
         }
+    }
+
+    /// Batch validation benchmark - validates n single-tx batches inside WASM
+    /// Eliminates FFI overhead by keeping the loop in Rust
+    #[wasm_bindgen(js_name = benchmarkValidation)]
+    pub fn benchmark_validation(&mut self, iterations: u32) -> u32 {
+        for _ in 0..iterations {
+            let batch = TransactionBatch {
+                transactions: vec![crate::subsystems::TransactionAction {
+                    nonce: self.inner.expected_nonce(),
+                    data: vec![1, 2, 3],
+                }],
+                previous_root: self.inner.get_current_root().id().to_string(),
+            };
+            let _ = self.inner.validate_batch(batch, &self.engine);
+        }
+        iterations
     }
 }
 
@@ -305,10 +355,10 @@ impl WasmCommitmentAgent {
         }
     }
 
-    /// Get commitment agent's current root (from LocalCausalAgent trait)
+    /// Get commitment agent's current root as raw bytes (from LocalCausalAgent trait)
     #[wasm_bindgen(js_name = currentRoot)]
-    pub fn current_root(&self) -> String {
-        self.inner.get_current_root().id().to_string()
+    pub fn current_root(&self) -> Vec<u8> {
+        id_to_bytes(self.inner.get_current_root().id())
     }
 
     /// Get expected nonce for next commitment
@@ -324,12 +374,21 @@ impl WasmCommitmentAgent {
     }
 }
 
-/// Helper for hex encoding (simple implementation)
-mod hex {
-    pub fn encode(bytes: [u8; 32]) -> String {
-        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+/// Convert distinction ID to bytes
+/// - Hex strings (64 chars for SHA256) are decoded to 32 bytes
+/// - Short IDs like "0", "1" are returned as UTF-8 bytes
+fn id_to_bytes(id: &str) -> Vec<u8> {
+    // SHA256 hex strings are 64 characters
+    if id.len() == 64 {
+        hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec())
+    } else {
+        // Primordial or short IDs - return as UTF-8
+        id.as_bytes().to_vec()
     }
+}
 
+/// Helper for hex decoding (simple implementation)
+mod hex {
     pub fn decode(s: &str) -> Result<Vec<u8>, String> {
         if s.len() % 2 != 0 {
             return Err("Hex string must have even length".to_string());
@@ -348,6 +407,11 @@ mod hex {
 mod tests {
     use super::*;
 
+    /// Helper to convert bytes to hex string for comparison
+    fn to_hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    }
+
     /// Test: WASM engine exposes same primordial distinctions as native
     /// Falsifies if: WASM creates different Δ₀, Δ₁ than native engine
     #[test]
@@ -355,9 +419,9 @@ mod tests {
         let native_engine = DistinctionEngine::new();
         let wasm_engine = WasmEngine::new();
 
-        // WASM must have same primordial IDs as native
-        assert_eq!(wasm_engine.d0_id(), native_engine.d0().id());
-        assert_eq!(wasm_engine.d1_id(), native_engine.d1().id());
+        // WASM must have same primordial IDs as native (compare hex)
+        assert_eq!(to_hex(&wasm_engine.d0_id()), native_engine.d0().id());
+        assert_eq!(to_hex(&wasm_engine.d1_id()), native_engine.d1().id());
 
         // Initial counts must match
         assert_eq!(wasm_engine.distinction_count(), native_engine.distinction_count());
@@ -371,30 +435,32 @@ mod tests {
         let native_engine = DistinctionEngine::new();
         let wasm_engine = WasmEngine::new();
 
-        let d0_id = wasm_engine.d0_id();
-        let d1_id = wasm_engine.d1_id();
+        // Get IDs as hex strings for synthesis input
+        let d0_id = native_engine.d0().id();
+        let d1_id = native_engine.d1().id();
 
-        // Synthesize via WASM
+        // Synthesize via WASM (returns bytes)
         let wasm_result =
-            wasm_engine.synthesize(&d0_id, &d1_id).expect("WASM synthesis should succeed");
+            wasm_engine.synthesize(d0_id, d1_id).expect("WASM synthesis should succeed");
 
         // Synthesize via native
         let native_result = native_engine.synthesize(native_engine.d0(), native_engine.d1());
 
-        // Results MUST be identical (determinism)
-        assert_eq!(wasm_result, native_result.id());
+        // Results MUST be identical (determinism) - compare hex
+        assert_eq!(to_hex(&wasm_result), native_result.id());
     }
 
     /// Test: WASM respects Axiom of Symmetry
     /// Falsifies if: synthesize(a, b) ≠ synthesize(b, a) in WASM
     #[test]
     fn test_wasm_axiom_symmetry() {
+        let native_engine = DistinctionEngine::new();
         let wasm_engine = WasmEngine::new();
-        let d0 = wasm_engine.d0_id();
-        let d1 = wasm_engine.d1_id();
+        let d0 = native_engine.d0().id();
+        let d1 = native_engine.d1().id();
 
-        let ab = wasm_engine.synthesize(&d0, &d1).unwrap();
-        let ba = wasm_engine.synthesize(&d1, &d0).unwrap();
+        let ab = wasm_engine.synthesize(d0, d1).unwrap();
+        let ba = wasm_engine.synthesize(d1, d0).unwrap();
 
         // Symmetry - order independence
         assert_eq!(ab, ba, "WASM synthesis violates symmetry axiom");
@@ -404,13 +470,14 @@ mod tests {
     /// Falsifies if: synthesize(a, a) ≠ a in WASM
     #[test]
     fn test_wasm_axiom_irreflexivity() {
+        let native_engine = DistinctionEngine::new();
         let wasm_engine = WasmEngine::new();
-        let d0 = wasm_engine.d0_id();
+        let d0 = native_engine.d0().id();
 
-        let result = wasm_engine.synthesize(&d0, &d0).unwrap();
+        let result = wasm_engine.synthesize(d0, d0).unwrap();
 
         // Irreflexivity - self-synthesis yields self
-        assert_eq!(result, d0, "WASM synthesis violates irreflexivity axiom");
+        assert_eq!(to_hex(&result), d0, "WASM synthesis violates irreflexivity axiom");
     }
 
     /// Test: NetworkAgent subsystem maintains LocalCausalAgent contract through WASM
@@ -448,7 +515,7 @@ mod tests {
 
         let batch = serde_json::json!({
             "transactions": [{"nonce": 0, "data": [1, 2, 3]}],
-            "previous_root": initial_root
+            "previous_root": to_hex(&initial_root)
         });
 
         let new_root =
@@ -492,23 +559,23 @@ mod tests {
 
         let batch = serde_json::json!({
             "transactions": [{"nonce": 0, "data": [1, 2, 3]}],
-            "previous_root": agent.consensus_root()
+            "previous_root": to_hex(&agent.consensus_root())
         })
         .to_string();
 
-        // Stage 1: Propose commitment
+        // Stage 1: Propose commitment (returns raw bytes)
         let hash = agent.propose_commitment(&batch).expect("Commitment proposal should succeed");
 
         assert!(!hash.is_empty(), "Commitment hash should not be empty");
-        assert_eq!(hash.len(), 64, "Commitment hash should be 32 bytes hex (64 chars)");
+        assert_eq!(hash.len(), 32, "Commitment hash should be 32 bytes");
 
-        // Stage 1: Verify commitment
+        // Stage 1: Verify commitment (accepts raw bytes)
         let is_valid =
             agent.check_commitment(&hash, 0, 0).expect("Commitment check should succeed");
 
         assert!(is_valid, "Valid commitment should pass verification");
 
-        // Stage 2: Finalize with correct hash should succeed
+        // Stage 2: Finalize with correct hash should succeed (accepts raw bytes)
         let result = agent.finalize_batch(&batch, &hash);
         assert!(result.is_ok(), "Finalization with correct hash should succeed");
     }
@@ -523,7 +590,7 @@ mod tests {
 
         let batch = serde_json::json!({
             "transactions": [{"nonce": 0, "data": [1, 2, 3]}],
-            "previous_root": agent.consensus_root()
+            "previous_root": to_hex(&agent.consensus_root())
         })
         .to_string();
 
@@ -531,8 +598,8 @@ mod tests {
         let _correct_hash =
             agent.propose_commitment(&batch).expect("Commitment proposal should succeed");
 
-        // Attacker creates different hash
-        let tampered_hash = "0".repeat(64);
+        // Attacker creates different hash (32 zero bytes)
+        let tampered_hash = vec![0u8; 32];
 
         // Should reject tampered hash
         let result = agent.finalize_batch(&batch, &tampered_hash);
@@ -552,7 +619,7 @@ mod tests {
 
         let batch = serde_json::json!({
             "transactions": [{"nonce": 0, "data": [1, 2, 3]}],
-            "previous_root": agent.consensus_root()
+            "previous_root": to_hex(&agent.consensus_root())
         })
         .to_string();
 
@@ -579,7 +646,7 @@ mod tests {
                 {"nonce": 0, "data": [1, 2, 3]},
                 {"nonce": 999, "data": [4, 5, 6]}  // Wrong nonce
             ],
-            "previous_root": initial_root
+            "previous_root": to_hex(&initial_root)
         })
         .to_string();
 
@@ -603,16 +670,16 @@ mod tests {
         );
     }
 
-    /// Test: WASM hex encoding/decoding correctness
+    /// Test: WASM hex decoding correctness
     /// Falsifies if: Hex conversion corrupts data
     #[test]
-    fn test_wasm_hex_encoding_correctness() {
+    fn test_wasm_hex_decoding_correctness() {
         let original = [42u8; 32];
-        let encoded = hex::encode(original);
+        let encoded = to_hex(&original);
         let decoded = hex::decode(&encoded).expect("Decoding should succeed");
 
         assert_eq!(decoded.len(), 32);
-        assert_eq!(&decoded[..], &original[..], "Hex encoding/decoding corrupted data");
+        assert_eq!(&decoded[..], &original[..], "Hex decoding corrupted data");
     }
 
     /// Test: WASM deterministic leader election through subsystem
@@ -635,5 +702,41 @@ mod tests {
 
         // Determinism: same validator set → same leader
         assert_eq!(leader1, leader2, "FALSIFICATION FAILED: Leader election is non-deterministic");
+    }
+
+    /// Test: Batch benchmark functions work correctly
+    #[test]
+    fn test_wasm_batch_benchmarks() {
+        let engine = WasmEngine::new();
+
+        // Test synthesis benchmark
+        let iterations = engine.benchmark_synthesis(100);
+        assert_eq!(iterations, 100);
+
+        // Test leader election benchmark
+        let mut agent = WasmNetworkAgent::new(&engine);
+        for i in 0..3 {
+            agent.join_peer(&format!("validator_{}", i)).unwrap();
+        }
+        let iterations = agent.benchmark_leader_election(100);
+        assert_eq!(iterations, 100);
+
+        // Test validation benchmark
+        let mut validator = WasmValidator::new(&engine);
+        let iterations = validator.benchmark_validation(10);
+        assert_eq!(iterations, 10);
+    }
+
+    /// Test: Bulk peer join works correctly
+    #[test]
+    fn test_wasm_bulk_peer_join() {
+        let engine = WasmEngine::new();
+        let mut agent = WasmNetworkAgent::new(&engine);
+
+        let peer_ids: Vec<String> = (0..5).map(|i| format!("validator_{}", i)).collect();
+        let result = agent.join_peers(peer_ids);
+
+        assert!(result.is_ok());
+        assert_eq!(agent.validator_count(), 5);
     }
 }
