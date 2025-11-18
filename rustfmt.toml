@@ -1,0 +1,30 @@
+# Rustfmt configuration for forma-core
+# Enforces consistent formatting across the codebase
+# Using stable features only for maximum compatibility
+
+# Edition
+edition = "2021"
+
+# Line width
+max_width = 100
+
+# Formatting
+newline_style = "Unix"
+use_small_heuristics = "Max"
+
+# Whitespace
+use_field_init_shorthand = true
+use_try_shorthand = true
+
+# Function definitions
+fn_params_layout = "Tall"
+
+# Match formatting
+match_block_trailing_comma = true
+
+# Misc
+remove_nested_parens = true
+
+# Note: Some advanced features require nightly Rust
+# To use nightly features, run: rustup install nightly
+# Then use: cargo +nightly fmt

@@ -1,0 +1,42 @@
+[package]
+name = "koru-lambda-core"
+version = "1.0.0"
+edition = "2021"
+description = "A minimal axiomatic system for distributed computation"
+authors = ["Sawyer Kent <sawyerkent.me@gmail.com>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+sha2 = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+dashmap = "6.0"
+rayon = "1.10"
+lru = "0.16"
+
+# WASM support
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+js-sys = { version = "0.3", optional = true }
+
+[features]
+default = []
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys"]
+
+[build-dependencies]
+cbindgen = "0.26"
+
+[dev-dependencies]
+criterion = "0.5"
+proptest = "1.0"
+petgraph = "0.6"
+rand = "0.8"
+
+[[bench]]
+name = "performance"
+harness = false

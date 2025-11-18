@@ -1,0 +1,15 @@
+# Clippy configuration for forma-core
+# These lints ensure high code quality and catch common mistakes
+
+# Cognitive complexity threshold - keep functions simple
+cognitive-complexity-threshold = 15
+
+# Type complexity threshold
+type-complexity-threshold = 100
+
+# Avoid breaking exported APIs
+avoid-breaking-exported-api = true
+
+# Note: Enable additional lints via Cargo.toml or command line:
+# cargo clippy -- -W clippy::missing_docs_in_private_items
+# cargo clippy -- -W clippy::unwrap_used
