@@ -74,7 +74,7 @@ echo ""
 
 # Verify package.json
 echo "Verifying package.json..."
-PACKAGE_VERSION=$(node -p "require('./pkg/package.json').version")
+PACKAGE_VERSION=$(node -p "require('../pkg/package.json').version")
 echo "Package version: ${PACKAGE_VERSION}"
 echo ""
 
@@ -93,7 +93,7 @@ if [[ ! "$response" =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-cd pkg
+cd ../pkg
 npm publish --access public
 
 if [ $? -eq 0 ]; then
