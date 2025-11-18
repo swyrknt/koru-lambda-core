@@ -40,20 +40,20 @@ fi
 echo -e "${GREEN}✓ npm authentication verified${NC}"
 echo ""
 
-# Run tests
+# Run code hygiene checks (format, clippy, tests)
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║   Running Test Suite                                         ║"
+echo "║   Running Code Hygiene Checks                                ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 
-cargo test --release
+./scripts/check.sh
 
 if [ $? -ne 0 ]; then
-    echo -e "${RED}❌ Tests failed${NC}"
+    echo -e "${RED}❌ Code hygiene checks failed${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}✓ All tests passed${NC}"
+echo -e "${GREEN}✓ All checks passed${NC}"
 echo ""
 
 # Build WASM
