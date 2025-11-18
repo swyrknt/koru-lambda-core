@@ -46,7 +46,7 @@ echo "║   Running Code Hygiene Checks                                ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 
-./scripts/check.sh
+./check.sh
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Code hygiene checks failed${NC}"
@@ -62,7 +62,7 @@ echo "║   Building WASM Artifact                                     ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 
-./scripts/build_universal.sh
+./build_universal.sh
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ WASM build failed${NC}"
