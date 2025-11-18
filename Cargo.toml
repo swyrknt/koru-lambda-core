@@ -6,6 +6,9 @@ description = "A minimal axiomatic system for distributed computation"
 authors = ["Sawyer Kent <sawyerkent.me@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+repository = "https://github.com/swyrknt/koru-lambda-core"
+keywords = ["distributed", "consensus", "wasm", "deterministic"]
+categories = ["algorithms", "wasm"]
 
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
