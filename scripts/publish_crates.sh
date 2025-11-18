@@ -3,9 +3,12 @@ set -e
 
 echo "Publishing koru-lambda-core to crates.io..."
 
+# Navigate to project root (parent of scripts/)
+cd "$(dirname "$0")/.."
+
 # Verify we're in the right directory
 if [ ! -f "Cargo.toml" ]; then
-    echo "Error: Cargo.toml not found. Run from project root."
+    echo "Error: Cargo.toml not found."
     exit 1
 fi
 
