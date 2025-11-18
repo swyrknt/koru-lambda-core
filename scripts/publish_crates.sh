@@ -12,9 +12,9 @@ if [ ! -f "Cargo.toml" ]; then
     exit 1
 fi
 
-# Run tests first
+# Run tests first (release mode for performance tests)
 echo "Running tests..."
-cargo test
+cargo test --release
 
 # Dry run to catch issues
 echo "Dry run..."
