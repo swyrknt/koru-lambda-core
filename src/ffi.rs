@@ -171,6 +171,33 @@ pub unsafe extern "C" fn koru_agent_state_root(agent: *const KoruAgent) -> *mut 
     }
 }
 
+/// Get expected transaction nonce from agent's validator
+///
+/// # Safety
+/// agent must be valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn koru_agent_expected_nonce(agent: *const KoruAgent) -> u64 {
+    if agent.is_null() {
+        return 0;
+    }
+    let agent = &*(agent as *const NetworkAgent);
+    agent.consensus_validator_expected_nonce()
+}
+
+/// Restore the expected transaction nonce for state import
+///
+/// # Safety
+/// agent must be valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn koru_agent_restore_nonce(agent: *mut KoruAgent, nonce: u64) -> i32 {
+    if agent.is_null() {
+        return KORU_ERROR_NULL_POINTER;
+    }
+    let agent = &mut *(agent as *mut NetworkAgent);
+    agent.restore_consensus_validator_nonce(nonce);
+    KORU_SUCCESS
+}
+
 // ============================================================================
 // PEER MANAGEMENT
 // ============================================================================
@@ -767,6 +794,106 @@ mod tests {
             koru_free_string(root_str);
             koru_agent_free(leader);
             koru_engine_free(engine);
+        }
+    }
+
+    #[test]
+    fn test_ffi_agent_expected_nonce() {
+        unsafe {
+            let engine = koru_engine_new();
+            let agent = koru_agent_new(engine);
+
+            // Initial nonce should be 0
+            let nonce = koru_agent_expected_nonce(agent);
+            assert_eq!(nonce, 0);
+
+            koru_agent_free(agent);
+            koru_engine_free(engine);
+        }
+    }
+
+    #[test]
+    fn test_ffi_agent_restore_nonce() {
+        unsafe {
+            let engine = koru_engine_new();
+            let agent = koru_agent_new(engine);
+
+            // Initial nonce should be 0
+            assert_eq!(koru_agent_expected_nonce(agent), 0);
+
+            // Restore nonce to 42
+            let result = koru_agent_restore_nonce(agent, 42);
+            assert_eq!(result, KORU_SUCCESS);
+
+            // Verify nonce was restored
+            assert_eq!(koru_agent_expected_nonce(agent), 42);
+
+            koru_agent_free(agent);
+            koru_engine_free(engine);
+        }
+    }
+
+    #[test]
+    fn test_ffi_nonce_restoration_with_batch() {
+        unsafe {
+            let engine = koru_engine_new();
+            let agent = koru_agent_new(engine);
+
+            // Restore nonce to 100
+            koru_agent_restore_nonce(agent, 100);
+            assert_eq!(koru_agent_expected_nonce(agent), 100);
+
+            // Get state root for batch
+            let root_str = koru_agent_state_root(agent);
+            let root_cstr = CStr::from_ptr(root_str);
+            let root = root_cstr.to_str().unwrap();
+
+            // Create batch with nonce 100
+            let batch = format!(
+                r#"{{"transactions":[{{"nonce":100,"data":[1,2,3]}}],"previous_root":"{}"}}"#,
+                root
+            );
+            let batch_bytes = batch.as_bytes();
+            let mut commitment_hash = [0u8; 32];
+
+            // Propose commitment
+            let result = koru_agent_propose_commitment(
+                agent,
+                engine,
+                batch_bytes.as_ptr(),
+                batch_bytes.len(),
+                commitment_hash.as_mut_ptr(),
+            );
+            assert_eq!(result, KORU_SUCCESS);
+
+            // Finalize batch
+            let result = koru_agent_finalize_batch(
+                agent,
+                engine,
+                batch_bytes.as_ptr(),
+                batch_bytes.len(),
+                commitment_hash.as_ptr(),
+            );
+            assert_eq!(result, KORU_SUCCESS);
+
+            // Nonce should now be 101
+            assert_eq!(koru_agent_expected_nonce(agent), 101);
+
+            koru_free_string(root_str);
+            koru_agent_free(agent);
+            koru_engine_free(engine);
+        }
+    }
+
+    #[test]
+    fn test_ffi_null_pointer_safety() {
+        unsafe {
+            // Test null pointer handling for new FFI functions
+            let nonce = koru_agent_expected_nonce(std::ptr::null());
+            assert_eq!(nonce, 0);
+
+            let result = koru_agent_restore_nonce(std::ptr::null_mut(), 42);
+            assert_eq!(result, KORU_ERROR_NULL_POINTER);
         }
     }
 }

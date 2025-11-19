@@ -156,6 +156,12 @@ impl ConsensusValidator {
         self.expected_nonce
     }
 
+    /// Set current expected nonce (used for state restoration/import).
+    /// WARNING: Use only during initialization/import.
+    pub fn set_expected_nonce(&mut self, nonce: u64) {
+        self.expected_nonce = nonce;
+    }
+
     /// Get current state root ID
     pub fn state_root_id(&self) -> &str {
         self.local_root.id()
@@ -317,5 +323,28 @@ mod tests {
         assert!(matches!(result2, BatchValidationResult::Valid(_)));
 
         assert_eq!(validator.expected_nonce(), 2);
+    }
+
+    #[test]
+    fn test_set_expected_nonce() {
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut validator = ConsensusValidator::new(&engine);
+
+        // Initial nonce should be 0
+        assert_eq!(validator.expected_nonce(), 0);
+
+        // Set nonce to 42 (simulating state restoration)
+        validator.set_expected_nonce(42);
+        assert_eq!(validator.expected_nonce(), 42);
+
+        // Now a batch with nonce 42 should be valid
+        let batch = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 42, data: vec![1, 2, 3] }],
+            previous_root: validator.state_root_id().to_string(),
+        };
+
+        let result = validator.validate_batch(batch, &engine);
+        assert!(matches!(result, BatchValidationResult::Valid(_)));
+        assert_eq!(validator.expected_nonce(), 43);
     }
 }

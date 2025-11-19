@@ -354,6 +354,18 @@ impl NetworkAgent {
     pub fn ftw_duration(&self) -> u64 {
         self.ftw_duration_ms
     }
+
+    /// Get expected transaction nonce from the internal validator.
+    /// This is the authoritative, canonical nonce required by the LCA contract.
+    pub fn consensus_validator_expected_nonce(&self) -> u64 {
+        self.validator.expected_nonce()
+    }
+
+    /// Restore the expected transaction nonce for state import.
+    /// Used during persistence load to set the correct Causal Frontier.
+    pub fn restore_consensus_validator_nonce(&mut self, nonce: u64) {
+        self.validator.set_expected_nonce(nonce);
+    }
 }
 
 /// Network statistics
@@ -541,5 +553,51 @@ mod tests {
         // Events counter should increment
         let stats = agent.get_stats();
         assert_eq!(stats.events_processed, 1);
+    }
+
+    #[test]
+    fn test_consensus_validator_nonce_access() {
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut agent = NetworkAgent::new(&engine);
+
+        // Initial nonce should be 0
+        assert_eq!(agent.consensus_validator_expected_nonce(), 0);
+
+        // Restore nonce to 100 (simulating state import)
+        agent.restore_consensus_validator_nonce(100);
+        assert_eq!(agent.consensus_validator_expected_nonce(), 100);
+
+        // Verify stats also reflect the nonce
+        let stats = agent.get_stats();
+        assert_eq!(stats.consensus_nonce, 100);
+    }
+
+    #[test]
+    fn test_nonce_restoration_with_batch() {
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut agent = NetworkAgent::new(&engine);
+
+        // Restore nonce to 50
+        agent.restore_consensus_validator_nonce(50);
+
+        // Propose a commitment with nonce 50
+        let batch = TransactionBatch {
+            transactions: vec![crate::subsystems::validator::TransactionAction {
+                nonce: 50,
+                data: vec![1, 2, 3],
+            }],
+            previous_root: agent.consensus_state_root().to_string(),
+        };
+
+        let commitment = agent.propose_commitment(batch.clone(), &engine);
+        assert!(commitment.is_ok());
+
+        // Finalize the batch
+        let commitment = commitment.unwrap();
+        let result = agent.finalize_batch(batch, commitment.commitment_hash, &engine);
+        assert!(result.is_ok());
+
+        // Nonce should now be 51
+        assert_eq!(agent.consensus_validator_expected_nonce(), 51);
     }
 }

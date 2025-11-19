@@ -1,6 +1,6 @@
 [package]
 name = "koru-lambda-core"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 description = "A minimal axiomatic system for distributed computation"
 authors = ["Sawyer Kent <sawyerkent.me@gmail.com>"]
