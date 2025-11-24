@@ -69,6 +69,16 @@ impl DistinctionEngine {
         &self.d1
     }
 
+    /// Retrieves a cloned Distinction by its unique ID.
+    /// O(1) complexity via internal DashMap lookup.
+    ///
+    /// Returns None if the distinction doesn't exist.
+    ///
+    /// Thread-safe: Can be called concurrently from multiple threads.
+    pub fn get_distinction_by_id(&self, id: &str) -> Option<Distinction> {
+        self.all_distinctions.get(id).map(|entry| entry.value().clone())
+    }
+
     /// Adds a canonical relationship between two distinctions.
     ///
     /// Thread-safe via DashMap interior mutability.

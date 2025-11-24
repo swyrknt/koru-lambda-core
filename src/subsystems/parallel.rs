@@ -33,12 +33,20 @@ pub enum ProcessingStrategy {
 
 impl Canonicalizable for ParallelAction {
     fn to_canonical_structure(&self, engine: &DistinctionEngine) -> Distinction {
-        // Canonicalize the number of batches
+        // Canonicalize the number of batches (u64 is 8 bytes)
         let batch_count_bytes = (self.batches.len() as u64).to_le_bytes();
-        batch_count_bytes.iter().fold(engine.d0().clone(), |acc, &byte| {
-            let byte_d = byte.to_canonical_structure(engine);
-            engine.synthesize(&acc, &byte_d)
-        })
+
+        // 1. Canonicalize each byte into a distinction in parallel (O(1) lookups via cache)
+        let byte_distinctions: Vec<Distinction> = batch_count_bytes
+            .into_par_iter()
+            .map(|byte| byte.to_canonical_structure(engine))
+            .collect();
+
+        // 2. Sequentially fold the resulting distinctions into the final root
+        // The overall process is significantly faster due to the byte cache and parallel mapping.
+        byte_distinctions
+            .into_iter()
+            .fold(engine.d0().clone(), |acc, d| engine.synthesize(&acc, &d))
     }
 }
 
@@ -223,14 +231,13 @@ impl ParallelSynthesizer {
         pairs
             .into_par_iter()
             .map(|(id_a, id_b)| {
-                // Get distinctions from engine
-                let distinctions = self.engine.get_distinctions_snapshot();
-                let d_a = distinctions.iter().find(|d| d.id() == id_a);
-                let d_b = distinctions.iter().find(|d| d.id() == id_b);
+                // O(1) lookup using the engine's internal map
+                let d_a = self.engine.get_distinction_by_id(&id_a);
+                let d_b = self.engine.get_distinction_by_id(&id_b);
 
                 match (d_a, d_b) {
                     (Some(a), Some(b)) => {
-                        let result = self.engine.synthesize(a, b);
+                        let result = self.engine.synthesize(&a, &b);
                         result.id().to_string()
                     },
                     _ => String::new(),
