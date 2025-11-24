@@ -69,19 +69,18 @@ impl WasmEngine {
     /// Returns the ID of the resulting distinction as raw bytes
     #[wasm_bindgen]
     pub fn synthesize(&self, id_a: &str, id_b: &str) -> Result<Vec<u8>, JsValue> {
-        let distinctions = self.inner.get_distinctions_snapshot();
-
-        let a = distinctions
-            .iter()
-            .find(|d| d.id() == id_a)
+        // O(1) lookup using the engine's internal map, replacing the slow O(N) snapshot/linear search.
+        let a = self
+            .inner
+            .get_distinction_by_id(id_a)
             .ok_or_else(|| JsValue::from_str(&format!("Distinction not found: {}", id_a)))?;
 
-        let b = distinctions
-            .iter()
-            .find(|d| d.id() == id_b)
+        let b = self
+            .inner
+            .get_distinction_by_id(id_b)
             .ok_or_else(|| JsValue::from_str(&format!("Distinction not found: {}", id_b)))?;
 
-        let result = self.inner.synthesize(a, b);
+        let result = self.inner.synthesize(&a, &b);
         Ok(id_to_bytes(result.id()))
     }
 
