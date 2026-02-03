@@ -165,10 +165,12 @@ cargo bench
 
 ### Performance Targets
 
+*Measured on Apple M3 Pro (11 cores), macOS*
+
 **Core Operations:**
-- **198,000 ops/s** - Core synthesis throughput (19.8x target)
-- **14,000,000 ops/s** - Parallel synthesis with Rayon (140x target)
-- **35,000 tx/s** - Sustained batch validation throughput
+- **~1.5M ops/s** - Core synthesis throughput (single-threaded)
+- **~3M ops/s** - Parallel synthesis with Rayon (10,000 element batches)
+- **3-7.5M tx/s** - Batch validation throughput (depends on batch size)
 
 **Concurrency:**
 - **Multi-core scaling** - Auto-detects CPU cores for parallelism
@@ -177,19 +179,19 @@ cargo bench
 - **Zero data races** - Validated with 100 concurrent threads
 
 **Distributed Consensus:**
-- **6,500 tx/s** - Across 5 nodes (BFT configuration)
-- **7μs leader election** - Sub-10μs deterministic leader selection
+- **~150K tx/s** - Across 5 nodes (100 tx per iteration)
+- **~1-7μs leader election** - Deterministic leader selection (1-50 validators)
 - **Instant finality** - No probabilistic confirmation needed
 
 **Storage Efficiency:**
 - **3.85x compression** - Via structural compaction
 - **O(log n) growth** - Logarithmic storage with compaction
-- **14ms compaction** - For 10,000 node graphs
+- **~6ms compaction** - For 10,000 node graphs
 
 **WASM (Universal Artifact):**
-- **1,500,000 ops/s** - Core synthesis throughput
-- **880,000 ops/s** - Leader election (7 validators)
-- **47,000 tx/s** - Batch validation throughput
+- **~1.5M ops/s** - Core synthesis throughput (measured in browser/Node.js)
+- **~880K ops/s** - Leader election (7 validators)
+- **~47K tx/s** - Batch validation throughput
 - **Binary marshalling** - Zero-copy Uint8Array returns eliminate FFI overhead
 - **Structural batching** - Bulk operations run entirely inside WASM
 
