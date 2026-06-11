@@ -29,5 +29,27 @@ path = "src/exp09_foreign_id.rs"
 name = "exp12_log_commutativity"
 path = "src/exp12_log_commutativity.rs"
 
+[[bin]]
+name = "exp21_cross_engine_determinism"
+path = "src/exp21_cross_engine_determinism.rs"
+
+# Validator audit probe (companion to audits/validator.md)
+[[bin]]
+name = "exp_validator_audit"
+path = "src/exp_validator_audit.rs"
+
+# Network audit probes (companion to audits/network.md)
+[[bin]]
+name = "audit_network_foreign_peers"
+path = "src/audit_network_foreign_peers.rs"
+
+[[bin]]
+name = "audit_network_commitment_unbound"
+path = "src/audit_network_commitment_unbound.rs"
+
+[[bin]]
+name = "audit_network_concurrency"
+path = "src/audit_network_concurrency.rs"
+
 [profile.release]
 opt-level = 3

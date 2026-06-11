@@ -52,3 +52,18 @@ path = "src/exp10_throughput.rs"
 [[bin]]
 name = "exp11_clone_cost"
 path = "src/exp11_clone_cost.rs"
+
+# Experiment 18: Coding Law (Spearman rho freq vs degree)
+[[bin]]
+name = "exp18_coding_law"
+path = "src/exp18_coding_law.rs"
+
+# Experiment 19: Mediated self-reference -> infinite novelty
+[[bin]]
+name = "exp19_mediated_self_reference"
+path = "src/exp19_mediated_self_reference.rs"
+
+# Experiment 20: Fold Law mechanism (depth <= 8 byte routing)
+[[bin]]
+name = "exp20_fold_law"
+path = "src/exp20_fold_law.rs"
