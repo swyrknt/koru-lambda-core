@@ -17,13 +17,15 @@ Status legend: `[ ]` not done · `[~]` partial · `[x]` done
 
 ## Execution order
 
-1. **Phase 1 — Audit + Validate** (Sections 3 + 4 in parallel, read-only)
-2. **Phase 2 — Quick wins** (Section 1.4 doc corrections, Section 1.2 hex swap, Section 1.1 snapshot doc)
-3. **Phase 3 — ByteMapping fix** (Section 1.1 phantom fix, ~5 LOC additive)
-4. **Phase 4 — Settle Section 5 decisions** (3 remaining: snapshot contract, merkle ordering, hex-on-wire)
-5. **Phase 5 — Implement v2.0** (Section 2)
-6. **Phase 6 — Version bump + CHANGELOG rename + integration PR to `dev`**
-7. **Phase 7 — Consumer migration** (ALIS, koru-protocol)
+1. **Phase 1 — Audit + Validate** (Sections 3 + 4 in parallel, read-only) — **complete (audits); validations drafted, not run**
+2. **Phase 1.5 — Empirical follow-up** (Sections 1.11 + 1.12: persist drafted code, run experiments, capture baseline)
+3. **Phase 2 — Quick wins** (Section 1.4 doc corrections, Section 1.2 hex swap, Section 1.1 snapshot doc)
+4. **Phase 3 — ByteMapping fix** (Section 1.1 phantom fix, ~5 LOC additive)
+5. **Phase 4 — Settle all Section 5 decisions** (9 items: 3 original + 6 from Phase 1 audits)
+6. **Phase 5 — Consensus-correctness patch decision** (Section 1.5: ship as v1.2.1 security release, or bundle into v2.0?)
+7. **Phase 6 — Implement v2.0** (Sections 1.6–1.10 + Section 2)
+8. **Phase 7 — Version bump + CHANGELOG rename + integration PR to `dev`**
+9. **Phase 8 — Consumer migration** (ALIS, koru-protocol)
 
 ---
 
@@ -69,6 +71,110 @@ Status legend: `[ ]` not done · `[~]` partial · `[x]` done
 - [ ] Replay: `714K ops/sec` → `450K ordered / 367K shuffled on M3 Pro`. *(Exp 7)*
 - [ ] Snapshot tearing: `16.5%` → `rare (~0.1%) but avalanche-sized when it occurs`. *(Exp 6)*
 - [ ] v2.0 framing: `clone elimination` → `8× memory density`. Clone is 1.6% of synth cost. *(Exp 11, 16)*
+- [ ] Compactor: "non-destructive — classifies but never mutates the engine" is wrong; `new()` and `synthesize_action` mutate. *(audit/compactor)*
+
+### 1.5 Consensus-correctness bugs (Phase 1 audit) — MUST NOT SHIP TO A NETWORK
+- [ ] **`BatchCommitment::compute` does NOT hash `leader_id`** — leader attribution is forgeable. *(audit/network N6, audit/ffi F7, audit/wasm W10)*
+  - Fix: include `leader_id.as_bytes()` in the SHA256 hasher (commitment.rs:46-58). Trivial.
+- [ ] **`NetworkAction::BatchProposed` truncates `previous_root` to first 8 bytes** — two different chain heads sharing 8-byte hex prefix produce identical action distinctions (causal-chain collision). *(audit/network N5)*
+  - Fix: drop `.take(8)` (network.rs:73-78); hash full string or validate as 64-hex-char SHA256.
+- [ ] **Validator atomic-failure semantics are misstated** — engine retains all syntheses from the rejected batch's valid prefix; only validator state rolls back. *(audit/validator V5)*
+  - Fix: either rephrase the docstring (validator.rs:96-97), or pre-validate batches (walk `transactions` once before any `synthesize` call). Doc fix is minimum; pre-validate is correct.
+
+### 1.6 Consensus hardening (Phase 1 audit)
+- [ ] Empty peer-id ("") collapses to `engine.d0()` — primordial impersonation. *(audit/network N2)*
+  - Fix: reject `id.is_empty()` in `PeerIdentity::new` (network.rs:30-39).
+- [ ] Unbounded peer-id length — 1MB peer-id = ~2s CPU + 1M permanent distinctions per join. *(audit/network N1)*
+  - Fix: cap peer-id length (suggest 64 bytes) in `PeerIdentity::new`.
+- [ ] Unbounded `TransactionAction.data` — 1 MB tx = ~2s CPU + ~N novel distinctions per tx. *(audit/validator V3)*
+  - Fix: length cap on `data` field before fold.
+- [ ] Rejection message amplifies attacker input — full untrusted `previous_root` copied into `format!`. *(audit/validator V4)*
+  - Fix: clip to first 64 chars in error message (validator.rs:115-119).
+- [ ] Validator-set dedupe mismatch — `join_peer` dedupes on `peer.id` (String), leader election hashes `peer.distinction_id()`. *(audit/network N7)*
+  - Fix: dedupe on joint `(id, distinction_id)` key (network.rs:175).
+- [ ] `pending_commitments` unbounded growth on never-finalized proposals. *(audit/network N11)*
+  - Fix: size cap + TTL eviction.
+
+### 1.7 FFI hardening (Phase 1 audit)
+- [ ] **Panic safety** — no `catch_unwind`, no `panic = "abort"`, unwinding across `extern "C"` is UB or hard abort. *(audit/ffi F1, F3)*
+  - Fix: add `panic = "abort"` to release and dev profiles in `Cargo.toml`. One line, eliminates F1+F3.
+- [ ] **TOCTOU on `*mut KoruAgent`** — concurrent calls = `&mut` aliasing = UB. Header doc lies about thread safety. *(audit/ffi F2, F8)*
+  - Fix (minimum): document the contract — engine is shared-thread-safe, agents/validators require exclusive access. One paragraph.
+  - Fix (heavier): wrap agents in `Mutex<NetworkAgent>` inside FFI. ~30 LOC.
+- [ ] **Opaque types collapse to `c_void`** — type confusion silently accepted. *(audit/ffi F4)*
+  - Fix: `#[repr(C)] pub struct KoruEngine { _private: [u8; 0] }` (same for agent, validator). cbindgen emits distinct typedefs; C mismatches become C compile errors.
+- [ ] cbindgen `include` list omits 18/22 functions from generated header. *(audit/ffi F5)*
+  - Fix: remove the `include` list in `cbindgen.toml:14` (cbindgen exports every `pub extern "C"` it finds).
+- [ ] FFI Arc-bookkeeping comment is wrong; pattern works only by coincidence. *(audit/ffi F6)*
+  - Fix: use `ManuallyDrop<Arc<DistinctionEngine>>` instead of `Arc::from_raw + Arc::into_raw` dance.
+- [ ] FFI `check_commitment` hash parameter is decorative (never inspected). *(audit/ffi F7)*
+  - Fix: add hash parameter to `BatchCommitment::verify`; FFI passes it through. Related to commitment.rs `leader_id` fix in 1.5.
+- [ ] `batch_len: usize` unbounded — UB if > `isize::MAX`. *(audit/ffi F9)*
+  - Fix: reject `batch_len > isize::MAX as usize` at FFI entrypoints.
+
+### 1.8 WASM wire-format (Phase 1 audit) — depends on §5 hex-on-wire decision
+- [ ] **`id_to_bytes` heuristic (`id.len() == 64`) breaks at v2.0** — every distinction falls through to UTF-8 fallback path. *(audit/wasm W1)*
+  - Fix: kill heuristic. Expose `Distinction::as_bytes() -> &[u8; 16]`; `id_to_bytes` becomes one `.to_vec()`.
+- [ ] **Primordials leak as `[0x30]` / `[0x31]` UTF-8 bytes** instead of real IDs. *(audit/wasm W2)*
+  - Fix: v2.0 gives primordials real 16-byte IDs. Special case disappears.
+- [ ] **Silent UTF-8 fallback on hex decode error** — `hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec())`. *(audit/wasm W4)*
+  - Fix: propagate as `JsValue::from_str(...)`. Fail-closed.
+- [ ] WASM `synthesize(&str, &str)` should be `synthesize(&[u8], &[u8])` at v2.0 (symmetric with outputs). *(audit/wasm W9)*
+- [ ] WASM `checkCommitment` builds Frankenstein `BatchCommitment { leader_id: "", batch_size: 0 }`. *(audit/wasm W10)*
+  - Fix: add proper params, OR narrower API in `NetworkAgent`.
+- [ ] No panic hook in WASM — Rust panics surface as opaque `RuntimeError`. *(audit/wasm W5)*
+  - Fix: add `console_error_panic_hook` + `#[wasm_bindgen(start)]`.
+- [ ] WASM tests are `#[test]` not `#[wasm_bindgen_test]` — never hit a WASM runtime. *(audit/wasm W13)*
+  - Fix: convert. Verify host tests pass first under `--features wasm`.
+
+### 1.9 Compactor cleanup (Phase 1 audit)
+- [ ] Compactor magic constants: `hot_threshold: 3`, `warm = hot/2`, unverified "26.6×" claim. *(audit/compactor)*
+  - Fix: derive thresholds from observed degree distribution OR drop HOT/WARM/COLD trichotomy for raw SIS. Remove "26.6×" until reproduced.
+- [ ] `compaction_count` double-increment (`compact()` and `synthesize_action`). *(audit/compactor)*
+  - Fix: remove from one site.
+- [ ] Compactor "archives its own work products" — `synthesize_action` re-runs `calculate_sis` after writing compaction-event distinctions; new low-degree nodes classified COLD. *(audit/compactor)*
+  - Fix: skip recompute after own synth, OR exclude compaction events from re-classification.
+- [ ] Replace compactor's `calculate_sis` body with `engine.degree(d)` once 2.2 traversal API lands.
+
+### 1.10 Architectural cleanup
+- [ ] **Delete `ParallelBatchProcessor`** (~250 LOC removed). It's misnamed (Sequential body, dead `worker_count` field, single-variant enum). Already covered by `ConsensusValidator`. *(audit/parallel)*
+  - Pre-flight: grep ALIS + koru-protocol for `ParallelBatchProcessor` use before deleting.
+- [ ] Keep `ParallelSynthesizer`; rename to `BatchSynthesizer`; return `Vec<Option<Distinction>>` instead of empty-string fallback. *(audit/parallel)*
+
+### 1.11 Phase 1 empirical follow-up (persisted, verified clean, NOT YET RUN)
+
+Validation experiment sources persisted and verified clippy-clean.
+
+- [x] Persisted `experiments/runner/src/exp18_coding_law.rs` — clippy clean
+- [x] Persisted `experiments/runner/src/exp19_mediated_self_reference.rs` — clippy clean
+- [x] Persisted `experiments/runner/src/exp20_fold_law.rs` (written from scratch using primitives.rs:11-22 as reference) — clippy clean
+- [x] Persisted `experiments/qa/src/exp21_cross_engine_determinism.rs` — clippy clean after 8 fixes (1 compile error + 7 warnings)
+- [x] Registered all four binaries in respective `Cargo.toml` files
+- [x] **`cargo clippy --release --all-targets` on new files** — zero warnings on all 4 new validation binaries
+- [ ] Run all four; update validation reports (`experiments/findings/validations/*.md`) with measured results
+
+Audit repro probes persisted and verified clippy-clean:
+- [x] `experiments/qa/src/exp_validator_audit.rs` — clippy clean
+- [x] `experiments/qa/src/audit_network_foreign_peers.rs` — clippy clean
+- [x] `experiments/qa/src/audit_network_commitment_unbound.rs` — clippy clean
+- [x] `experiments/qa/src/audit_network_concurrency.rs` — clippy clean
+- [ ] Run the 4 probes; capture output as evidence appendix to corresponding audit reports
+
+### 1.12 Baseline measurement (COMPLETE — see `experiments/findings/baseline.md`)
+
+- [x] `cargo test --release` — **103 tests pass, 0 fail** (CLAUDE.md claims 114 — drift)
+- [x] `cargo clippy --all-targets --release` — **CLEAN** on main crate (no features)
+- [x] `cargo build --features wasm --release` — **library builds OK**
+- [x] `cargo test --features wasm --release --lib wasm` — **2 confirmed failures:**
+  - `test_wasm_engine_primordial_consistency` **FAILS** — confirms audit W2 (id_to_bytes heuristic)
+  - `test_wasm_validator_atomic_failure` **PANICS** on host — confirms audit W13 (host-side `#[test]` vs `#[wasm_bindgen_test]`)
+- [x] `cargo clippy --features wasm --all-targets --release` — **FAILS TO COMPILE** `tests/falsification/wasm_consistency.rs` (18 errors: `[u8]` Display)
+- [x] Baseline saved to `experiments/findings/baseline.md`
+
+**New baseline-derived items:**
+- [ ] CLAUDE.md says "114 tests" but actual is 103. Update doc (add to 1.4).
+- [ ] `tests/falsification/wasm_consistency.rs` is broken under `--features wasm` — pre-existing test code that expects a wire format the wasm wrapper doesn't deliver. Fix as part of Section 1.8 wasm work.
+- [ ] Pre-existing experiments (`exp01-12`) have ~20 clippy warnings (`type_complexity`, `manual_div_ceil`, `dead_code`). Either fix as cleanup or scope the "no warnings" promise to `src/` + `tests/`. Recommended: fix. Low priority but easy.
 
 ---
 
@@ -102,76 +208,116 @@ All items ship together in 2.0.0. The structural type changes and the additive A
 
 ---
 
-## Section 3 — AUDIT (code paths NOT yet examined for theory drift or correctness)
+## Section 3 — AUDIT (Phase 1 complete — findings folded into Sections 1.4–1.10)
 
-These subsystems were skimmed for structure during the warroom but never audited for invariant preservation, theory leaks, or correctness under adversarial input. **The project cannot be called "completely theory-aligned" until these are reviewed.**
+All 7 subsystems audited. Reports in `experiments/findings/audits/`. Top-level summary in `experiments/findings/AUDIT_SUMMARY.md`.
 
-- [ ] **`src/subsystems/compactor.rs`** (503 LOC) — claimed non-destructive; verify all 11 classification paths preserve append-only.
-  - Owner candidate: theory-guardian or engine-architect.
-- [ ] **`src/subsystems/validator.rs`** (350 LOC) — blockchain consensus. Does nonce-ordered batch validation construct Distinctions from foreign data? Any path that takes untrusted bytes → ID?
-  - Owner candidate: qa-sentinel.
-- [ ] **`src/subsystems/network.rs`** (603 LOC) — leader election, epochs, gossip. Network bytes → distinction IDs anywhere?
-  - Owner candidate: qa-sentinel.
-- [ ] **`src/subsystems/commitment.rs`** (504 LOC) — two-stage gossip + LRU cache. Any post-commit mutation of engine state?
-  - Owner candidate: engine-architect.
-- [ ] **`src/subsystems/parallel.rs`** (379 LOC) — rayon-based `ParallelBatchProcessor` + `ParallelSynthesizer`. Race conditions when multiple cores synthesize? (Engine itself is reviewed; the parallel wrappers are not.)
-  - Owner candidate: rust-craftsman.
-- [ ] **`src/ffi.rs`** (899 LOC) — Exp 17 reviewed the **ID surface** (0 signature changes for v2.0). It did NOT review:
-  - Memory safety (unsafe blocks, lifetimes of `*mut c_char`).
-  - Panic safety across the C boundary.
-  - Leak paths (any unfreed allocations?).
-  - Error handling under malformed input.
-  - Owner candidate: rust-craftsman.
-- [ ] **`src/wasm.rs`** (741 LOC) — **completely unaudited**. JS-side ID comparisons (`id === "abc..."`) break post-v2.0. Memory model and panic propagation unreviewed.
-  - Owner candidate: rust-craftsman.
+- [x] **`src/subsystems/compactor.rs`** — see 1.4, 1.9. Largest theory drift in codebase; non-destructive claim is wrong; magic constants; archives own work products.
+- [x] **`src/subsystems/validator.rs`** — see 1.5, 1.6. Atomic-failure docstring lies; foreign-Distinction acceptance; unbounded DoS.
+- [x] **`src/subsystems/network.rs`** — see 1.5, 1.6. 5 foreign-ID vectors; **leader_id not hashed (forgeable)**; **previous_root 8-byte truncation (causal collision)**; primordial impersonation.
+- [x] **`src/subsystems/commitment.rs`** — CLEAN. No drift, one v2.0 type break in `commitment_root_id`.
+- [x] **`src/subsystems/parallel.rs`** — see 1.10. Delete `ParallelBatchProcessor`; rename `ParallelSynthesizer`.
+- [x] **`src/ffi.rs`** — see 1.7. 2 HIGH (panic safety, TOCTOU), both fixable in ~5 LOC. 0 leak paths.
+- [x] **`src/wasm.rs`** — see 1.8. 1 CRITICAL wire-format heuristic. 0 unsafe, theory-clean.
 
 ---
 
-## Section 4 — VALIDATE (theory claims in CLAUDE.md not reproduced in this repo)
+## Section 4 — VALIDATE (Phase 1 — designs drafted, experiments not yet run)
 
-These are imported from the ALIS warroom (5 rounds, 50+ experiments) but were never measured here. They're plausibly true — they're the theory's reason for existing — but for the engine to be self-contained provably theory-aligned, they should be reproduced against this codebase.
+Phase 1 produced design reports for all four. Three have full source drafted. None executed (plan mode blocked file creation + `cargo run`). Reports in `experiments/findings/validations/`.
 
-- [ ] **Coding Law: degree ↔ usage frequency rho=0.99** — CLAUDE.md asserts this. Not measured locally. Needs experiment that drives synthesis with a known frequency distribution and checks Spearman correlation against final degrees.
-  - Owner candidate: research-lead.
-- [ ] **Self-reference through mediated observation → infinite novelty** — claim: `synth(synth(self, obs_i), self)` produces unique distinctions at every depth, while direct `synth(self, self)` is irreflexive.
-  - Test: assert ID-distinctness across depths 1, 10, 100, 1000.
-  - Owner candidate: research-lead.
-- [ ] **Fold Law mechanism (depth ≤ 8)** — Exp 4 confirmed d0/d1 are linear-in-N hubs. The depth-8 byte-routing mechanism specifically was not isolated. Need experiment that shows the seed-layer hub effect emerges from ByteMapping's 8-step chain, not from later content concentration.
-  - Owner candidate: research-lead.
-- [ ] **Cross-engine determinism on arbitrary chains** — Exp 7 showed log replay produces byte-identical state. Stronger version: two cold engines, driven by identical synthesis sequences but never sharing memory, produce byte-identical `all_distinctions` and `relationships` sets at every step.
-  - Owner candidate: qa-sentinel.
+- [~] **Coding Law: degree ↔ usage frequency rho=0.99** — `experiments/runner/src/exp18_coding_law.rs` source drafted (in agent transcript). Predicted rho 0.97–0.999.
+  - Pending: persist source, register `[[bin]]`, run.
+- [~] **Mediated self-reference → infinite novelty** — `experiments/runner/src/exp19_mediated_self_reference.rs` source drafted. Predicted CONFIRMED for both T2 (varying obs) and T3 (constant obs).
+  - Pending: persist source, register `[[bin]]`, run.
+- [ ] **Fold Law mechanism (depth ≤ 8)** — design report drafted; source NOT drafted (agent ran out of permitted actions). Depends on TODO #3 phantom fix OR manual 8-step replication.
+  - Pending: write source.
+- [~] **Cross-engine determinism on arbitrary chains** — `experiments/qa/src/exp21_cross_engine_determinism.rs` source drafted. Five phases (baseline, history adversary, concurrent, closed-form predict_id, three-way majority). All predicted CONFIRMED.
+  - Pending: persist source, register `[[bin]]`, run.
 
 ---
 
 ## Section 5 — STILL OPEN (decisions, not work)
 
+### Original (pre-Phase 1)
 - [ ] **Merkle-over-log / log-diffing semantics** — Exp 12 showed canonical ordering is NOT needed for replay. It IS needed if koru-protocol ever hashes the log for consensus or peer-diffs logs. Decide before the log API is finalized.
 - [ ] **Snapshot API contract** — pick: rename to `_unsynchronized`, add `_quiesced(barrier)` variant, or document the 0.06–0.08% tear rate at the call site. Required before any persistence consumer adopts it.
-- [ ] **Hex on the wire after v2.0** — WASM consumers comparing `id === "abc..."` strings will break if we switch JS-visible IDs to bytes. Decision: keep hex on the wire / serialize bytes / both? Affects Section 3 audit of `wasm.rs`.
+- [ ] **Hex on the wire after v2.0** — WASM consumers comparing `id === "abc..."` strings will break if we switch JS-visible IDs to bytes. Decision: keep hex on the wire / serialize bytes / both? Affects Section 1.8 (WASM wire-format fixes).
+
+### Surfaced by Phase 1 audits
+- [ ] **Consensus-correctness bugs (1.5): patch in v1.2.x now, or wait for v2.0?**
+  - `leader_id` not in hash, `previous_root` 8-byte truncation, validator atomic-failure leakage.
+  - All three are network-correctness critical. If any code runs on a testnet, these are exploitable.
+  - Fixing `leader_id` hash changes the `commitment_hash` output — wire-format break even in a "patch" release. Coordinate with consumers either way.
+  - Recommended: v1.2.1 security patch alongside v2.0 development. Single v2.0 cut still holds for everything else.
+- [ ] **Compactor mutation: accept the design and fix docs, or refactor to truly read-only?**
+  - The mutations (in `new()` and `synthesize_action`) all route through `engine.synthesize` — theory-clean (append-only, axioms preserved).
+  - "Non-destructive" claim in CLAUDE.md/TODO.md is the actual error.
+  - Two paths: (a) cheapest — rephrase docs to say "all mutations are append-only `synthesize` calls"; (b) refactor — `synthesize_action` becomes a `pure_analysis()` returning a `CompactionReport` instead of writing to the engine.
+  - Recommended: (a). The append-only mutations are correct theory; the docs are wrong, not the code.
+- [ ] **Validator atomic-failure: doc fix only, or pre-validate batches?**
+  - Doc fix is one paragraph; honest about engine-side append-only growth.
+  - Pre-validation eliminates the engine-side leakage but adds a pass per batch.
+  - Recommended: pre-validation. Cheap, removes the leakage entirely, aligns implementation with the docstring's promise.
+- [ ] **FFI thread-safety: doc paragraph only, or wrap agents in internal `Mutex`?**
+  - Doc-only is cheap and zero perf cost; relies on embedder discipline.
+  - Internal `Mutex<NetworkAgent>` is ~30 LOC; single-digit ns hot path; eliminates the footgun at compile time.
+  - Recommended: internal Mutex. The "Go/Kotlin/Swift runtime serializes" assumption is unverifiable from Rust; defense in depth matches the rest of the engine's "no footguns" stance.
+- [ ] **WASM panic hook: feature-gate or always-on?**
+  - Add `console_error_panic_hook` as a `wasm` feature dep; call from `#[wasm_bindgen(start)]`.
+  - Cost is ~5 KB of WASM bundle. Acceptable for diagnostic value.
+  - Recommended: always-on under `wasm` feature.
+- [ ] **Network audit: must-fix items are also useful as a security advisory.**
+  - Should we publish a `SECURITY.md` describing the three consensus-correctness bugs once fixed, or quietly fix and ship?
+  - Recommended: SECURITY.md once patched. ALIS/koru-protocol consumers need to know which versions are safe.
 
 **Decided** (record only):
 - ~~v1.3 vs v2.0 boundary~~ → single v2.0 cut. One migration for consumers.
+- ~~Defensive runtime input validation on engine~~ → no (theory drift; closed by v2.0 `pub(crate)` structurally).
 
 ---
 
 ## Quick stats
 
-| Category | Items |
-|---|---|
-| Section 1 — FIX (concrete bugs/drift) | 14 |
-| Section 2 — IMPLEMENT (all v2.0) | 13 |
-| Section 3 — AUDIT (unreviewed code) | 7 subsystems |
-| Section 4 — VALIDATE (unreproduced theory) | 4 claims |
-| Section 5 — DECIDE (open questions) | 3 |
+| Category | Items | Status |
+|---|---|---|
+| Section 1.1–1.3 — Engine FIX (original 14 items) | 14 | not started |
+| Section 1.4 — CLAUDE.md doc drift | 7 | not started |
+| Section 1.5 — Consensus-correctness bugs (MUST NOT SHIP) | 3 | not started |
+| Section 1.6 — Consensus hardening | 6 | not started |
+| Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | not started |
+| Section 1.8 — WASM wire-format (incl. 1 CRITICAL) | 7 | not started |
+| Section 1.9 — Compactor cleanup | 4 | not started |
+| Section 1.10 — Architectural cleanup | 2 | not started |
+| Section 1.11 — Phase 1 follow-up (persist + run drafted code) | 10 | not started |
+| Section 1.12 — Baseline measurement | 4 | not started |
+| Section 2 — IMPLEMENT (all v2.0) | 13 | not started |
+| Section 3 — AUDIT (Phase 1) | 7 subsystems | **complete** |
+| Section 4 — VALIDATE | 4 claims | 3 drafted / 0 run |
+| Section 5 — DECIDE | 9 | 3 original + 6 from Phase 1 |
 
 **To call the project "completely theory-aligned, clean, high-quality, bug-free":**
-- All of Section 1 must be closed.
-- All of Section 3 must be audited (and any findings closed).
+- All of Section 1 (1.1–1.10) must be closed.
 - Section 4 should be closed for the engine to be self-validating.
 - Section 2 is the new value being shipped; Section 5 are gating decisions.
 
 ## Evidence index
 
+**Phase 1 (audits + validation designs):**
+- `experiments/findings/AUDIT_SUMMARY.md` — top-level Phase 1 synthesis
+- `experiments/findings/audits/compactor.md`
+- `experiments/findings/audits/commitment.md`
+- `experiments/findings/audits/validator.md`
+- `experiments/findings/audits/network.md`
+- `experiments/findings/audits/parallel.md`
+- `experiments/findings/audits/ffi.md`
+- `experiments/findings/audits/wasm.md`
+- `experiments/findings/validations/coding_law.md`
+- `experiments/findings/validations/mediated_self_reference.md`
+- `experiments/findings/validations/fold_law.md`
+- `experiments/findings/validations/cross_engine_determinism.md`
+
+**Original warroom (17 experiments):**
 - `experiments/findings/WARROOM_FINDINGS.md` — top-level synthesis
 - `experiments/findings/SUMMARY_research_lead.md` — Exp 1, 2, 3, 7, 10, 11
 - `experiments/findings/SUMMARY_qa_sentinel.md` — Exp 5, 6, 8, 9, 12
