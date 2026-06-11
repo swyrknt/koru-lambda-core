@@ -1,0 +1,33 @@
+[package]
+name = "qa_sentinel_experiments"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+koru-lambda-core = { path = "../.." }
+dashmap = "6.0"
+rand = "0.8"
+sha2 = "0.10"
+
+[[bin]]
+name = "exp05_phantoms"
+path = "src/exp05_phantoms.rs"
+
+[[bin]]
+name = "exp06_tearing"
+path = "src/exp06_tearing.rs"
+
+[[bin]]
+name = "exp08_concurrent_read"
+path = "src/exp08_concurrent_read.rs"
+
+[[bin]]
+name = "exp09_foreign_id"
+path = "src/exp09_foreign_id.rs"
+
+[[bin]]
+name = "exp12_log_commutativity"
+path = "src/exp12_log_commutativity.rs"
+
+[profile.release]
+opt-level = 3

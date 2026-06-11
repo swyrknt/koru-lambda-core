@@ -1,0 +1,47 @@
+[package]
+name = "rust-experiments"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+koru-lambda-core = { path = "../.." }
+dashmap = "6.0"
+sha2 = "0.10"
+hex = "0.4"
+rand = "0.8"
+once_cell = "1.19"
+rayon = "1.10"
+ahash = "0.8"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bin]]
+name = "exp04_reverse_index"
+path = "src/bin/exp04_reverse_index.rs"
+
+[[bin]]
+name = "exp13_collision"
+path = "src/bin/exp13_collision.rs"
+
+[[bin]]
+name = "exp15_synth_breakdown"
+path = "src/bin/exp15_synth_breakdown.rs"
+
+[[bench]]
+name = "exp14_rehashing"
+harness = false
+
+[[bench]]
+name = "exp16_clone_cost"
+harness = false
+
+[[bench]]
+name = "exp15_synth_criterion"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
