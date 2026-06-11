@@ -1,10 +1,29 @@
 # Checklist — Path to Theory-Aligned, Audited, Validated
 
-**Branch:** `research/warroom-experiments`
-**Base:** koru-lambda-core 1.2.0 (`src/` unmodified)
+**Integration branch:** `research/warroom-experiments`
+**Base:** koru-lambda-core 1.2.0 (`src/` unmodified at start)
 **Evidence basis:** 17 experiments across `experiments/{runner,qa,rust}/`, summarized in `experiments/findings/`.
+**Target release:** 2.0.0 (single cut, no intermediate 1.3)
 
 Status legend: `[ ]` not done · `[~]` partial · `[x]` done
+
+## Working agreements
+
+- **All sub-work branches off `research/warroom-experiments` and merges back into it.** Naming: `fix/*`, `audit/*`, `validate/*`, `impl/*`. The integration branch eventually merges to `dev` as one v2.0 PR.
+- **`Cargo.toml` stays at `1.2.0` throughout.** The final commit on the integration branch (right before the PR to `dev`) is the single bump to `2.0.0`. No version edits in any sub-branch.
+- **`CHANGELOG.md` grows during the work**, not at the end. Each sub-PR appends to an `## Unreleased` section. The final commit renames it to `## 2.0.0` with the date.
+- **Phase 1 (Sections 3 + 4) runs first**, in parallel, before any `src/` edits. We don't refactor on top of unaudited subsystems.
+- **No defensive runtime checks (length validation, existence checks) on engine inputs.** Foreign-ID bugs close structurally via the `pub(crate)` constructor change. Theory-pure stays theory-pure.
+
+## Execution order
+
+1. **Phase 1 — Audit + Validate** (Sections 3 + 4 in parallel, read-only)
+2. **Phase 2 — Quick wins** (Section 1.4 doc corrections, Section 1.2 hex swap, Section 1.1 snapshot doc)
+3. **Phase 3 — ByteMapping fix** (Section 1.1 phantom fix, ~5 LOC additive)
+4. **Phase 4 — Settle Section 5 decisions** (3 remaining: snapshot contract, merkle ordering, hex-on-wire)
+5. **Phase 5 — Implement v2.0** (Section 2)
+6. **Phase 6 — Version bump + CHANGELOG rename + integration PR to `dev`**
+7. **Phase 7 — Consumer migration** (ALIS, koru-protocol)
 
 ---
 
@@ -53,27 +72,33 @@ Status legend: `[ ]` not done · `[~]` partial · `[x]` done
 
 ---
 
-## Section 2 — IMPLEMENT (additive work, design settled)
+## Section 2 — IMPLEMENT (all v2.0, no intermediate release)
 
-### 2.1 Version 1.3 (additive, non-breaking)
+All items ship together in 2.0.0. The structural type changes and the additive APIs land in the same release so consumers migrate once.
+
+### 2.1 Type-level changes (structural, theory-strengthening)
+- [ ] `Distinction([u8; 16])` — truncated SHA256. Content addressing preserved. *(Exp 13: 0 collisions in 268M; Exp 15: 4.2× faster end-to-end)*
+- [ ] `pub(crate)` on the field + private constructor — closes foreign-ID poisoning structurally. No external code can mint IDs.
+- [ ] `BuildHasherDefault<IdentityHasher>` on internal DashMaps — 6–13× hash speedup. Safe ONLY with byte keys. *(Exp 14)*
+- [ ] FFI: keep public C signatures, swap internal `format!`/parsing for `hex::encode`/`hex::decode`. ~25 LOC. *(Exp 17: 0 signature changes)*
+
+### 2.2 Additive APIs (new public surface)
 - [ ] `degree(d: &Distinction) -> usize` — O(1) via `DashMap<Distinction, AtomicUsize>`.
 - [ ] `parents_of(d: &Distinction) -> Option<(Distinction, Distinction)>` — forward index populated in synthesize.
 - [ ] `children_of(d: &Distinction) -> impl Iterator<Item = Distinction>` — reverse index, in-engine.
-- [ ] Synthesis log on `SegQueue` + `without_log()` constructor.
 - [ ] Streaming `calculate_sis` using the reverse index (removes the full-snapshot clone in compactor).
+
+### 2.3 Synthesis log
+- [ ] Append-only log on `SegQueue<(Distinction, Distinction)>` (bytes from day one, not retyped from String).
+- [ ] `DistinctionEngine::without_log()` constructor or `log` feature flag for memory-sensitive consumers.
+- [ ] Serde derives on log entry type (`bincode` round-trip 25 ms / 14 ms at 1M). *(Exp 7)*
+
+### 2.4 Invariant tripwire
 - [ ] `debug_assert!(self.relationship_count() == 2 * self.distinction_count() - 3)` inside `synthesize()` on the novel path. Zero release cost, future-regression tripwire.
 
-### 2.2 Version 2.0 (breaking, paired)
-- [ ] `Distinction([u8; 16])` — truncated SHA256. Content addressing preserved. *(Exp 13: 0 collisions in 268M; Exp 15: 4.2× faster end-to-end)*
-- [ ] `pub(crate)` on the field + private constructor — closes foreign-ID poisoning structurally.
-- [ ] `BuildHasherDefault<IdentityHasher>` on internal DashMaps — 6–13× hash speedup. Safe ONLY with byte keys. *(Exp 14)*
-- [ ] Retype synthesis log from `(String, String)` (v1.3) to `(Distinction, Distinction)` (v2.0).
-- [ ] Serde derives on log entry type (`bincode` round-trip 25 ms / 14 ms at 1M). *(Exp 7)*
-- [ ] FFI: keep public C signatures, swap internal `format!`/parsing for `hex::encode`/`hex::decode`. ~25 LOC. *(Exp 17: 0 signature changes)*
-
-### 2.3 Consumer coordination
-- [ ] ALIS (`/Users/sawyerkent/Projects/alis-ai/`) — pins `koru-lambda-core = "1.2"`. v2.0 migration plan.
-- [ ] koru-protocol (`/Users/sawyerkent/Projects/koru/`) — same pin, same plan. Check JSON wire formats for embedded distinction IDs.
+### 2.5 Consumer coordination
+- [ ] ALIS (`/Users/sawyerkent/Projects/alis-ai/`) — pins `koru-lambda-core = "1.2"`. Bump to 2.0 after engine release.
+- [ ] koru-protocol (`/Users/sawyerkent/Projects/koru/`) — same pin, same bump. Check JSON wire formats for embedded distinction IDs.
 
 ---
 
@@ -120,12 +145,12 @@ These are imported from the ALIS warroom (5 rounds, 50+ experiments) but were ne
 
 ## Section 5 — STILL OPEN (decisions, not work)
 
-- [ ] **Merkle-over-log / log-diffing semantics** — Exp 12 showed canonical ordering is NOT needed for replay. It IS needed if koru-protocol ever hashes the log for consensus or peer-diffs logs. Decide before v1.3 ships, even if the answer is "not now."
+- [ ] **Merkle-over-log / log-diffing semantics** — Exp 12 showed canonical ordering is NOT needed for replay. It IS needed if koru-protocol ever hashes the log for consensus or peer-diffs logs. Decide before the log API is finalized.
 - [ ] **Snapshot API contract** — pick: rename to `_unsynchronized`, add `_quiesced(barrier)` variant, or document the 0.06–0.08% tear rate at the call site. Required before any persistence consumer adopts it.
 - [ ] **Hex on the wire after v2.0** — WASM consumers comparing `id === "abc..."` strings will break if we switch JS-visible IDs to bytes. Decision: keep hex on the wire / serialize bytes / both? Affects Section 3 audit of `wasm.rs`.
-- [ ] **v1.3 vs v2.0 boundary** — two options:
-  - A) Ship v1.3 (traversal API + log + phantom fix + perf) on Strings, then v2.0 retype. Faster value to ALIS.
-  - B) Skip v1.3, ship v2.0 in one cut. One migration for consumers.
+
+**Decided** (record only):
+- ~~v1.3 vs v2.0 boundary~~ → single v2.0 cut. One migration for consumers.
 
 ---
 
@@ -134,10 +159,10 @@ These are imported from the ALIS warroom (5 rounds, 50+ experiments) but were ne
 | Category | Items |
 |---|---|
 | Section 1 — FIX (concrete bugs/drift) | 14 |
-| Section 2 — IMPLEMENT (additive work) | 13 |
+| Section 2 — IMPLEMENT (all v2.0) | 13 |
 | Section 3 — AUDIT (unreviewed code) | 7 subsystems |
 | Section 4 — VALIDATE (unreproduced theory) | 4 claims |
-| Section 5 — DECIDE (open questions) | 4 |
+| Section 5 — DECIDE (open questions) | 3 |
 
 **To call the project "completely theory-aligned, clean, high-quality, bug-free":**
 - All of Section 1 must be closed.
