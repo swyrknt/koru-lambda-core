@@ -33,8 +33,8 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 1. **Phase 1 — Audit + Validate** — **COMPLETE**
 2. **Phase 1.5 — Empirical follow-up** — **COMPLETE**
 3. **Phase 4 — Settle Section 5 decisions** — **COMPLETE** (all 9 locked; details in Section 5 below)
-4. **Phase 2 — Quick wins** (Section 1.4 doc corrections, Section 1.2 hex swap, Section 1.1 snapshot rename)
-5. **Phase 3 — ByteMapping fix** (Section 1.1 phantom fix, ~5 LOC additive)
+4. **Phase 2 — Quick wins** — **COMPLETE** (commits `727f7f9`, `7265bfd`, `6b247d3`, `36d4cdd` merged in `00fcdb3`)
+5. **Phase 3 — ByteMapping fix** — **COMPLETE** (commit `86747db` merged in `58a7ff5`; Phase 1.5 probe re-run confirms phantoms 253 → 0)
 6. **Phase 6 — Implement v2.0** (Sections 1.5–1.10 + Section 2; including Tier 0 consensus-correctness fixes per DECISION 5.1: bundle, not patch)
 7. **Phase 7 — `SECURITY.md` + CHANGELOG finalization + Cargo.toml bump 1.2.0 → 2.0.0 + integration PR to `dev`**
 8. **Phase 8 — Consumer migration** (ALIS, koru-protocol)
@@ -44,9 +44,7 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 ## Section 1 — FIX (confirmed bugs and drift, evidence in hand)
 
 ### 1.1 Live bugs in engine core
-- [ ] **ByteMapping phantom parents** — `primitives.rs:26–38` builds cache against a throwaway engine. Byte-derived IDs exist in relationships but not in `all_distinctions`. Violates `r = 2d − 3` semantically. *(Exp 5, qa)*
-  - Fix: register the 8-step chain into the calling engine on first byte use.
-  - Scope: ~5 LOC. Zero in-tree tests break (Exp 5).
+- [x] **ByteMapping phantom parents** — `primitives.rs:26–38` builds cache against a throwaway engine. Byte-derived IDs exist in relationships but not in `all_distinctions`. Violates `r = 2d − 3` semantically. *(Exp 5, qa)* — DONE in commit `86747db` (Phase 3). Static cache + throwaway engine removed; `map_byte_to_distinction` now folds each byte through the calling engine, registering the full chain. Phase 1.5 probe re-run confirms phantom count 253 → 0; distinction_count = unique_parent_ids. 103 tests still pass.
 - [ ] **Foreign-ID acceptance** — public `Distinction::new(String)` (`engine.rs:13`) lets external callers mint IDs. *(Exp 9, qa)*
   - 1MB ID → 7.3 ms/synth (225× DoS slowdown).
   - Cross-engine ID → silent phantom parent in receiver.
