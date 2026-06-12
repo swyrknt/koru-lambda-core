@@ -44,13 +44,13 @@ Two mechanisms produce hubs:
 - **Self-reference through mediated observation → infinite novelty.** Direct self⊗self is irreflexive (returns self). Mediated self-observation (synth(synth(self, obs), self)) produces unique distinctions at every depth.
 
 ### Key Behavioral Facts
-- **Performance:** 500K–900K synths/sec single-threaded. 1.85M on 8 threads (3.5× scaling via DashMap shards).
-- **Memory:** ~656 bytes per distinction (String hex IDs — the main scalability bottleneck).
-- **Ceiling:** ~10M distinctions on 16GB laptop.
-- **Log replay:** 714K ops/sec with perfect fidelity. Append-only log of (parent_a_id, parent_b_id) pairs round-trips exactly.
-- **Snapshots tear:** `get_state_snapshot()` under concurrent writes has 16.5% torn rate (two independent DashMap iterations, not atomic). Not safe for persistence under load.
-- **Compactor is non-destructive:** `compact()` classifies but never mutates the engine. Append-only is preserved.
-- **ByteMapping phantom nodes:** `map_byte_to_distinction()` returns Distinction objects NOT registered in the calling engine's `all_distinctions`. The cache was built against a throwaway engine.
+- **Performance:** 425–540K synths/sec single-threaded depending on chain depth. 2.6M on 8 threads (4.8× scaling via DashMap shards on M3 Pro). *(Exp 10, 2026)*
+- **Memory:** ~629 bytes per distinction measured at 1M live heap via dhat (String hex IDs — the main scalability bottleneck). v2.0's `Distinction([u8; 16])` reduces this 8× to ~80 bytes per distinction.
+- **Ceiling:** ~10M distinctions on 16GB laptop today; post-v2.0, the same hardware fits the equivalent of ~80M distinctions.
+- **Log replay:** 450K ops/sec ordered / 367K shuffled with perfect fidelity (M3 Pro). Append-only log of (parent_a_id, parent_b_id) pairs round-trips exactly; shuffled order produces byte-identical state via content addressing. *(Exp 7)*
+- **Snapshots tear:** `get_state_snapshot_unsynchronized()` under concurrent writes has rare (≤0.1%) but avalanche-sized torn rate — two independent DashMap iterations, not atomic. Not safe for persistence under load. *(Exp 6, 2026; the older "16.5%" figure was an early estimate that did not survive empirical measurement.)*
+- **Compactor mutations are theory-clean:** all compactor writes go through `engine.synthesize` (append-only, axioms preserved). The compaction event itself becomes a first-class distinction in the engine; the engine record is the canonical compaction history. *("non-destructive" was an earlier framing; mutations exist but they are append-only and therefore axiom-aligned.)*
+- **ByteMapping phantom nodes:** `map_byte_to_distinction()` returns Distinction objects NOT registered in the calling engine's `all_distinctions`. The cache was built against a throwaway engine. *(Closed by Section 1.1 #1 in CHECKLIST: register the 8-step chain into the calling engine on first byte use.)*
 
 ---
 
@@ -87,8 +87,9 @@ From ALIS warroom findings (documented in `/Users/sawyerkent/Projects/alis-ai/wa
 - **Streaming SIS:** `calculate_sis` currently clones the full relationship snapshot. With a reverse index it becomes O(1) per node.
 
 ### Breaking (version 2.0)
-- **`Distinction([u8; 16]) + Copy`:** 5-8× memory reduction. Eliminates all clones. Enables zero-copy persistence. The single highest-leverage change possible.
-- **`Distinction` field `pub(crate)`:** Prevents external construction of invalid IDs. Type-system validation.
+- **`Distinction([u8; 16]) + Copy`:** 8× memory density (629 B → ~80 B per distinction). Every measured axis improves 4–26× (Exp 13–16, 2026). The single highest-leverage change possible. Clone-elimination is a small CPU win (~1.6% of synth cost); the dominant gain is memory density and cache effects.
+- **`Distinction` field `pub(crate)`:** Prevents external construction of invalid IDs. Closes the foreign-ID poisoning class (Exp 9, 2026) structurally at compile time — no defensive runtime checks required.
+- **Bytes-on-wire canonical + explicit hex serialization layer:** `Distinction::to_hex()` / `Distinction::from_hex()` / `impl Display` in a separate module. JSON wire uses hex via `#[serde(with = "distinction_hex")]`; WASM uses `Uint8Array` with `idToHex` / `idFromHex` JS helpers; FFI keeps existing `*mut c_char` (hex) surfaces and adds byte-native accessors. The substrate stays pure bytes; humans interact via the hex layer at boundaries.
 - **Serde derives on log types:** Enables bincode serialization of the synthesis log.
 
 ---
@@ -110,9 +111,11 @@ From ALIS warroom findings (documented in `/Users/sawyerkent/Projects/alis-ai/wa
 ## Testing
 
 ```bash
-cargo test              # 114 tests, zero warnings
+cargo test              # 103 tests, zero warnings (baseline 2026-06-11)
 cargo clippy            # clean at default level
 cargo build --release   # FFI + rlib
 ```
 
 Tests cover: axiom verification, synthesis determinism, compactor classification, consensus validation, network agent epochs/leaders, parallel processing, byte canonicalization, FFI safety.
+
+For the `wasm` feature, the host-side `#[test]` blocks in `src/wasm.rs` cannot exercise the wasm-bindgen runtime; some tests fail/panic on host as of 1.2.0 (see `experiments/findings/baseline.md`). v2.0 migrates them to `#[wasm_bindgen_test]` and uses `wasm-pack test --node` (Section 1.8 in CHECKLIST).

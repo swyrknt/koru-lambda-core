@@ -18,9 +18,13 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
 
 ### Changed
 
-- **Docs:** corrected numerical drift in `CLAUDE.md` (memory, throughput, replay rate,
-  snapshot tearing, test count, v2.0 framing, compactor description). Numbers now match
-  measured baseline (`experiments/findings/baseline.md`).
+- **Docs:** corrected numerical drift in `CLAUDE.md` (memory: 656→629 B/distinction;
+  throughput: 500–900K → 425–540K single-thread / 1.85M @ 3.5× → 2.6M @ 4.8×;
+  replay: 714K → 450K ordered / 367K shuffled; snapshot tearing: 16.5% → ≤0.1% but
+  avalanche-sized; test count: 114→103; compactor described as "append-only via
+  synthesize" rather than "non-destructive"; v2.0 framing reworded around memory
+  density not clone elimination). Numbers now match measured baseline
+  (`experiments/findings/baseline.md`).
 
 ### Deprecated
 
