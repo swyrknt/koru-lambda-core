@@ -1,14 +1,21 @@
 use crate::{Distinction, DistinctionEngine};
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
 
 // --------------------------------------------------------------------------------
-// BYTE CANONICALIZATION CACHE (O(N) -> O(1))
+// BYTE CANONICALIZATION
 // --------------------------------------------------------------------------------
 
-/// Internal function: Computes byte distinction using the original 8-step
-/// binary path encoding logic (used only once to build the cache).
-fn compute_byte_distinction_uncached(byte: u8, engine: &DistinctionEngine) -> Distinction {
+/// Computes a byte's canonical distinction by folding the byte's 8 bits MSB-first
+/// through the engine. Each bit selects d0 (bit=0) or d1 (bit=1) as the `bit_d`
+/// operand; the accumulator starts at `engine.d0()`.
+///
+/// All 8 intermediate syntheses are performed against `engine`, registering the
+/// full chain (8 distinctions, 16 relationships per novel byte) in the calling
+/// engine's `all_distinctions` and relationship set.
+///
+/// `synthesize` is idempotent, so repeat calls for the same byte against the
+/// same engine are fast (DashMap hits on the cached intermediate IDs); only the
+/// first call for a given byte pays the 8-step SHA256 cost.
+fn fold_byte_into_engine(byte: u8, engine: &DistinctionEngine) -> Distinction {
     let mut current_d = engine.d0().clone();
 
     // MSB-first 8-step binary path encoding (8 synthesis operations)
@@ -20,22 +27,6 @@ fn compute_byte_distinction_uncached(byte: u8, engine: &DistinctionEngine) -> Di
 
     current_d
 }
-
-/// Pre-computed cache of all 256 possible byte-to-distinction IDs.
-/// Built once on first access using thread-safe lazy initialization.
-static BYTE_DISTINCTION_CACHE: Lazy<HashMap<u8, String>> = Lazy::new(|| {
-    // A temporary engine is created just for this deterministic computation.
-    let engine = DistinctionEngine::new();
-    let mut cache = HashMap::with_capacity(256);
-
-    for byte in 0u8..=255 {
-        let distinction = compute_byte_distinction_uncached(byte, &engine);
-        // Store only the resulting ID string for cheap cloning.
-        cache.insert(byte, distinction.id().to_string());
-    }
-
-    cache
-});
 
 // --------------------------------------------------------------------------------
 // TRAIT & MAPPING
@@ -55,18 +46,31 @@ pub trait Canonicalizable {
 pub struct ByteMapping;
 
 impl ByteMapping {
-    /// Maps a byte to a canonical distinction using a pre-computed cache.
+    /// Maps a byte to its canonical distinction in the given engine.
     ///
-    /// The actual distinction is computed once during lazy initialization. Subsequent
-    /// calls are O(1) lookups. The `_engine` parameter is kept for API compatibility.
+    /// Performs the MSB-first 8-step binary path encoding into `engine`,
+    /// registering every intermediate distinction in `engine.all_distinctions`
+    /// and adding the corresponding relationships. Subsequent calls for the same
+    /// byte against the same engine are fast (idempotent `synthesize` short-circuits
+    /// via DashMap lookup).
     ///
-    /// Thread-safe: Can be called concurrently from multiple threads.
-    pub fn map_byte_to_distinction(byte: u8, _engine: &DistinctionEngine) -> Distinction {
-        let id = BYTE_DISTINCTION_CACHE
-            .get(&byte)
-            .expect("BYTE_DISTINCTION_CACHE must contain all 256 bytes");
-
-        Distinction::new(id.clone())
+    /// # History
+    ///
+    /// Prior to this fix (Phase 3, CHECKLIST 1.1 #1), `ByteMapping` cached byte
+    /// IDs against a throwaway engine and returned them as `Distinction::new(id)`,
+    /// leaving the 8-step chain unregistered in the calling engine. This produced
+    /// phantom parents in the relationship set and violated `r = 2d - 3`
+    /// semantically (Exp 5, qa-sentinel). Phase 1.5 demonstrated that running
+    /// the validator over a 256-byte payload produced 259 distinctions but 512
+    /// unique parent IDs in relationships, leaving 253 phantoms
+    /// (`run_log/exp_validator_audit.log` E).
+    ///
+    /// Thread-safe: can be called concurrently from multiple threads. The engine's
+    /// DashMap handles concurrent inserts; `synthesize`'s idempotency means
+    /// duplicate concurrent calls converge on the same Distinction without
+    /// inflating distinction or relationship counts.
+    pub fn map_byte_to_distinction(byte: u8, engine: &DistinctionEngine) -> Distinction {
+        fold_byte_into_engine(byte, engine)
     }
 }
 

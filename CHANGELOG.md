@@ -44,6 +44,25 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   avalanche-sized tear rate per Exp 6) and when the snapshot is safe vs unsafe.
   External callers must rename: this is a v2.0 breaking change.
 
+### Fixed
+
+- **`ByteMapping::map_byte_to_distinction` no longer leaves phantom parents in
+  the calling engine** (CHECKLIST 1.1 #1; Exp 5, qa-sentinel). Previously, the
+  function returned IDs from a static cache built against a throwaway engine,
+  so the 8-step byte fold chain existed in relationships but not in the calling
+  engine's `all_distinctions`. The fix now folds each byte through the actual
+  calling engine, registering the full chain. Phase 1.5 validator probe
+  Section E confirms the phantom count goes from 253 (before) to 0 (after) on
+  the 256-byte exercise. `synthesize` idempotency ensures subsequent calls for
+  the same byte are fast (DashMap hits).
+
+  **Behavioral change:** byte-heavy workloads now grow the engine by the full
+  byte chain (up to 8 distinctions per novel byte, ~510 distinct total across
+  all 256 bytes due to prefix sharing). This is the correct theory; the prior
+  behavior undercounted distinctions and violated `r = 2d - 3` semantically.
+  v2.0's `Distinction([u8; 16])` migration recovers the lost throughput
+  (4–26× speedups across measured axes per Exp 14, 15).
+
 ### Deprecated
 
 ### Removed
