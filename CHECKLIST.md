@@ -30,15 +30,14 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 
 ## Execution order
 
-1. **Phase 1 — Audit + Validate** (Sections 3 + 4 in parallel, read-only) — **complete (audits); validations drafted, not run**
-2. **Phase 1.5 — Empirical follow-up** (Sections 1.11 + 1.12: persist drafted code, run experiments, capture baseline)
-3. **Phase 2 — Quick wins** (Section 1.4 doc corrections, Section 1.2 hex swap, Section 1.1 snapshot doc)
-4. **Phase 3 — ByteMapping fix** (Section 1.1 phantom fix, ~5 LOC additive)
-5. **Phase 4 — Settle all Section 5 decisions** (9 items: 3 original + 6 from Phase 1 audits)
-6. **Phase 5 — Consensus-correctness patch decision** (Section 1.5: ship as v1.2.1 security release, or bundle into v2.0?)
-7. **Phase 6 — Implement v2.0** (Sections 1.6–1.10 + Section 2)
-8. **Phase 7 — Version bump + CHANGELOG rename + integration PR to `dev`**
-9. **Phase 8 — Consumer migration** (ALIS, koru-protocol)
+1. **Phase 1 — Audit + Validate** — **COMPLETE**
+2. **Phase 1.5 — Empirical follow-up** — **COMPLETE**
+3. **Phase 4 — Settle Section 5 decisions** — **COMPLETE** (all 9 locked; details in Section 5 below)
+4. **Phase 2 — Quick wins** (Section 1.4 doc corrections, Section 1.2 hex swap, Section 1.1 snapshot rename)
+5. **Phase 3 — ByteMapping fix** (Section 1.1 phantom fix, ~5 LOC additive)
+6. **Phase 6 — Implement v2.0** (Sections 1.5–1.10 + Section 2; including Tier 0 consensus-correctness fixes per DECISION 5.1: bundle, not patch)
+7. **Phase 7 — `SECURITY.md` + CHANGELOG finalization + Cargo.toml bump 1.2.0 → 2.0.0 + integration PR to `dev`**
+8. **Phase 8 — Consumer migration** (ALIS, koru-protocol)
 
 ---
 
@@ -56,7 +55,7 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 - [ ] **Snapshot tearing** — `get_state_snapshot` (`engine.rs:154–156`) does two independent DashMap iterations. *(Exp 6, qa)*
   - Real, but 0.06–0.08% rate (not the 16.5% CLAUDE.md claims).
   - When it tears, it tears avalanche-sized.
-  - Fix: rename to `get_state_snapshot_unsynchronized()` and document, OR add quiesced variant. Decide before any persistence consumer ships.
+  - Fix (DECISION 5.8): rename `get_state_snapshot` → `get_state_snapshot_unsynchronized` and document the tearing behavior. Defer `_quiesced(barrier)` variant until a concrete consumer asks. ~5 LOC.
 
 ### 1.2 Performance / cleanup (no theory impact)
 - [ ] **`format!("{:x}", digest)` → `hex::encode(digest)`** in `engine.rs` hot path. *(Exp 15, rust)*
@@ -74,6 +73,7 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
   - 26% throughput regression at 8 threads. Mutex is worse (52.7%).
   - Replace with `crossbeam::queue::SegQueue<(Distinction, Distinction)>` (7% at 8 threads, scales with cores).
   - Order-independence of replay confirmed (Exp 7, Exp 12), so SegQueue's weaker ordering is safe.
+  - DECISION 5.7: push canonical `(min, max)` tuples (not raw `(parent_a, parent_b)`). Enables future Merkle-over-log and cross-peer log diffing without rewriting persisted logs. Reuse `engine.rs::synthesize`'s existing min/max canonicalization at push site.
 - [ ] **TODO #2 memory escape hatch** — 1M synths = 81 MB resident log; worst case ~176 B/entry. At 10M = ~1.7 GB.
   - Add `DistinctionEngine::without_log()` constructor or a `log` feature flag.
 
@@ -92,7 +92,7 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 - [ ] **`NetworkAction::BatchProposed` truncates `previous_root` to first 8 bytes** — two different chain heads sharing 8-byte hex prefix produce identical action distinctions (causal-chain collision). *(audit/network N5)* — EVIDENCE: `run_log/audit_network_foreign_peers.log` D (`deadbeefAAAA…` and `deadbeefBBBB…` both produced action_id `11e9fd90…`)
   - Fix: drop `.take(8)` (network.rs:73-78); hash full string or validate as 64-hex-char SHA256.
 - [ ] **Validator atomic-failure semantics are misstated** — engine retains all syntheses from the rejected batch's valid prefix; only validator state rolls back. *(audit/validator V5; severity reverted MEDIUM→HIGH→HIGH-but-not-Tier-0 after correction — engine leakage is deterministic across nodes so consensus is preserved; still a DoS amplifier)* — EVIDENCE: `run_log/exp_validator_audit.log` C (3-tx out-of-order batch rejected; 4 distinctions leaked into engine)
-  - Fix: pre-validate batches (walk `transactions` once before any `synthesize` call). Doc-only fix is insufficient given demonstrated leakage.
+  - Fix (DECISION 5.3): pre-validate batches. Walk `batch.transactions` once to verify nonce sequence + `previous_root` BEFORE any `engine.synthesize` call. ~30 LOC. Eliminates leakage; makes the "atomic" docstring true.
 
 ### 1.6 Consensus hardening (Phase 1 audit)
 - [ ] Empty peer-id ("") collapses to `engine.d0()` — primordial impersonation. *(audit/network N2)* — EVIDENCE: `run_log/audit_network_foreign_peers.log` B (`peer("").distinction_id() == "0" == d0.id()`)
@@ -115,9 +115,8 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 ### 1.7 FFI hardening (Phase 1 audit)
 - [ ] **Panic safety** — no `catch_unwind`, no `panic = "abort"`, unwinding across `extern "C"` is UB or hard abort. *(audit/ffi F1, F3)* — EVIDENCE: NOT-PROBEABLE this round (requires synthetic panic injection); structural fix is single-line
   - Fix: add `panic = "abort"` to release and dev profiles in `Cargo.toml`. One line, eliminates F1+F3.
-- [ ] **TOCTOU on `*mut KoruAgent`** — concurrent calls = `&mut` aliasing = UB. Header doc lies about thread safety. *(audit/ffi F2, F8)* — EVIDENCE: NOT-PROBEABLE this round (requires C-thread harness); related N8 pattern demonstrated via `run_log/audit_network_concurrency.log`
-  - Fix (minimum): document the contract — engine is shared-thread-safe, agents/validators require exclusive access. One paragraph.
-  - Fix (heavier): wrap agents in `Mutex<NetworkAgent>` inside FFI. ~30 LOC.
+- [ ] **TOCTOU on `*mut KoruAgent`** — concurrent calls = `&mut` aliasing = UB. Header doc lies about thread safety. *(audit/ffi F2, F8)* — EVIDENCE: NOT-PROBEABLE this round (requires C-thread harness); related N8 pattern demonstrated via `run_log/audit_network_concurrency.log` — DECISION 5.4: internal Mutex
+  - Fix: wrap agents/validators in `Mutex<NetworkAgent>` / `Mutex<ConsensusValidator>` inside the FFI boundary. ~30 LOC. Update crate header doc to reflect the new contract (engine shared-thread-safe; FFI-wrapped agents internally synchronized).
 - [ ] **Opaque types collapse to `c_void`** — type confusion silently accepted. *(audit/ffi F4)*
   - Fix: `#[repr(C)] pub struct KoruEngine { _private: [u8; 0] }` (same for agent, validator). cbindgen emits distinct typedefs; C mismatches become C compile errors.
 - [ ] cbindgen `include` list omits 18/22 functions from generated header. *(audit/ffi F5)*
@@ -129,18 +128,16 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 - [ ] `batch_len: usize` unbounded — UB if > `isize::MAX`. *(audit/ffi F9)*
   - Fix: reject `batch_len > isize::MAX as usize` at FFI entrypoints.
 
-### 1.8 WASM wire-format (Phase 1 audit) — depends on §5 hex-on-wire decision
-- [ ] **`id_to_bytes` heuristic (`id.len() == 64`) breaks at v2.0** — every distinction falls through to UTF-8 fallback path. *(audit/wasm W1)* — EVIDENCE: implicit (structural; v2.0 changes `id().len()` from 64 to 32)
-  - Fix: kill heuristic. Expose `Distinction::as_bytes() -> &[u8; 16]`; `id_to_bytes` becomes one `.to_vec()`.
-- [ ] **Primordials leak as `[0x30]` / `[0x31]` UTF-8 bytes** instead of real IDs. *(audit/wasm W2)* — EVIDENCE: `experiments/findings/baseline.md` (`test_wasm_engine_primordial_consistency` FAILS in `cargo test --features wasm`)
-  - Fix: v2.0 gives primordials real 16-byte IDs. Special case disappears.
-- [ ] **Silent UTF-8 fallback on hex decode error** — `hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec())`. *(audit/wasm W4)* — EVIDENCE: source-only (would need to inject non-hex 64-char string into JS bridge)
-  - Fix: propagate as `JsValue::from_str(...)`. Fail-closed.
-- [ ] WASM `synthesize(&str, &str)` should be `synthesize(&[u8], &[u8])` at v2.0 (symmetric with outputs). *(audit/wasm W9)*
+### 1.8 WASM wire-format — DECISION 5.5: bytes-on-wire canonical
+- [ ] **Kill `id_to_bytes` heuristic entirely.** Expose `Distinction::as_bytes() -> &[u8; 16]`; all WASM-facing IDs are `Uint8Array` of length 16. *(audit/wasm W1)*
+- [ ] **Primordials get real 16-byte IDs** (`[0u8; 16]` and `[1u8; 16]` or domain-separated hashes; small open subdecision in v2.0 implementation). Special-case dies. *(audit/wasm W2)* — EVIDENCE: `experiments/findings/baseline.md` (`test_wasm_engine_primordial_consistency` FAILS in baseline)
+- [ ] **`WasmEngine::synthesize` signature becomes `synthesize(&[u8], &[u8]) -> Result<Vec<u8>, JsValue>`.** Symmetric inputs/outputs. *(audit/wasm W9)*
+- [ ] **Add `Distinction::to_hex(&self) -> String` and `Distinction::from_hex(s: &str) -> Result<Self, ParseError>`** in a separate hex module. Expose via WASM as `idToHex(arr: &[u8]) -> String` and `idFromHex(s: &str) -> Result<Vec<u8>, JsValue>` for JS display/parsing.
+- [ ] **`impl Display for Distinction` uses `to_hex`.** `impl Debug` too.
+- [ ] Remove `id_to_bytes` silent UTF-8 fallback (the function disappears entirely). *(audit/wasm W4)*
 - [ ] WASM `checkCommitment` builds Frankenstein `BatchCommitment { leader_id: "", batch_size: 0 }`. *(audit/wasm W10)*
   - Fix: add proper params, OR narrower API in `NetworkAgent`.
-- [ ] No panic hook in WASM — Rust panics surface as opaque `RuntimeError`. *(audit/wasm W5)*
-  - Fix: add `console_error_panic_hook` + `#[wasm_bindgen(start)]`.
+- [ ] Add `console_error_panic_hook` under existing `wasm` feature; call `set_once()` from `#[wasm_bindgen(start)]`. *(audit/wasm W5; DECISION 5.6: always-on)*
 - [ ] WASM tests are `#[test]` not `#[wasm_bindgen_test]` — never hit a WASM runtime. *(audit/wasm W13)*
   - Fix: convert. Verify host tests pass first under `--features wasm`.
 
@@ -196,7 +193,8 @@ All items ship together in 2.0.0. The structural type changes and the additive A
 - [ ] `Distinction([u8; 16])` — truncated SHA256. Content addressing preserved. *(Exp 13: 0 collisions in 268M; Exp 15: 4.2× faster end-to-end)*
 - [ ] `pub(crate)` on the field + private constructor — closes foreign-ID poisoning structurally. No external code can mint IDs.
 - [ ] `BuildHasherDefault<IdentityHasher>` on internal DashMaps — 6–13× hash speedup. Safe ONLY with byte keys. *(Exp 14)*
-- [ ] FFI: keep public C signatures, swap internal `format!`/parsing for `hex::encode`/`hex::decode`. ~25 LOC. *(Exp 17: 0 signature changes)*
+- [ ] **DECISION 5.5: hex serialization layer** — `Distinction::to_hex(&self) -> String`, `Distinction::from_hex(s: &str) -> Result<Self, ParseError>`, `impl Display for Distinction`, `impl Debug for Distinction`. New file `src/hex.rs` (or extend `primitives.rs`). ~30 LOC. Independent of the engine; substrate stays pure bytes.
+- [ ] FFI: existing `*mut c_char` returns become `hex::encode(state_root.as_bytes())`. Add new byte-native accessors for binary surfaces (`[u8; 16]`). *(Exp 17: 0 existing signature changes; ~25 LOC internal + additive byte APIs)*
 
 ### 2.2 Additive APIs (new public surface)
 - [ ] `degree(d: &Distinction) -> usize` — O(1) via `DashMap<Distinction, AtomicUsize>`.
@@ -205,7 +203,7 @@ All items ship together in 2.0.0. The structural type changes and the additive A
 - [ ] Streaming `calculate_sis` using the reverse index (removes the full-snapshot clone in compactor).
 
 ### 2.3 Synthesis log
-- [ ] Append-only log on `SegQueue<(Distinction, Distinction)>` (bytes from day one, not retyped from String).
+- [ ] Append-only log on `SegQueue<(Distinction, Distinction)>` (bytes from day one, not retyped from String). DECISION 5.7: push canonical `(min, max)` tuples (reuse `engine.rs::synthesize`'s existing canonicalization).
 - [ ] `DistinctionEngine::without_log()` constructor or `log` feature flag for memory-sensitive consumers.
 - [ ] Serde derives on log entry type (`bincode` round-trip 25 ms / 14 ms at 1M). *(Exp 7)*
 
@@ -243,41 +241,72 @@ All four CLAUDE.md theory claims now have measured numbers (replacing prediction
 
 ---
 
-## Section 5 — STILL OPEN (decisions, not work)
+## Section 5 — DECIDED (all 9 locked)
 
-### Original (pre-Phase 1)
-- [ ] **Merkle-over-log / log-diffing semantics** — Exp 12 showed canonical ordering is NOT needed for replay. It IS needed if koru-protocol ever hashes the log for consensus or peer-diffs logs. Decide before the log API is finalized.
-- [ ] **Snapshot API contract** — pick: rename to `_unsynchronized`, add `_quiesced(barrier)` variant, or document the 0.06–0.08% tear rate at the call site. Required before any persistence consumer adopts it.
-- [ ] **Hex on the wire after v2.0** — WASM consumers comparing `id === "abc..."` strings will break if we switch JS-visible IDs to bytes. Decision: keep hex on the wire / serialize bytes / both? Affects Section 1.8 (WASM wire-format fixes).
+All Section 5 decisions resolved 2026-06-11. Frame: no active users today; everything bundles into v2.0 (no intermediate release); no version bump until the entire CHECKLIST is closed; "done right in every aspect" governs each call.
 
-### Surfaced by Phase 1 audits
-- [ ] **Consensus-correctness bugs (1.5): patch in v1.2.x now, or wait for v2.0?**
-  - `leader_id` not in hash, `previous_root` 8-byte truncation, validator atomic-failure leakage.
-  - All three are network-correctness critical. If any code runs on a testnet, these are exploitable.
-  - Fixing `leader_id` hash changes the `commitment_hash` output — wire-format break even in a "patch" release. Coordinate with consumers either way.
-  - Recommended: v1.2.1 security patch alongside v2.0 development. Single v2.0 cut still holds for everything else.
-- [ ] **Compactor mutation: accept the design and fix docs, or refactor to truly read-only?**
-  - The mutations (in `new()` and `synthesize_action`) all route through `engine.synthesize` — theory-clean (append-only, axioms preserved).
-  - "Non-destructive" claim in CLAUDE.md/TODO.md is the actual error.
-  - Two paths: (a) cheapest — rephrase docs to say "all mutations are append-only `synthesize` calls"; (b) refactor — `synthesize_action` becomes a `pure_analysis()` returning a `CompactionReport` instead of writing to the engine.
-  - Recommended: (a). The append-only mutations are correct theory; the docs are wrong, not the code.
-- [ ] **Validator atomic-failure: doc fix only, or pre-validate batches?**
-  - Doc fix is one paragraph; honest about engine-side append-only growth.
-  - Pre-validation eliminates the engine-side leakage but adds a pass per batch.
-  - Recommended: pre-validation. Cheap, removes the leakage entirely, aligns implementation with the docstring's promise.
-- [ ] **FFI thread-safety: doc paragraph only, or wrap agents in internal `Mutex`?**
-  - Doc-only is cheap and zero perf cost; relies on embedder discipline.
-  - Internal `Mutex<NetworkAgent>` is ~30 LOC; single-digit ns hot path; eliminates the footgun at compile time.
-  - Recommended: internal Mutex. The "Go/Kotlin/Swift runtime serializes" assumption is unverifiable from Rust; defense in depth matches the rest of the engine's "no footguns" stance.
-- [ ] **WASM panic hook: feature-gate or always-on?**
-  - Add `console_error_panic_hook` as a `wasm` feature dep; call from `#[wasm_bindgen(start)]`.
-  - Cost is ~5 KB of WASM bundle. Acceptable for diagnostic value.
-  - Recommended: always-on under `wasm` feature.
-- [ ] **Network audit: must-fix items are also useful as a security advisory.**
-  - Should we publish a `SECURITY.md` describing the three consensus-correctness bugs once fixed, or quietly fix and ship?
-  - Recommended: SECURITY.md once patched. ALIS/koru-protocol consumers need to know which versions are safe.
+### 5.1 — Release shape: bundle everything into v2.0 ✓
 
-**Decided** (record only):
+- ~~v1.2.x patch vs v2.0 bundle for Tier 0 bugs~~ → **bundle into v2.0**
+- Rationale: no active users on a real network; no urgency for a separate security patch. ALIS + koru-protocol coordinate one breaking change instead of two.
+- Implication: `Cargo.toml` stays at `1.2.0` throughout. Bump to `2.0.0` is the final commit before the integration PR. CHANGELOG grows during work in an `## Unreleased` section.
+
+### 5.2 — Compactor: accept the design, fix everything around it ✓
+
+- ~~Refactor compactor to truly read-only~~ → **accept the design; fix docs + magic constants + 26.6× claim + double-counted compaction_count + recursive synthesize_action + dead archived_ids field**
+- Rationale: compactor mutations via `engine.synthesize` are theory-clean (append-only, axioms preserved). Compaction events become first-class distinctions. Refactoring would LOSE that property. The actual bugs are in Section 1.9, all of which get fixed regardless.
+- Implication: CLAUDE.md "Compactor is non-destructive" wording → "All compactor mutations are append-only `synthesize` calls; the engine record is the canonical compaction history." Section 1.9 items execute as listed.
+
+### 5.3 — Validator V5: pre-validate batches ✓
+
+- ~~Doc fix only~~ → **pre-validate batches; eliminate engine-side leakage**
+- Rationale: 4 distinctions per pre-failure tx (Phase 1.5 demonstrated). Doc-fix says "the bug is fine because it's theoretically consistent"; that's dishonest. "Atomic" must mean atomic. ~30 LOC.
+- Implication: Section 1.5 V5 fix is a code change, not a doc change. Validator gets a new pre-validation pass before any `synthesize` call.
+
+### 5.4 — FFI thread-safety: internal Mutex ✓
+
+- ~~Doc paragraph only~~ → **wrap agents/validators in internal `Mutex` inside the FFI boundary**
+- Rationale: trusting Go/Kotlin/Swift embedders to externally lock something they can't see is exactly the kind of "users will be careful" trap the rest of the project rejects. Engine stays DashMap-safe; agents get a Mutex wrapper. Single-digit ns hot path cost. Header doc also updated for honesty.
+- Implication: Section 1.7 F2 fix is the heavier ~30 LOC option, not the doc-only option.
+
+### 5.5 — Bytes-on-wire canonical + first-class hex serialization helpers ✓
+
+- ~~Hex-on-wire everywhere~~ → **bytes canonical everywhere; explicit hex serialization at human-facing boundaries only**
+- Rationale: the Distinction *is* bytes; hex is a display format. Forcing hex through the substrate permanently couples the engine to a particular human-readable representation that's not load-bearing on the theory. With explicit serialization helpers (`Distinction::to_hex`, `Distinction::from_hex`, `impl Display`), JSON gets hex strings via `#[serde(with = "distinction_hex")]`; WASM gets `Uint8Array` + JS-exposed `idToHex` / `idFromHex` helpers; FFI gets `[u8; 16]` for binary surfaces and `*mut c_char` (hex) for the existing logging surfaces.
+- Architecture (locked):
+  - **DashMap keys / synthesis log / binary persistence:** bytes
+  - **FFI binary surfaces:** `[u8; 16]` directly
+  - **FFI human surfaces (`koru_agent_state_root`):** `*mut c_char` (hex via `hex::encode`)
+  - **WASM:** `Uint8Array` for IDs + exposed `idToHex(arr)` and `idFromHex(str)` helpers
+  - **JSON wire (blockchain payloads):** hex strings via serde adapter
+- Implication: Section 1.8 collapses. WASM `id_to_bytes` heuristic dies completely (not "fixed at 32"). Primordials get real `[0u8; 16]` and `[1u8; 16]` IDs. `WasmEngine::synthesize` signature becomes `synthesize(&[u8], &[u8])`. `Distinction::to_hex` / `from_hex` / `Display` land in the hex module (one file, ~30 LOC, separate from the engine).
+
+### 5.6 — WASM panic hook: always-on under `wasm` feature ✓
+
+- ~~Feature-gated sub-feature~~ → **always-on under existing `wasm` feature**
+- Rationale: 5 KB bundle cost vs huge diagnostic value. Anyone using WASM wants readable panics in JS. Feature-gating diagnostic infrastructure is a stale habit.
+- Implication: add `console_error_panic_hook` as optional dep under `wasm` feature; call `set_once()` from `#[wasm_bindgen(start)]`.
+
+### 5.7 — Synthesis log: canonical `(min, max)` tuples ✓
+
+- ~~Raw `(parent_a, parent_b)` tuples~~ → **canonical `(min, max)` tuples**
+- Rationale: Exp 12 showed both work for replay. Canonical also enables future Merkle-over-log and cross-peer log diffing without rewriting persisted logs. Cost is one comparison per push. Decide once, decide right.
+- Implication: Section 2.3 log entry type stores `(Distinction, Distinction)` already; the canonicalization happens at push site (`engine.rs::synthesize` already canonicalizes for hashing — reuse the same min/max).
+
+### 5.8 — Snapshot API: rename to `_unsynchronized`; defer `_quiesced(barrier)` ✓
+
+- ~~Document at call site~~ / ~~add `_quiesced(barrier)` variant~~ → **rename existing `get_state_snapshot` to `get_state_snapshot_unsynchronized`; defer the quiesced variant until a real consumer asks**
+- Rationale: rename forces every caller to acknowledge the unsynchronized nature at compile time. Adding a `_quiesced` variant designs a barrier API for a consumer we don't have. YAGNI.
+- Implication: Section 1.1 snapshot tearing item becomes a rename + docstring update. ~5 LOC.
+
+### 5.9 — Publish `SECURITY.md` ✓
+
+- ~~CHANGELOG mention only~~ → **publish `SECURITY.md`** describing N5 / N6 / V5 once v2.0 ships
+- Rationale: standard practice when known security bugs ship in any version. ALIS + koru-protocol consumers need to know which version to pin without grepping CHANGELOGs.
+- Implication: `SECURITY.md` lands as part of the v2.0 integration PR. Includes supported version table, vulnerability list (N5/N6/V5 affecting <=1.2.0), and reporting contact.
+
+### Previously decided (record)
+
 - ~~v1.3 vs v2.0 boundary~~ → single v2.0 cut. One migration for consumers.
 - ~~Defensive runtime input validation on engine~~ → no (theory drift; closed by v2.0 `pub(crate)` structurally).
 
@@ -290,22 +319,23 @@ All four CLAUDE.md theory claims now have measured numbers (replacing prediction
 | Section 1.1–1.3 — Engine FIX (original 14 items) | 14 | not started |
 | Section 1.4 — CLAUDE.md doc drift | 7 | not started |
 | Section 1.5 — Consensus-correctness bugs (MUST NOT SHIP) | 3 | not started |
-| Section 1.6 — Consensus hardening | 6 | not started |
+| Section 1.6 — Consensus hardening | 8 | not started |
 | Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | not started |
-| Section 1.8 — WASM wire-format (incl. 1 CRITICAL) | 7 | not started |
+| Section 1.8 — WASM bytes-on-wire + helpers | 9 | not started |
 | Section 1.9 — Compactor cleanup | 4 | not started |
 | Section 1.10 — Architectural cleanup | 2 | not started |
-| Section 1.11 — Phase 1 follow-up (persist + run drafted code) | 10 | not started |
-| Section 1.12 — Baseline measurement | 4 | not started |
-| Section 2 — IMPLEMENT (all v2.0) | 13 | not started |
+| Section 1.11 — Phase 1 follow-up | 13 | **complete** |
+| Section 1.12 — Baseline measurement | 4 | **complete** |
+| Section 2 — IMPLEMENT (all v2.0) | 14 | not started |
 | Section 3 — AUDIT (Phase 1) | 7 subsystems | **complete** |
-| Section 4 — VALIDATE | 4 claims | 3 drafted / 0 run |
-| Section 5 — DECIDE | 9 | 3 original + 6 from Phase 1 |
+| Section 4 — VALIDATE | 4 claims | **complete** |
+| Section 5 — DECIDE | 9 | **complete (all locked)** |
 
 **To call the project "completely theory-aligned, clean, high-quality, bug-free":**
-- All of Section 1 (1.1–1.10) must be closed.
-- Section 4 should be closed for the engine to be self-validating.
-- Section 2 is the new value being shipped; Section 5 are gating decisions.
+- All of Section 1.1–1.10 must be closed.
+- Section 2 must be implemented.
+- `SECURITY.md` + CHANGELOG finalized.
+- `Cargo.toml` bumped 1.2.0 → 2.0.0 as the last commit before integration PR.
 
 ## Evidence index
 
