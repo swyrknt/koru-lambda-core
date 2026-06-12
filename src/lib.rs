@@ -65,7 +65,7 @@ mod tests {
         // Synthesis creates a new distinction
         assert_eq!(engine.distinction_count(), 3);
 
-        let (distinctions, relationships) = engine.get_state_snapshot();
+        let (distinctions, relationships) = engine.get_state_snapshot_unsynchronized();
 
         // Verify the new distinction exists
         assert!(distinctions.iter().any(|d| d.id() == c.id()));

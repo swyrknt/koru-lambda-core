@@ -130,7 +130,7 @@ impl StructuralCompactor {
     ///
     /// Returns: HashMap<distinction_id, degree>
     pub fn calculate_sis(&self, engine: &Arc<DistinctionEngine>) -> HashMap<String, usize> {
-        let (distinctions, relationships) = engine.get_state_snapshot();
+        let (distinctions, relationships) = engine.get_state_snapshot_unsynchronized();
 
         // Build degree count for each distinction
         let mut degree_map: HashMap<String, usize> = HashMap::new();

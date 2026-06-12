@@ -113,7 +113,7 @@ impl DistinctionEngine {
 
         // Deterministic synthesis using SHA256 for content-addressable structure
         let new_id_str = format!("{}:{}", first, second);
-        let new_id = format!("{:x}", Sha256::digest(new_id_str.as_bytes()));
+        let new_id = hex::encode(Sha256::digest(new_id_str.as_bytes()));
 
         // Return existing if already synthesized (timeless consistency)
         if let Some(existing) = self.all_distinctions.get(&new_id) {
@@ -146,12 +146,32 @@ impl DistinctionEngine {
         self.relationships.iter().map(|entry| entry.key().clone()).collect()
     }
 
-    /// Returns a complete state snapshot (for compatibility with existing tests).
+    /// Returns a complete state snapshot.
     ///
-    /// Warning: This method is less efficient than the individual snapshot
-    /// methods as it allocates temporary vectors. Consider using direct iteration
-    /// in performance-critical code.
-    pub fn get_state_snapshot(&self) -> StateSnapshot {
+    /// # Tearing semantics
+    ///
+    /// This method performs **two independent DashMap iterations** (one for
+    /// distinctions, one for relationships) with no synchronization barrier
+    /// between them. Under concurrent writes, the two halves are NOT consistent
+    /// with each other: a distinction may appear in the first half while its
+    /// relationships have not yet been written, or relationships may reference
+    /// a distinction not present in the first half.
+    ///
+    /// Measured tearing rate: rare (~0.1% under 8 concurrent writers) but
+    /// avalanche-sized when it occurs — when a tear happens, thousands of
+    /// novel syntheses can land between the two iterations (Exp 6, 2026).
+    ///
+    /// # When to use
+    ///
+    /// - Quiescent reads (no concurrent writers): consistent.
+    /// - Diagnostic / observability use during writes: tolerable.
+    /// - **Persistence under load: NOT SAFE.** A future `get_state_snapshot_quiesced`
+    ///   API (gated on a write barrier) will be added if and when a concrete
+    ///   persistence consumer needs it.
+    ///
+    /// The suffix `_unsynchronized` is intentional: every caller acknowledges
+    /// at the call site that the snapshot is not atomic across the two halves.
+    pub fn get_state_snapshot_unsynchronized(&self) -> StateSnapshot {
         (self.get_distinctions_snapshot(), self.get_relationships_snapshot())
     }
 
