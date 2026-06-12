@@ -107,6 +107,10 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
   - Fix: dedupe on joint `(id, distinction_id)` key (network.rs:175).
 - [ ] `pending_commitments` unbounded growth on never-finalized proposals. *(audit/network N11)* — EVIDENCE: source-only (requires multi-round commit flow)
   - Fix: size cap + TTL eviction.
+- [ ] **`ConsensusValidator` has no joint invariant between `local_root` and `expected_nonce`** — `set_expected_nonce(100)` then submitting a nonce-100 batch against the genesis root is ACCEPTED. *(audit/validator V6)* — EVIDENCE: `run_log/exp_validator_audit.log` G
+  - Fix: replace `from_root + set_expected_nonce` with a single `restore_state(engine, root_id, nonce)` that validates both jointly. Remove the partial-update setters from the public API.
+- [ ] **Empty `TransactionAction.data` produces a fixed, degenerate tx-distinction** — every empty-data tx with the same nonce collides on id `6bab8d5b...`. *(audit/validator V8)* — EVIDENCE: `run_log/exp_validator_audit.log` D
+  - Disposition: arguably by-design (content addressing means equal inputs produce equal outputs). Decide: (a) document the collapse as expected, (b) reject empty `data` outright, or (c) add domain separation between "the empty-distinction" and "primordial d0." Recommendation: (a) — it's correct theory; consumers should not rely on tx-id uniqueness for txs with identical (nonce, data).
 
 ### 1.7 FFI hardening (Phase 1 audit)
 - [ ] **Panic safety** — no `catch_unwind`, no `panic = "abort"`, unwinding across `extern "C"` is UB or hard abort. *(audit/ffi F1, F3)* — EVIDENCE: NOT-PROBEABLE this round (requires synthetic panic injection); structural fix is single-line
