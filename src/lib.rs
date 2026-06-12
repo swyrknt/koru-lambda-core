@@ -1,3 +1,4 @@
+pub mod distinction_hex;
 pub mod engine;
 pub mod ffi;
 pub mod primitives;
