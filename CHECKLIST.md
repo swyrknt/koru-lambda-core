@@ -52,15 +52,10 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
   - Cross-engine ID → silent phantom parent in receiver.
   - Empty / colon-containing strings accepted.
   - **Structural fix = TODO #6 (`pub(crate)`)**. Do not patch with runtime length checks (theory drift).
-- [ ] **Snapshot tearing** — `get_state_snapshot` (`engine.rs:154–156`) does two independent DashMap iterations. *(Exp 6, qa)*
-  - Real, but 0.06–0.08% rate (not the 16.5% CLAUDE.md claims).
-  - When it tears, it tears avalanche-sized.
-  - Fix (DECISION 5.8): rename `get_state_snapshot` → `get_state_snapshot_unsynchronized` and document the tearing behavior. Defer `_quiesced(barrier)` variant until a concrete consumer asks. ~5 LOC.
+- [x] **Snapshot tearing** — `get_state_snapshot` (`engine.rs:154–156`) does two independent DashMap iterations. *(Exp 6, qa)* — DONE in commit `36d4cdd` (Phase 2). Renamed to `get_state_snapshot_unsynchronized`; tearing semantics documented in docstring; 8 call sites updated across src/, tests/, experiments/qa/.
 
 ### 1.2 Performance / cleanup (no theory impact)
-- [ ] **`format!("{:x}", digest)` → `hex::encode(digest)`** in `engine.rs` hot path. *(Exp 15, rust)*
-  - 213 ns → 113 ns. ~15% end-to-end synth speedup.
-  - 2 LOC, additive, ship as 1.2.x patch.
+- [x] **`format!("{:x}", digest)` → `hex::encode(digest)`** in `engine.rs` hot path. *(Exp 15, rust)* — DONE in commit `6b247d3` (Phase 2). 1 LOC swap in `synthesize()`; `hex = "0.4"` added as direct dep; output byte-identical; all 103 tests pass.
 
 ### 1.3 TODO.md design errors (must be corrected before implementation)
 - [ ] **TODO #1 API shape** — current proposal returns `Vec`, probes via `synthesize()`. *(Exp 4 + Exp 8)*
@@ -77,14 +72,15 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 - [ ] **TODO #2 memory escape hatch** — 1M synths = 81 MB resident log; worst case ~176 B/entry. At 10M = ~1.7 GB.
   - Add `DistinctionEngine::without_log()` constructor or a `log` feature flag.
 
-### 1.4 CLAUDE.md numerical drift (documentation)
-- [ ] Memory: `~656 bytes` → `629 B measured at 1M (live heap, dhat)`. *(Exp 1)*
-- [ ] Throughput single-thread: `500K–900K/s` → `425–540K/s depending on chain depth`. *(Exp 10)*
-- [ ] Throughput 8-thread: `1.85M, 3.5×` → `2.6M, 4.8× on M3 Pro`. *(Exp 10)*
-- [ ] Replay: `714K ops/sec` → `450K ordered / 367K shuffled on M3 Pro`. *(Exp 7)*
-- [ ] Snapshot tearing: `16.5%` → `rare (~0.1%) but avalanche-sized when it occurs`. *(Exp 6)*
-- [ ] v2.0 framing: `clone elimination` → `8× memory density`. Clone is 1.6% of synth cost. *(Exp 11, 16)*
-- [ ] Compactor: "non-destructive — classifies but never mutates the engine" is wrong; `new()` and `synthesize_action` mutate. *(audit/compactor)*
+### 1.4 CLAUDE.md numerical drift (documentation) — DONE in commit `7265bfd` (Phase 2)
+- [x] Memory: `~656 bytes` → `629 B measured at 1M (live heap, dhat)`. *(Exp 1)*
+- [x] Throughput single-thread: `500K–900K/s` → `425–540K/s depending on chain depth`. *(Exp 10)*
+- [x] Throughput 8-thread: `1.85M, 3.5×` → `2.6M, 4.8× on M3 Pro`. *(Exp 10)*
+- [x] Replay: `714K ops/sec` → `450K ordered / 367K shuffled on M3 Pro`. *(Exp 7)*
+- [x] Snapshot tearing: `16.5%` → `rare (~0.1%) but avalanche-sized when it occurs`. *(Exp 6)*
+- [x] v2.0 framing: `clone elimination` → `8× memory density`. Clone is 1.6% of synth cost. *(Exp 11, 16)*
+- [x] Compactor: "non-destructive" reworded to "all compactor mutations are append-only `synthesize` calls" per DECISION 5.2. *(audit/compactor)*
+- [x] Test count: `114 tests` → `103 tests` (baseline 2026-06-11). Plus note that `--features wasm` host tests fail/panic per W13.
 
 ### 1.5 Consensus-correctness bugs (Phase 1 audit) — MUST NOT SHIP TO A NETWORK
 - [ ] **`BatchCommitment::compute` does NOT hash `leader_id`** — leader attribution is forgeable. *(audit/network N6, audit/ffi F7, audit/wasm W10)* — EVIDENCE: `run_log/audit_network_commitment_unbound.log` (honest/forged `commitment_hash` identical despite `leader_id` swap "alice"↔"EVE")
