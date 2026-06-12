@@ -25,6 +25,14 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   synthesize" rather than "non-destructive"; v2.0 framing reworded around memory
   density not clone elimination). Numbers now match measured baseline
   (`experiments/findings/baseline.md`).
+- **`src/engine.rs::synthesize`:** swapped `format!("{:x}", Sha256::digest(...))`
+  for `hex::encode(Sha256::digest(...))`. Identical output; ~15% faster synthesis
+  hot path (213 ns → 113 ns per Exp 15, 2026). All 103 tests continue to pass with
+  byte-identical Distinction IDs.
+
+### Added
+
+- `hex = "0.4"` direct dependency (used by the synthesize hot path).
 
 ### Deprecated
 

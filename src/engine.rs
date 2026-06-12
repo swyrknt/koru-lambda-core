@@ -113,7 +113,7 @@ impl DistinctionEngine {
 
         // Deterministic synthesis using SHA256 for content-addressable structure
         let new_id_str = format!("{}:{}", first, second);
-        let new_id = format!("{:x}", Sha256::digest(new_id_str.as_bytes()));
+        let new_id = hex::encode(Sha256::digest(new_id_str.as_bytes()));
 
         // Return existing if already synthesized (timeless consistency)
         if let Some(existing) = self.all_distinctions.get(&new_id) {

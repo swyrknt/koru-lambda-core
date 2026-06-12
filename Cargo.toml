@@ -22,6 +22,7 @@ dashmap = "6.0"
 rayon = "1.10"
 lru = "0.16"
 once_cell = "1.19"
+hex = "0.4"
 
 # WASM support
 wasm-bindgen = { version = "0.2", optional = true }
