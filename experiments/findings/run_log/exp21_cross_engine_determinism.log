@@ -1,0 +1,44 @@
+=== Experiment 21: Cross-Engine Determinism ===
+  STEPS=100000 SNAP=1000
+
+-- Phase 1: cold A vs cold B, identical chain --
+  snapshots: 100  eq: 100  ne: 0
+  final A d=99942 r=199881 fp=cd79fa11c5dd56aa
+  final B d=99942 r=199881 fp=cd79fa11c5dd56aa
+  r = 2d - 3  A: true  B: true
+  VERDICT phase 1: CONFIRMED
+
+-- Phase 2: A poisoned with unrelated history --
+  A noise: d=49979 r=99955
+  A final: d=149951 r=299899
+  B final: d=99980 r=199957
+  per-step ID matches: 100000 / 100000
+  engine fp differs (expected true): true
+  VERDICT phase 2: CONFIRMED
+
+-- Phase 3: concurrent execution, two engines, different scheduling --
+  A 0.01s d=23108 r=46213
+  B 0.01s d=23108 r=46213
+  distinctions eq: true  relationships eq: true  fp eq: true
+  VERDICT phase 3: CONFIRMED
+
+-- Phase 4: deep chain + closed-form predict_id --
+  depth 20000
+  A vs B mismatches:    0 (first None)
+  A vs predict mismatches: 0 (first None)
+  VERDICT phase 4: CONFIRMED
+
+-- Phase 5: three independent threads, majority vote --
+  fp_A b3a3ccda579bdb38
+  fp_B b3a3ccda579bdb38
+  fp_C b3a3ccda579bdb38
+  VERDICT phase 5: CONFIRMED
+
+=== Summary ===
+  Phase 1 baseline:                  CONFIRMED
+  Phase 2 history adversary:         CONFIRMED
+  Phase 3 concurrent:                CONFIRMED
+  Phase 4 deep + closed-form:        CONFIRMED
+  Phase 5 three-way majority:        CONFIRMED
+  OVERALL: CONFIRMED
+  total: 9.50s

@@ -1,0 +1,42 @@
+# exp19_mediated_self_reference
+# depths        = [1, 10, 100, 1000, 10000]
+# direct_iters  = 1000
+
+## T1: direct self-reference (control)
+       s_{n+1} = synth(s_n, s_n)
+  iterations = 1000  secs = 0.000  (10676119 ops/sec)
+  s.id stable     : YES
+  new distinctions: 0   new relationships: 0
+  T1 verdict: PASS
+
+## T2: mediated, varying observation
+  depth =     1  unique s_i =     2 /     2   d =       7  r =      11  r-(2d-3) = 0
+  depth =    10  unique s_i =    11 /    11   d =      34  r =      65  r-(2d-3) = 0
+  depth =   100  unique s_i =   101 /   101   d =     304  r =     605  r-(2d-3) = 0
+  depth =  1000  unique s_i =  1001 /  1001   d =    3004  r =    6005  r-(2d-3) = 0
+  depth = 10000  unique s_i = 10001 / 10001   d =   30004  r =   60005  r-(2d-3) = 0
+  total steps = 10000  secs = 26.095  (383 ops/sec)
+  unique s_i overall : 10001 / 10001  (collisions: 0)
+  new distinctions in engine over the trial: 30002
+  first 5 s_i ids: ["0", "6d7592053c652c891bb526eecc88b10eb017928ef5896f678644baabb73312a6", "e3a5c22ea908ee753a23d565c34538a6d619a6fc58f06753e92d228ce4f9d4f9", "9faa2964978cc5ec860bc06ff5f9b8e5fd6479108c42e3f234dc2efaeae89bb2", "9188bef8e0e96f6994ad3f33015f8e57a65194352bdf7435f22543845dc7108b"]
+  last  5 s_i ids: ["b558ed47c8c06e7e0d7cc2bc4d17d1adb8803313c090541c06305b11fbf73dd0", "07606b8a321c8c6d36b685a6637d58b15c246c386978ce2b055bc52d910fe081", "a01a0d138c9f0261473321ca448e67c3726b023100fe51d7881b734ea7777207", "4a594a4f38a10d56a66085d0affce553c6ed9a0d4895d4c95fddbf1875ccfaaf", "a04e2c8cb364c399f8236502e43038ac9c9404bcea3b8548cf5fa477670aab69"]
+  T2 verdict: PASS
+
+## T3: mediated, CONSTANT observation (= d1)
+  depth =     1  unique s_i =     2 /     2   d =       4  r =       5  r-(2d-3) = 0
+  depth =    10  unique s_i =    11 /    11   d =      22  r =      41  r-(2d-3) = 0
+  depth =   100  unique s_i =   101 /   101   d =     202  r =     401  r-(2d-3) = 0
+  depth =  1000  unique s_i =  1001 /  1001   d =    2002  r =    4001  r-(2d-3) = 0
+  depth = 10000  unique s_i = 10001 / 10001   d =   20002  r =   40001  r-(2d-3) = 0
+  total steps = 10000  secs = 0.024  (422199 ops/sec)
+  unique s_i overall : 10001 / 10001  (collisions: 0)
+  new distinctions in engine over the trial: 20000
+  fixed-point step: never reached
+  first 5 s_i ids: ["0", "6bab8d5b7c6f7ed1acd59161a1c7e7aab56f54e3abb072b30dbd5587afefd01e", "605a9e3ca7433e6dab700ebcf7b501921649f0385c3772b2a05cbe14f2c36f8f", "27301aaf09f40b98e5398191c5166e92897d8a8981f6ca92ace41b12ac4ad059", "f1202317c4c445e9aa8f585048ff8ec0ec3348f53100e7fbb1db72c5c9b2d827"]
+  last  5 s_i ids: ["3dadbf2f1b5aee4b8d891cf201837ff17a7c59e62a26b5ea36cb1f53abf8622b", "7ddb52f62ee6a4a69b80427b8429d731429f16bad327e0d6479affab0d6afa07", "d6e21ab8431487d4aa06027abb57989a22b80d7d7f1119bf624ca860240f0cfb", "d4f3b95a25460fac206a1758c2529cb8ffc6cc49d0720794af4e5286a7b7a4be", "abc784b49a2b4f52f7b5f4512e5187513805efff5f6246a54741bb71495020a5"]
+  T3 verdict: PASS (constant obs still produces novelty)
+
+## Summary
+  T1 direct (irreflexive)                : PASS
+  T2 mediated, varying obs               : PASS
+  T3 mediated, constant obs              : PASS

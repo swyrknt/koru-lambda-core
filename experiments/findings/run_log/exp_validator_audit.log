@@ -1,0 +1,46 @@
+=== Validator Audit Probe ===
+
+-- A: 1 MiB previous_root --
+  rejected in 70.875µs; reason length = 1000102 bytes
+  validator.rs:115-119 format!s the full untrusted string into the
+  error message. 1 MB in -> ~1 MB allocation out.
+
+-- B: 100 000-byte TransactionAction.data --
+  validated in 148.988916ms: new root = 423bfe49fa12fc7c...
+  engine grew: distinctions +100002, relationships +200004
+  one batch with one large tx -> ~data.len() synth calls.
+
+-- C: out-of-order nonces in a batch --
+  rejected: Invalid nonce at tx 1: expected 1, got 2
+  engine distinction delta = 4; validator.expected_nonce = 0
+  VERDICT: NODES LEAKED into engine despite atomic rejection.
+  validator.rs:131-145 calls engine.synthesize() inside the loop;
+  the engine is append-only, so any synth before the failing tx is
+  permanent. Only validator state rolls back.
+
+-- D: empty batch + empty transaction data --
+  empty-batch result: Rejected("Empty batch")
+  empty-data tx result: Valid(Distinction { id: "6bab8d5b7c6f7ed1acd59161a1c7e7aab56f54e3abb072b30dbd5587afefd01e" })
+  Empty data folds to engine.d0(). Two txs with empty data + same nonce
+  produce identical tx-distinctions.
+
+-- E: phantom-parent count after validator usage --
+  distinction_count       = 259
+  unique parent IDs in r  = 512
+  phantom IDs (refd, !registered) = 253
+  VERDICT: validator path INHERITS the ByteMapping phantom-parent bug.
+
+-- F: from_root(foreign_distinction, nonce) --
+  validator.state_root_id = deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+  registered in engine    = false
+  VERDICT: from_root admits a foreign / unanchored root with zero check.
+  validator.rs:90-92 stores the externally-built Distinction as
+  local_root. Subsequent validate_batch will synthesize children whose
+  parent IS this phantom. v2.0 (pub(crate) field) closes this.
+
+-- G: set_expected_nonce desync --
+  Accepted a nonce-100 batch against the genesis root.
+  set_expected_nonce + local_root are independent fields. No invariant
+  ties them. No atomic restore-state(root, nonce) API exists.
+
+=== Done ===

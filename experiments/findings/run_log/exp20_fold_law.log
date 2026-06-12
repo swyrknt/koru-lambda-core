@@ -1,0 +1,39 @@
+# exp20_fold_law
+# control syntheses (M) = 10000
+# treatment bytes       = 256 (full byte universe)
+
+## CONTROL: Fibonacci-style chain (no ByteMapping)
+        a_2 = synth(d0, d1); a_{i+2} = synth(a_i, a_{i+1}).
+  syntheses = 10000  secs = 0.014  (701650 ops/sec)
+  engine grew: d 2 -> 10002 (10000); r 1 -> 20001 (20000)
+  deg(d0): 1 -> 2 (delta 1)
+  deg(d1): 1 -> 3 (delta 2)
+  deg(depth-5 interior node): 4
+
+## TREATMENT: ByteMapping 8-step MSB fold for all 256 distinct bytes
+        Mirrors primitives.rs:compute_byte_distinction_uncached,
+        but applied to the engine under test (avoids phantom-parent bug).
+  syntheses attempted = 2048  (saturated = 1793)  secs = 0.001  (1840553 ops/sec)
+  engine grew: d 2 -> 257 (255); r 1 -> 511 (510)
+  deg(d0): 1 -> 129 (delta 128)
+  deg(d1): 1 -> 129 (delta 128)
+  deg(byte 0x2A interior at step 5): 4 (expected small, ~2)
+
+## TREATMENT SCALING: deg(d0) / N as N varies
+        N here = bytes ingested (with possible repeats forcing saturation).
+  N =     64  syntheses_attempted =     512  d =     65  r =    127  deg(d0) =     33  deg(d1) =     33  ratio = 0.1289
+  N =    128  syntheses_attempted =    1024  d =    129  r =    255  deg(d0) =     65  deg(d1) =     65  ratio = 0.1270
+  N =    256  syntheses_attempted =    2048  d =    257  r =    511  deg(d0) =    129  deg(d1) =    129  ratio = 0.1260
+  N =    512  syntheses_attempted =    4096  d =    257  r =    511  deg(d0) =    129  deg(d1) =    129  ratio = 0.0630
+  N =   1024  syntheses_attempted =    8192  d =    257  r =    511  deg(d0) =    129  deg(d1) =    129  ratio = 0.0315
+  After saturation (>=256 distinct bytes), deg(d0)+deg(d1) plateaus at the
+  total distinct-byte fold size (~510) because repeated bytes are idempotent.
+
+## Summary
+                   phase     syntheses       d_added       r_added       deg(d0)     deg(random)
+       control_fibonacci         10000         10000         20000             1               4
+         treatment_bytes          2048           255           510           128               4
+
+  deg(d0) treatment / control = 128.0x  (128 vs 1)
+
+  VERDICT: CONFIRMED -- ByteMapping concentrates degree on d0/d1, not on interior nodes.

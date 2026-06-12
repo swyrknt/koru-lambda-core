@@ -7,6 +7,14 @@
 
 Status legend: `[ ]` not done · `[~]` partial · `[x]` done
 
+## Tier 0 — SHOW-STOPPERS (demonstrated, must-not-ship-to-a-network)
+
+Three consensus-correctness bugs CONFIRMED by Phase 1.5 probes. **Cannot ship at any version on a network.** See full evidence in `experiments/findings/PHASE_1_5_RESULTS.md` Section 5.
+
+1. **N6** — `BatchCommitment::compute` does not hash `leader_id` → leader attribution forgeable. *(Section 1.5, evidence: `run_log/audit_network_commitment_unbound.log`)*
+2. **N5** — `NetworkAction::BatchProposed` truncates `previous_root` to first 8 bytes → causal-chain collision. *(Section 1.5, evidence: `run_log/audit_network_foreign_peers.log` D)*
+3. **V5** — Validator atomic-failure leaks distinctions into engine on rejected batch (4 distinctions per partial-prefix). *(Section 1.5, **severity upgraded MEDIUM→HIGH** per Phase 1.5 surprise inventory; evidence: `run_log/exp_validator_audit.log` C)*
+
 ## Working agreements
 
 - **All sub-work branches off `research/warroom-experiments` and merges back into it.** Naming: `fix/*`, `audit/*`, `validate/*`, `impl/*`. The integration branch eventually merges to `dev` as one v2.0 PR.
@@ -74,31 +82,31 @@ Status legend: `[ ]` not done · `[~]` partial · `[x]` done
 - [ ] Compactor: "non-destructive — classifies but never mutates the engine" is wrong; `new()` and `synthesize_action` mutate. *(audit/compactor)*
 
 ### 1.5 Consensus-correctness bugs (Phase 1 audit) — MUST NOT SHIP TO A NETWORK
-- [ ] **`BatchCommitment::compute` does NOT hash `leader_id`** — leader attribution is forgeable. *(audit/network N6, audit/ffi F7, audit/wasm W10)*
+- [ ] **`BatchCommitment::compute` does NOT hash `leader_id`** — leader attribution is forgeable. *(audit/network N6, audit/ffi F7, audit/wasm W10)* — EVIDENCE: `run_log/audit_network_commitment_unbound.log` (honest/forged `commitment_hash` identical despite `leader_id` swap "alice"↔"EVE")
   - Fix: include `leader_id.as_bytes()` in the SHA256 hasher (commitment.rs:46-58). Trivial.
-- [ ] **`NetworkAction::BatchProposed` truncates `previous_root` to first 8 bytes** — two different chain heads sharing 8-byte hex prefix produce identical action distinctions (causal-chain collision). *(audit/network N5)*
+- [ ] **`NetworkAction::BatchProposed` truncates `previous_root` to first 8 bytes** — two different chain heads sharing 8-byte hex prefix produce identical action distinctions (causal-chain collision). *(audit/network N5)* — EVIDENCE: `run_log/audit_network_foreign_peers.log` D (`deadbeefAAAA…` and `deadbeefBBBB…` both produced action_id `11e9fd90…`)
   - Fix: drop `.take(8)` (network.rs:73-78); hash full string or validate as 64-hex-char SHA256.
-- [ ] **Validator atomic-failure semantics are misstated** — engine retains all syntheses from the rejected batch's valid prefix; only validator state rolls back. *(audit/validator V5)*
-  - Fix: either rephrase the docstring (validator.rs:96-97), or pre-validate batches (walk `transactions` once before any `synthesize` call). Doc fix is minimum; pre-validate is correct.
+- [ ] **Validator atomic-failure semantics are misstated** — engine retains all syntheses from the rejected batch's valid prefix; only validator state rolls back. *(audit/validator V5; **SEVERITY UPGRADED MEDIUM→HIGH** per Phase 1.5 surprise inventory)* — EVIDENCE: `run_log/exp_validator_audit.log` C (3-tx out-of-order batch rejected; 4 distinctions leaked into engine)
+  - Fix: pre-validate batches (walk `transactions` once before any `synthesize` call). Doc-only fix is insufficient given demonstrated leakage.
 
 ### 1.6 Consensus hardening (Phase 1 audit)
-- [ ] Empty peer-id ("") collapses to `engine.d0()` — primordial impersonation. *(audit/network N2)*
+- [ ] Empty peer-id ("") collapses to `engine.d0()` — primordial impersonation. *(audit/network N2)* — EVIDENCE: `run_log/audit_network_foreign_peers.log` B (`peer("").distinction_id() == "0" == d0.id()`)
   - Fix: reject `id.is_empty()` in `PeerIdentity::new` (network.rs:30-39).
-- [ ] Unbounded peer-id length — 1MB peer-id = ~2s CPU + 1M permanent distinctions per join. *(audit/network N1)*
+- [ ] Unbounded peer-id length — 1MB peer-id = ~1.85s CPU + 1M permanent distinctions per join. *(audit/network N1)* — EVIDENCE: `run_log/audit_network_foreign_peers.log` A (1MB peer-id → 1,000,002 distinctions in 1.85s)
   - Fix: cap peer-id length (suggest 64 bytes) in `PeerIdentity::new`.
-- [ ] Unbounded `TransactionAction.data` — 1 MB tx = ~2s CPU + ~N novel distinctions per tx. *(audit/validator V3)*
+- [ ] Unbounded `TransactionAction.data` — 100K bytes = 149 ms + 100K permanent distinctions per tx. *(audit/validator V3)* — EVIDENCE: `run_log/exp_validator_audit.log` B (100K bytes → 100,002 distinctions in 148.9ms)
   - Fix: length cap on `data` field before fold.
-- [ ] Rejection message amplifies attacker input — full untrusted `previous_root` copied into `format!`. *(audit/validator V4)*
+- [ ] Rejection message amplifies attacker input — full untrusted `previous_root` copied into `format!`. *(audit/validator V4)* — EVIDENCE: `run_log/exp_validator_audit.log` A (1MB previous_root → 1,000,102-byte rejection reason)
   - Fix: clip to first 64 chars in error message (validator.rs:115-119).
-- [ ] Validator-set dedupe mismatch — `join_peer` dedupes on `peer.id` (String), leader election hashes `peer.distinction_id()`. *(audit/network N7)*
+- [ ] Validator-set dedupe mismatch — `join_peer` dedupes on `peer.id` (String), leader election hashes `peer.distinction_id()`. *(audit/network N7)* — EVIDENCE: source-only (not exercised by Phase 1.5 probes; requires multi-peer election scenario)
   - Fix: dedupe on joint `(id, distinction_id)` key (network.rs:175).
-- [ ] `pending_commitments` unbounded growth on never-finalized proposals. *(audit/network N11)*
+- [ ] `pending_commitments` unbounded growth on never-finalized proposals. *(audit/network N11)* — EVIDENCE: source-only (requires multi-round commit flow)
   - Fix: size cap + TTL eviction.
 
 ### 1.7 FFI hardening (Phase 1 audit)
-- [ ] **Panic safety** — no `catch_unwind`, no `panic = "abort"`, unwinding across `extern "C"` is UB or hard abort. *(audit/ffi F1, F3)*
+- [ ] **Panic safety** — no `catch_unwind`, no `panic = "abort"`, unwinding across `extern "C"` is UB or hard abort. *(audit/ffi F1, F3)* — EVIDENCE: NOT-PROBEABLE this round (requires synthetic panic injection); structural fix is single-line
   - Fix: add `panic = "abort"` to release and dev profiles in `Cargo.toml`. One line, eliminates F1+F3.
-- [ ] **TOCTOU on `*mut KoruAgent`** — concurrent calls = `&mut` aliasing = UB. Header doc lies about thread safety. *(audit/ffi F2, F8)*
+- [ ] **TOCTOU on `*mut KoruAgent`** — concurrent calls = `&mut` aliasing = UB. Header doc lies about thread safety. *(audit/ffi F2, F8)* — EVIDENCE: NOT-PROBEABLE this round (requires C-thread harness); related N8 pattern demonstrated via `run_log/audit_network_concurrency.log`
   - Fix (minimum): document the contract — engine is shared-thread-safe, agents/validators require exclusive access. One paragraph.
   - Fix (heavier): wrap agents in `Mutex<NetworkAgent>` inside FFI. ~30 LOC.
 - [ ] **Opaque types collapse to `c_void`** — type confusion silently accepted. *(audit/ffi F4)*
@@ -113,11 +121,11 @@ Status legend: `[ ]` not done · `[~]` partial · `[x]` done
   - Fix: reject `batch_len > isize::MAX as usize` at FFI entrypoints.
 
 ### 1.8 WASM wire-format (Phase 1 audit) — depends on §5 hex-on-wire decision
-- [ ] **`id_to_bytes` heuristic (`id.len() == 64`) breaks at v2.0** — every distinction falls through to UTF-8 fallback path. *(audit/wasm W1)*
+- [ ] **`id_to_bytes` heuristic (`id.len() == 64`) breaks at v2.0** — every distinction falls through to UTF-8 fallback path. *(audit/wasm W1)* — EVIDENCE: implicit (structural; v2.0 changes `id().len()` from 64 to 32)
   - Fix: kill heuristic. Expose `Distinction::as_bytes() -> &[u8; 16]`; `id_to_bytes` becomes one `.to_vec()`.
-- [ ] **Primordials leak as `[0x30]` / `[0x31]` UTF-8 bytes** instead of real IDs. *(audit/wasm W2)*
+- [ ] **Primordials leak as `[0x30]` / `[0x31]` UTF-8 bytes** instead of real IDs. *(audit/wasm W2)* — EVIDENCE: `experiments/findings/baseline.md` (`test_wasm_engine_primordial_consistency` FAILS in `cargo test --features wasm`)
   - Fix: v2.0 gives primordials real 16-byte IDs. Special case disappears.
-- [ ] **Silent UTF-8 fallback on hex decode error** — `hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec())`. *(audit/wasm W4)*
+- [ ] **Silent UTF-8 fallback on hex decode error** — `hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec())`. *(audit/wasm W4)* — EVIDENCE: source-only (would need to inject non-hex 64-char string into JS bridge)
   - Fix: propagate as `JsValue::from_str(...)`. Fail-closed.
 - [ ] WASM `synthesize(&str, &str)` should be `synthesize(&[u8], &[u8])` at v2.0 (symmetric with outputs). *(audit/wasm W9)*
 - [ ] WASM `checkCommitment` builds Frankenstein `BatchCommitment { leader_id: "", batch_size: 0 }`. *(audit/wasm W10)*
@@ -141,24 +149,17 @@ Status legend: `[ ]` not done · `[~]` partial · `[x]` done
   - Pre-flight: grep ALIS + koru-protocol for `ParallelBatchProcessor` use before deleting.
 - [ ] Keep `ParallelSynthesizer`; rename to `BatchSynthesizer`; return `Vec<Option<Distinction>>` instead of empty-string fallback. *(audit/parallel)*
 
-### 1.11 Phase 1 empirical follow-up (persisted, verified clean, NOT YET RUN)
+### 1.11 Phase 1 empirical follow-up — COMPLETE
 
-Validation experiment sources persisted and verified clippy-clean.
+All 8 binaries persisted clippy-clean AND run. Logs at `experiments/findings/run_log/`. Consolidated results at `experiments/findings/PHASE_1_5_RESULTS.md`.
 
-- [x] Persisted `experiments/runner/src/exp18_coding_law.rs` — clippy clean
-- [x] Persisted `experiments/runner/src/exp19_mediated_self_reference.rs` — clippy clean
-- [x] Persisted `experiments/runner/src/exp20_fold_law.rs` (written from scratch using primitives.rs:11-22 as reference) — clippy clean
-- [x] Persisted `experiments/qa/src/exp21_cross_engine_determinism.rs` — clippy clean after 8 fixes (1 compile error + 7 warnings)
-- [x] Registered all four binaries in respective `Cargo.toml` files
-- [x] **`cargo clippy --release --all-targets` on new files** — zero warnings on all 4 new validation binaries
-- [ ] Run all four; update validation reports (`experiments/findings/validations/*.md`) with measured results
-
-Audit repro probes persisted and verified clippy-clean:
-- [x] `experiments/qa/src/exp_validator_audit.rs` — clippy clean
-- [x] `experiments/qa/src/audit_network_foreign_peers.rs` — clippy clean
-- [x] `experiments/qa/src/audit_network_commitment_unbound.rs` — clippy clean
-- [x] `experiments/qa/src/audit_network_concurrency.rs` — clippy clean
-- [ ] Run the 4 probes; capture output as evidence appendix to corresponding audit reports
+- [x] Persisted + clippy-clean: `exp18_coding_law`, `exp19_mediated_self_reference`, `exp20_fold_law`, `exp21_cross_engine_determinism`
+- [x] Persisted + clippy-clean: `exp_validator_audit`, `audit_network_foreign_peers`, `audit_network_commitment_unbound`, `audit_network_concurrency`
+- [x] Registered in respective `Cargo.toml`
+- [x] **All 8 binaries run** — total ~60 sec; all exit 0
+- [x] **All 4 validation reports CONFIRMED with measured numbers** (coding_law rho ∈ {0.980, 0.989, 0.991}; mediated 0 collisions @ 10K depth; fold_law 128× ratio; cross-engine 0 divergences across 5 phases)
+- [x] **All 13 probeable HIGH+ findings CONFIRMED** (V1, V3, V4, V5, V6, V7, V8 from validator; N1, N2, N3, N4, N5, N6 from network)
+- [x] Updated validation reports + audit reports with EVIDENCE annotations (in CHECKLIST 1.5–1.10 inline)
 
 ### 1.12 Baseline measurement (COMPLETE — see `experiments/findings/baseline.md`)
 
@@ -222,18 +223,14 @@ All 7 subsystems audited. Reports in `experiments/findings/audits/`. Top-level s
 
 ---
 
-## Section 4 — VALIDATE (Phase 1 — designs drafted, experiments not yet run)
+## Section 4 — VALIDATE — COMPLETE
 
-Phase 1 produced design reports for all four. Three have full source drafted. None executed (plan mode blocked file creation + `cargo run`). Reports in `experiments/findings/validations/`.
+All four CLAUDE.md theory claims now have measured numbers (replacing predictions). Full results in `experiments/findings/PHASE_1_5_RESULTS.md` Section 3.
 
-- [~] **Coding Law: degree ↔ usage frequency rho=0.99** — `experiments/runner/src/exp18_coding_law.rs` source drafted (in agent transcript). Predicted rho 0.97–0.999.
-  - Pending: persist source, register `[[bin]]`, run.
-- [~] **Mediated self-reference → infinite novelty** — `experiments/runner/src/exp19_mediated_self_reference.rs` source drafted. Predicted CONFIRMED for both T2 (varying obs) and T3 (constant obs).
-  - Pending: persist source, register `[[bin]]`, run.
-- [ ] **Fold Law mechanism (depth ≤ 8)** — design report drafted; source NOT drafted (agent ran out of permitted actions). Depends on TODO #3 phantom fix OR manual 8-step replication.
-  - Pending: write source.
-- [~] **Cross-engine determinism on arbitrary chains** — `experiments/qa/src/exp21_cross_engine_determinism.rs` source drafted. Five phases (baseline, history adversary, concurrent, closed-form predict_id, three-way majority). All predicted CONFIRMED.
-  - Pending: persist source, register `[[bin]]`, run.
+- [x] **Coding Law: degree ↔ usage frequency rho=0.99** — CONFIRMED. Measured rho = 0.980 (N=1K), 0.989 (N=10K), **0.991 (N=100K, M=5M)**. Trend approaches 0.99 as predicted. Throughput 508K–833K/s confirms CLAUDE.md band.
+- [x] **Mediated self-reference → infinite novelty** — CONFIRMED for both T2 (varying obs) AND T3 (constant obs). 10001/10001 unique distinctions at depth 10K. T1 direct produces 0 new distinctions (irreflexivity).
+- [x] **Fold Law mechanism (depth ≤ 8)** — CONFIRMED. Control deg(d0) = 1 after 10K Fibonacci syntheses; treatment deg(d0) = 128 after 256 byte folds. **Ratio = 128× (predicted ≥40, exceeded).** Mechanism isolated: ByteMapping's 8-step alternating fold, not general content concentration.
+- [x] **Cross-engine determinism on arbitrary chains** — CONFIRMED on all 5 phases (baseline, history adversary, concurrent ×8 threads, closed-form predict_id at depth 20K, three-engine majority). Phase 4's closed-form comparison vs pure SHA256 prediction is the strongest variant.
 
 ---
 

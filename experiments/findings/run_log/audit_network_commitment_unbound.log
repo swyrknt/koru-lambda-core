@@ -1,0 +1,14 @@
+=== Audit: BatchCommitment leader_id is not in the hash ===
+
+  honest.commitment_hash = [fb, 51, cd, f, 62, b1, ef, b0, 69, 3f, e5, 6e, d1, cf, 60, d7, b2, 12, 39, a5, 45, 35, f9, a3, 18, 83, f7, d9, b, b2, 95, 5c]
+  forged.commitment_hash = [fb, 51, cd, f, 62, b1, ef, b0, 69, 3f, e5, 6e, d1, cf, 60, d7, b2, 12, 39, a5, 45, 35, f9, a3, 18, 83, f7, d9, b, b2, 95, 5c]
+  honest.leader_id = alice
+  forged.leader_id = EVE
+  hashes equal? true
+  honest.verify_batch(&batch, 7, 3) = true
+  forged.verify_batch(&batch, 7, 3) = true
+
+  VERDICT: CONFIRMED. leader_id is a free-form field with no
+           cryptographic binding to the commitment hash.
+           commitment.rs:46-58 -- hasher never reads leader_id.
+           SEVERITY: HIGH. Leader attribution is forgeable.

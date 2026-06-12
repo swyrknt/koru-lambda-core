@@ -1,0 +1,32 @@
+=== Audit: NetworkAgent foreign-input surface ===
+
+-- A: PeerIdentity::new with 1MB peer id --
+  Constructed in 1.8526835s
+  peer.id.len() = 1000000
+  engine.distinction_count() after = 1000002
+  VERDICT: 1MB peer id permitted, ~1M synth calls. SEVERITY: HIGH.
+
+-- B: empty peer id collapses to d0 --
+  peer("")  -> distinction = 0
+  d0.id()         = 0
+  peer("") distinction == d0 ? true
+  validator_count = 1
+  VERDICT: CONFIRMED. Empty peer id impersonates primordial.
+
+-- C: from_state accepts forged Distinction as root --
+  network_root in stats = FORGED_ROOT_NEVER_SYNTHESIZED
+  Present in engine? false
+  VERDICT: CONFIRMED. SEVERITY: HIGH.
+
+-- D: BatchProposed truncates previous_root to first 8 bytes --
+  action_a.id = 11e9fd90e257382db6a57beb28b327e86ccf2c3054709fcf75ccab72d76fc685
+  action_b.id = 11e9fd90e257382db6a57beb28b327e86ccf2c3054709fcf75ccab72d76fc685
+  VERDICT: CONFIRMED. Causal-chain collision on 8-byte prefix.
+           SEVERITY: HIGH.  network.rs:73-78 .take(8)
+
+-- E: update_local_root accepts forged Distinction --
+  before: ef134f2a180ba05d
+  after : ATTACKER_PICKED_ROOT
+  VERDICT: CONFIRMED. SEVERITY: HIGH.
+
+=== Done ===

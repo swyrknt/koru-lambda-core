@@ -1,0 +1,13 @@
+=== Audit: NetworkAgent concurrency contract ===
+
+  validator_count after 8x50 concurrent joins (Mutex-serialised) = 400
+  engine.distinction_count = 1228
+  engine.relationship_count = 2453
+  r=2d-3 numerically? true
+
+  OBSERVATION: NetworkAgent is &mut self everywhere. There is NO
+  built-in Mutex/RwLock. The above test only works because we wrap
+  the agent ourselves. Embedders MUST do this. Nothing in network.rs
+  enforces or documents the requirement.
+  VERDICT: agent is single-writer by construction, advertised as
+           network consensus. SEVERITY: MEDIUM (footgun / doc gap).

@@ -36,6 +36,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+# Phase 1.5 evidence — keep these tracked
+!experiments/findings/run_log/*.log
 
 # Coverage
 coverage/

@@ -1,0 +1,35 @@
+
+## Sanity: saturated repeats contribute 0 to degree
+K=10000 repeats. d: 5 -> 6 (delta 1). r: 7 -> 9 (delta 2).
+deg(a): 3 -> 4 (delta 1). deg(c): 2 -> 3 (delta 1).
+expectation: +1 distinction, +2 rels, +1 deg each parent : CONFIRMED
+
+--- run N=1000 M=200000 alpha=1 seed=0xc0de ---
+pool built: 1000 distinctions, engine d_count=1000, build_secs=0.001
+zipf phase: 200000 calls in 0.240s (833775 calls/sec) | novel=54558 saturated=145442
+engine d_count: before=1000 after=55558 delta=54558 (expect delta == novel_calls)
+freq distribution: top5=[49898, 26084, 17714, 13344, 10783] (sum across pool = 400000), zeros=0
+Spearman rho(freq, delta_degree) = 0.980050
+Spearman rho(freq, total_degree) = 0.986034
+
+--- run N=10000 M=1000000 alpha=1 seed=0xc0de ---
+pool built: 10000 distinctions, engine d_count=10000, build_secs=0.010
+zipf phase: 1000000 calls in 1.605s (623086 calls/sec) | novel=413404 saturated=586596
+engine d_count: before=10000 after=423404 delta=413404 (expect delta == novel_calls)
+freq distribution: top5=[194097, 99635, 67608, 51236, 40510] (sum across pool = 2000000), zeros=0
+Spearman rho(freq, delta_degree) = 0.988942
+Spearman rho(freq, total_degree) = 0.989545
+
+--- run N=100000 M=5000000 alpha=1 seed=0xc0de ---
+pool built: 100000 distinctions, engine d_count=100000, build_secs=0.120
+zipf phase: 5000000 calls in 9.828s (508734 calls/sec) | novel=2534479 saturated=2465521
+engine d_count: before=100000 after=2634479 delta=2534479 (expect delta == novel_calls)
+freq distribution: top5=[794993, 406752, 272922, 205620, 165405] (sum across pool = 10000000), zeros=2
+Spearman rho(freq, delta_degree) = 0.991382
+Spearman rho(freq, total_degree) = 0.991442
+
+## Summary
+       N          M  alpha      novel  saturated  rho(freq,delta)  rho(freq,total)       secs
+    1000     200000   1.00      54558     145442         0.980050         0.986034      0.241
+   10000    1000000   1.00     413404     586596         0.988942         0.989545      1.615
+  100000    5000000   1.00    2534479    2465521         0.991382         0.991442      9.948
