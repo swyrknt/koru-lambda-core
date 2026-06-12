@@ -9,11 +9,16 @@ Status legend: `[ ]` not done · `[~]` partial · `[x]` done
 
 ## Tier 0 — SHOW-STOPPERS (demonstrated, must-not-ship-to-a-network)
 
-Three consensus-correctness bugs CONFIRMED by Phase 1.5 probes. **Cannot ship at any version on a network.** See full evidence in `experiments/findings/PHASE_1_5_RESULTS.md` Section 5.
+Two consensus-correctness bugs CONFIRMED by Phase 1.5 probes that **break consensus determinism or cryptographic attribution**. Cannot ship at any version on a network. See `PHASE_1_5_RESULTS.md` Section 5.
 
-1. **N6** — `BatchCommitment::compute` does not hash `leader_id` → leader attribution forgeable. *(Section 1.5, evidence: `run_log/audit_network_commitment_unbound.log`)*
-2. **N5** — `NetworkAction::BatchProposed` truncates `previous_root` to first 8 bytes → causal-chain collision. *(Section 1.5, evidence: `run_log/audit_network_foreign_peers.log` D)*
-3. **V5** — Validator atomic-failure leaks distinctions into engine on rejected batch (4 distinctions per partial-prefix). *(Section 1.5, **severity upgraded MEDIUM→HIGH** per Phase 1.5 surprise inventory; evidence: `run_log/exp_validator_audit.log` C)*
+1. **N6** — `BatchCommitment::compute` does not hash `leader_id` → cryptographic attribution forgeable. Same batch + nonce + epoch + different leader_id → byte-identical commitment_hash. *(evidence: `run_log/audit_network_commitment_unbound.log`)*
+2. **N5** — `NetworkAction::BatchProposed` truncates `previous_root` to first 8 bytes → two distinct chain heads with shared hex prefix produce identical action distinctions. **Breaks consensus determinism: two valid forks can converge.** *(evidence: `run_log/audit_network_foreign_peers.log` D)*
+
+## Tier 1 — Critical bugs, demonstrated, fix in v2.0 cohort
+
+V5 was initially flagged Tier 0 after the probe demonstration but on review belongs here. The engine grows on rejected batches but does so *deterministically* — all nodes leak identically, so consensus is not broken. Still a real DoS amplifier + validator-engine consistency issue that must be fixed.
+
+1. **V5** — Validator pre-failure syntheses leak into engine despite "atomic" rejection (4 distinctions per pre-failure tx demonstrated in a 3-tx batch). *(evidence: `run_log/exp_validator_audit.log` C)*. Fix: pre-validate batches before any `synthesize` call.
 
 ## Working agreements
 
@@ -86,7 +91,7 @@ Three consensus-correctness bugs CONFIRMED by Phase 1.5 probes. **Cannot ship at
   - Fix: include `leader_id.as_bytes()` in the SHA256 hasher (commitment.rs:46-58). Trivial.
 - [ ] **`NetworkAction::BatchProposed` truncates `previous_root` to first 8 bytes** — two different chain heads sharing 8-byte hex prefix produce identical action distinctions (causal-chain collision). *(audit/network N5)* — EVIDENCE: `run_log/audit_network_foreign_peers.log` D (`deadbeefAAAA…` and `deadbeefBBBB…` both produced action_id `11e9fd90…`)
   - Fix: drop `.take(8)` (network.rs:73-78); hash full string or validate as 64-hex-char SHA256.
-- [ ] **Validator atomic-failure semantics are misstated** — engine retains all syntheses from the rejected batch's valid prefix; only validator state rolls back. *(audit/validator V5; **SEVERITY UPGRADED MEDIUM→HIGH** per Phase 1.5 surprise inventory)* — EVIDENCE: `run_log/exp_validator_audit.log` C (3-tx out-of-order batch rejected; 4 distinctions leaked into engine)
+- [ ] **Validator atomic-failure semantics are misstated** — engine retains all syntheses from the rejected batch's valid prefix; only validator state rolls back. *(audit/validator V5; severity reverted MEDIUM→HIGH→HIGH-but-not-Tier-0 after correction — engine leakage is deterministic across nodes so consensus is preserved; still a DoS amplifier)* — EVIDENCE: `run_log/exp_validator_audit.log` C (3-tx out-of-order batch rejected; 4 distinctions leaked into engine)
   - Fix: pre-validate batches (walk `transactions` once before any `synthesize` call). Doc-only fix is insufficient given demonstrated leakage.
 
 ### 1.6 Consensus hardening (Phase 1 audit)
