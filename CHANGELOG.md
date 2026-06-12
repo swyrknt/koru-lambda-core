@@ -34,6 +34,16 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
 
 - `hex = "0.4"` direct dependency (used by the synthesize hot path).
 
+### Changed (breaking)
+
+- **`DistinctionEngine::get_state_snapshot` renamed to
+  `get_state_snapshot_unsynchronized`** (Decision 5.8). The method's existing
+  tearing behavior under concurrent writes is unchanged; the new name forces
+  every caller to acknowledge at the call site that the two-half snapshot is
+  not atomic. Docstring expanded to document the tearing semantics (~0.1%
+  avalanche-sized tear rate per Exp 6) and when the snapshot is safe vs unsafe.
+  External callers must rename: this is a v2.0 breaking change.
+
 ### Deprecated
 
 ### Removed

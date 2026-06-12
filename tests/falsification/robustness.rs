@@ -22,7 +22,7 @@ mod graph_helpers {
 
     /// Converts engine state to petgraph for analysis
     pub fn build_graph(engine: &DistinctionEngine) -> Graph<String, (), petgraph::Undirected> {
-        let (distinctions, relationships) = engine.get_state_snapshot();
+        let (distinctions, relationships) = engine.get_state_snapshot_unsynchronized();
 
         let mut graph = Graph::new_undirected();
         let mut node_map: HashMap<String, NodeIndex> = HashMap::new();
@@ -124,7 +124,7 @@ fn test_falsify_uniform_vulnerability() {
     println!("  Executing 3000 synthesis operations with degree bias...");
 
     for step in 0..3000 {
-        let distinctions = engine.get_state_snapshot().0;
+        let distinctions = engine.get_state_snapshot_unsynchronized().0;
 
         if distinctions.len() < 2 {
             continue;
@@ -330,7 +330,7 @@ fn test_falsify_random_degree_distribution() {
     println!("  Executing 2000 synthesis operations with degree bias...");
 
     for _step in 0..2000 {
-        let distinctions = engine.get_state_snapshot().0;
+        let distinctions = engine.get_state_snapshot_unsynchronized().0;
 
         if distinctions.len() < 2 {
             continue;

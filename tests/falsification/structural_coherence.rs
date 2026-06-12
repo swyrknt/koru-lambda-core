@@ -20,7 +20,7 @@ mod coherence_helpers {
 
     /// Converts engine state to petgraph for analysis
     pub fn build_graph(engine: &DistinctionEngine) -> Graph<String, (), petgraph::Undirected> {
-        let (distinctions, relationships) = engine.get_state_snapshot();
+        let (distinctions, relationships) = engine.get_state_snapshot_unsynchronized();
 
         let mut graph = Graph::new_undirected();
         let mut node_map: HashMap<String, NodeIndex> = HashMap::new();
@@ -123,7 +123,7 @@ mod coherence_helpers {
 /// Evolve universe with local selection bias
 fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng) {
     for _step in 0..steps {
-        let distinctions = engine.get_state_snapshot().0;
+        let distinctions = engine.get_state_snapshot_unsynchronized().0;
 
         if distinctions.len() < 2 {
             continue;
@@ -193,7 +193,7 @@ fn evolve_subprocess(
     rng: &mut StdRng,
 ) {
     for _step in 0..steps {
-        let all_distinctions = engine.get_state_snapshot().0;
+        let all_distinctions = engine.get_state_snapshot_unsynchronized().0;
 
         let subprocess_distinctions: Vec<_> = all_distinctions
             .iter()

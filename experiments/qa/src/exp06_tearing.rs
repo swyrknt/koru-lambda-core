@@ -80,7 +80,7 @@ fn run_with_writers(num_writers: usize, snapshot_count: usize, writer_cap: u64) 
     let mut max_abs_delta: i64 = 0;
     let t = Instant::now();
     for _ in 0..snapshot_count {
-        let (ds, rs) = engine.get_state_snapshot();
+        let (ds, rs) = engine.get_state_snapshot_unsynchronized();
         let d = ds.len() as i64;
         let r = rs.len() as i64;
         let expected = 2 * d - 3;
