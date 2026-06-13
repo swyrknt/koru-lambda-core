@@ -235,6 +235,30 @@ impl DistinctionEngine {
         new_distinction
     }
 
+    /// Returns `true` if the engine satisfies the structural invariant
+    /// `r = 2d - 3` (for `d >= 2`), or `true` trivially when `d < 2`.
+    ///
+    /// # Concurrency
+    ///
+    /// This method is only meaningful when **no concurrent writers** are
+    /// active. Mid-synthesize, the engine transiently observes
+    /// `d_new + 1, r_new` between the `all_distinctions.insert` and the first
+    /// `add_relationship` call, and `d_new + 1, r_new + 1` between the two
+    /// `add_relationship` calls. A concurrent reader can therefore see
+    /// `r != 2d - 3` even though the long-term invariant holds.
+    ///
+    /// Use this from tests and quiescent diagnostics; do NOT use it as a
+    /// hot-path assertion. The `r = 2d - 3` invariant is verified at scale
+    /// by `tests/falsification/structural_coherence.rs` and Exp 2 (2026,
+    /// 5M synths, zero deviations).
+    ///
+    /// Section 2.4 / Phase 6 sub-branch #3.
+    pub fn check_structural_invariant(&self) -> bool {
+        let d = self.distinction_count();
+        let r = self.relationship_count();
+        d < 2 || r == 2 * d - 3
+    }
+
     /// Returns a snapshot of all distinctions as a Vec.
     ///
     /// Note: In production, prefer iterating over distinctions directly
@@ -400,5 +424,51 @@ mod identity_hasher_tests {
         }
         // 10 001 distinct hashes (the `(d0, d1)` seed plus 10K novel).
         assert_eq!(set.len(), 10_001);
+    }
+}
+
+#[cfg(test)]
+mod structural_invariant_tests {
+    use super::*;
+
+    /// Genesis: 2 distinctions (d0, d1) and 1 relationship satisfies
+    /// `r = 2d - 3`: 2 * 2 - 3 = 1.
+    #[test]
+    fn genesis_satisfies_invariant() {
+        let engine = DistinctionEngine::new();
+        assert!(engine.check_structural_invariant());
+    }
+
+    /// Every novel synthesis adds 1 distinction and 2 relationships,
+    /// preserving the invariant. Confirms tripwire detects single-thread
+    /// monotone growth without false positives.
+    #[test]
+    fn invariant_holds_across_100_step_chain() {
+        let engine = DistinctionEngine::new();
+        let d1 = engine.d1().clone();
+        let mut current = engine.synthesize(engine.d0(), &d1);
+        assert!(engine.check_structural_invariant());
+        for _ in 0..100 {
+            current = engine.synthesize(&current, &d1);
+            assert!(
+                engine.check_structural_invariant(),
+                "invariant violated after synth: d={} r={}",
+                engine.distinction_count(),
+                engine.relationship_count()
+            );
+        }
+    }
+
+    /// Saturated synthesis adds nothing and preserves the invariant.
+    #[test]
+    fn invariant_holds_under_saturation() {
+        let engine = DistinctionEngine::new();
+        let a = engine.synthesize(engine.d0(), engine.d1());
+        let b = engine.synthesize(&a, engine.d1());
+        assert!(engine.check_structural_invariant());
+        for _ in 0..1000 {
+            let _ = engine.synthesize(&a, &b);
+        }
+        assert!(engine.check_structural_invariant());
     }
 }
