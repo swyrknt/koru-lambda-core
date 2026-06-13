@@ -72,79 +72,38 @@ pub(crate) type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>;
 /// and Δ₁ respectively.
 ///
 /// `Distinction` is `Clone + PartialEq + Eq + Hash + Display + Debug`.
-/// Step 7 of the foundation sub-branch makes the byte field `pub(crate)`
-/// and drops `Distinction::new` entirely; from then on, every Distinction
-/// in any consumer's hands either came from `engine.synthesize` (or
-/// `engine.d0/d1`) or from `Distinction::from_hex` (an explicit hex
-/// parse the consumer chose to do).
+///
+/// # Construction
+///
+/// The byte field is `pub(crate)` and there is **no public constructor**.
+/// External code obtains a `Distinction` value only through:
+///
+/// - `engine.synthesize(a, b)` — the canonical path
+/// - `engine.d0() / engine.d1()` — the primordials
+/// - `engine.get_distinction_by_id(hex_str)` — lookup of a known ID
+/// - `Distinction::from_hex(hex_str)` — explicit hex parse (the value
+///   produced here is well-formed bytes; whether the engine recognises
+///   it as a registered distinction is a separate question)
+///
+/// This closes the foreign-ID poisoning class structurally at compile
+/// time (Exp 9 / V1 / N3 / N4) — no defensive runtime checks needed.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Distinction {
     /// Canonical 16-byte ID. Authoritative identity.
-    bytes: [u8; 16],
+    pub(crate) bytes: [u8; 16],
 }
 
 impl Distinction {
-    /// Legacy constructor: parses the supplied String back into the
-    /// 16-byte canonical representation. Step 7 removes this entirely.
-    pub fn new(id: String) -> Self {
-        let bytes = derive_bytes_from_legacy_id(&id);
-        Self { bytes }
-    }
-
     /// Returns the canonical 16-byte ID of this distinction.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8; 16] {
         &self.bytes
     }
 
-    /// Internal constructor from raw bytes. The only callable Distinction
-    /// constructor post step 7 (when `Distinction::new` is removed).
+    /// Internal constructor from raw bytes.
     pub(crate) fn from_bytes_internal(bytes: [u8; 16]) -> Self {
         Self { bytes }
     }
-}
-
-/// Derive the canonical 16-byte representation from a legacy String id.
-///
-/// Only invoked by the soon-to-be-removed `Distinction::new(String)` (step 7).
-///
-/// Handles:
-/// - Primordials `"0"` → `[0; 16]`, `"1"` → `[1, 0, ..., 0]`
-/// - 32-char hex → decode directly (post-step-3 ids)
-/// - 64-char SHA256 hex → first 16 bytes (pre-step-3 ids)
-/// - Anything else → SHA256 the string and take first 16 bytes (covers
-///   foreign IDs minted via `Distinction::new` until step 7 closes that
-///   surface structurally)
-fn derive_bytes_from_legacy_id(id: &str) -> [u8; 16] {
-    match id {
-        "0" => return [0u8; 16],
-        "1" => {
-            let mut b = [0u8; 16];
-            b[0] = 1;
-            return b;
-        },
-        _ => {},
-    }
-    if id.len() == 32 {
-        if let Ok(bytes) = hex::decode(id) {
-            let mut arr = [0u8; 16];
-            arr.copy_from_slice(&bytes);
-            return arr;
-        }
-    }
-    if id.len() == 64 {
-        if let Ok(bytes) = hex::decode(id) {
-            let mut arr = [0u8; 16];
-            arr.copy_from_slice(&bytes[..16]);
-            return arr;
-        }
-    }
-    // Fallback: hash whatever was supplied. Covers foreign-ID inputs
-    // (Exp 9) that step 7 closes structurally.
-    let digest = Sha256::digest(id.as_bytes());
-    let mut arr = [0u8; 16];
-    arr.copy_from_slice(&digest[..16]);
-    arr
 }
 
 /// Type alias for a canonical relationship between two distinctions.
@@ -213,16 +172,15 @@ impl DistinctionEngine {
         &self.d1
     }
 
-    /// Retrieves a cloned Distinction by its unique ID (32-char hex).
+    /// Retrieves a cloned Distinction by its unique 32-character hex ID.
     ///
-    /// O(1) lookup via the internal byte-keyed DashMap. Parses the supplied
-    /// hex string to bytes; returns `None` if the hex is malformed or the
-    /// distinction isn't registered.
+    /// O(1) lookup via the internal byte-keyed DashMap. Returns `None` if
+    /// the hex is malformed or the distinction isn't registered.
     ///
     /// Thread-safe: can be called concurrently from multiple threads.
     pub fn get_distinction_by_id(&self, id: &str) -> Option<Distinction> {
-        let bytes = derive_bytes_from_legacy_id(id);
-        self.all_distinctions.get(&bytes).map(|entry| entry.value().clone())
+        let parsed = Distinction::from_hex(id).ok()?;
+        self.all_distinctions.get(parsed.as_bytes()).map(|entry| entry.value().clone())
     }
 
     /// Adds a canonical relationship between two distinctions, keyed on bytes.
