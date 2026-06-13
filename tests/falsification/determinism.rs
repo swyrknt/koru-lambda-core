@@ -42,7 +42,7 @@ fn test_falsify_determinism_across_engines() {
     let c1 = engine1.synthesize(&a1, &d1_1);
     let final1 = engine1.synthesize(&b1, &c1);
 
-    println!("  Engine 1 final ID: {}", final1.id());
+    println!("  Engine 1 final ID: {}", final1.to_hex());
 
     // ============================================================
     // ENGINE 2: Identical synthesis sequence
@@ -56,49 +56,49 @@ fn test_falsify_determinism_across_engines() {
     let c2 = engine2.synthesize(&a2, &d1_2);
     let final2 = engine2.synthesize(&b2, &c2);
 
-    println!("  Engine 2 final ID: {}", final2.id());
+    println!("  Engine 2 final ID: {}", final2.to_hex());
 
     // ============================================================
     // ASSERTION: All distinctions must be identical
     // ============================================================
 
     // Verify primordial distinctions
-    assert_eq!(d0_1.id(), d0_2.id(), "FALSIFIED: Primordial distinction d0 differs across engines");
+    assert_eq!(d0_1.to_hex(), d0_2.to_hex(), "FALSIFIED: Primordial distinction d0 differs across engines");
 
-    assert_eq!(d1_1.id(), d1_2.id(), "FALSIFIED: Primordial distinction d1 differs across engines");
+    assert_eq!(d1_1.to_hex(), d1_2.to_hex(), "FALSIFIED: Primordial distinction d1 differs across engines");
 
     // Verify intermediate distinctions
     assert_eq!(
-        a1.id(),
-        a2.id(),
+        a1.to_hex(),
+        a2.to_hex(),
         "FALSIFIED: Intermediate distinction 'a' differs across engines.\n  Engine 1: {}\n  Engine 2: {}",
-        a1.id(),
-        a2.id()
+        a1.to_hex(),
+        a2.to_hex()
     );
 
     assert_eq!(
-        b1.id(),
-        b2.id(),
+        b1.to_hex(),
+        b2.to_hex(),
         "FALSIFIED: Intermediate distinction 'b' differs across engines.\n  Engine 1: {}\n  Engine 2: {}",
-        b1.id(),
-        b2.id()
+        b1.to_hex(),
+        b2.to_hex()
     );
 
     assert_eq!(
-        c1.id(),
-        c2.id(),
+        c1.to_hex(),
+        c2.to_hex(),
         "FALSIFIED: Intermediate distinction 'c' differs across engines.\n  Engine 1: {}\n  Engine 2: {}",
-        c1.id(),
-        c2.id()
+        c1.to_hex(),
+        c2.to_hex()
     );
 
     // Verify final distinction
     assert_eq!(
-        final1.id(),
-        final2.id(),
+        final1.to_hex(),
+        final2.to_hex(),
         "FALSIFIED: Final distinction differs across engines.\n  Engine 1: {}\n  Engine 2: {}",
-        final1.id(),
-        final2.id()
+        final1.to_hex(),
+        final2.to_hex()
     );
 
     // ============================================================

@@ -27,7 +27,7 @@ fn main() {
             // Each thread performs synthesis
             let result = engine_clone.synthesize(&d0, &d1);
 
-            println!("Thread {} synthesized: {}", i, &result.id()[..16]);
+            println!("Thread {} synthesized: {}", i, &result.to_hex()[..16]);
             result
         });
 
@@ -38,10 +38,10 @@ fn main() {
     let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
 
     // Verify all threads produced identical results (determinism)
-    let first_id = results[0].id();
+    let first_id = results[0].to_hex();
     for (i, result) in results.iter().enumerate() {
-        assert_eq!(result.id(), first_id);
-        println!("✓ Thread {} result matches", i);
+        assert_eq!(result.to_hex(), first_id);
+        println!("Thread {} result matches", i);
     }
 
     println!("\n✓ All threads produced identical distinctions!");

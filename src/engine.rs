@@ -66,41 +66,29 @@ pub(crate) type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>;
 ///
 /// # Representation
 ///
-/// A `Distinction` is identified by its canonical 16-byte ID
-/// (`bytes: [u8; 16]`), the first 16 bytes of `SHA256(min_parent || max_parent)`
-/// (or `[0; 16]` for the primordial Δ₀ and `[1, 0, ..., 0]` for Δ₁).
+/// A `Distinction` carries a single canonical 16-byte ID — the first 16
+/// bytes of `SHA256(min_parent || max_parent)` for synthesized
+/// distinctions, or `[0; 16]` / `[1, 0, ..., 0]` for the primordial Δ₀
+/// and Δ₁ respectively.
 ///
-/// During the foundation sub-branch (steps 3–6) a derived `id: String`
-/// field is cached so `.id() -> &str` callers continue to compile. Step 6
-/// removes the cached String and `.id()`; consumers use `as_bytes()` for
-/// raw bytes or `to_hex()` for display.
+/// `Distinction` is `Clone + PartialEq + Eq + Hash + Display + Debug`.
+/// Step 7 of the foundation sub-branch makes the byte field `pub(crate)`
+/// and drops `Distinction::new` entirely; from then on, every Distinction
+/// in any consumer's hands either came from `engine.synthesize` (or
+/// `engine.d0/d1`) or from `Distinction::from_hex` (an explicit hex
+/// parse the consumer chose to do).
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Distinction {
-    /// Cached 32-character lowercase hex of `bytes`. Carried during
-    /// steps 3–5 so the legacy `.id() -> &str` accessor keeps working;
-    /// removed in step 6.
-    id: String,
-    /// Canonical 16-byte ID. Authoritative identity field. Step 3 made
-    /// this the source of truth for `synthesize()`; step 6 removes the
-    /// cached String above; step 7 makes this field `pub(crate)`.
+    /// Canonical 16-byte ID. Authoritative identity.
     bytes: [u8; 16],
 }
 
 impl Distinction {
     /// Legacy constructor: parses the supplied String back into the
-    /// 16-byte canonical representation. Step 7 removes this entirely
-    /// (`Distinction::new` is dropped from the public surface).
+    /// 16-byte canonical representation. Step 7 removes this entirely.
     pub fn new(id: String) -> Self {
         let bytes = derive_bytes_from_legacy_id(&id);
-        // Renormalize id to the canonical 32-char hex form to keep `id`
-        // and `bytes` consistent.
-        Self { id: hex::encode(bytes), bytes }
-    }
-
-    /// Accessor for the cached hex-string ID. Removed in step 6 of the
-    /// foundation sub-branch.
-    pub fn id(&self) -> &str {
-        &self.id
+        Self { bytes }
     }
 
     /// Returns the canonical 16-byte ID of this distinction.
@@ -112,7 +100,7 @@ impl Distinction {
     /// Internal constructor from raw bytes. The only callable Distinction
     /// constructor post step 7 (when `Distinction::new` is removed).
     pub(crate) fn from_bytes_internal(bytes: [u8; 16]) -> Self {
-        Self { id: hex::encode(bytes), bytes }
+        Self { bytes }
     }
 }
 

@@ -42,14 +42,14 @@ fn test_falsify_commutativity() {
     let ba = engine.synthesize(&d1, &d0);
 
     assert_eq!(
-        ab.id(),
-        ba.id(),
+        ab.to_hex(),
+        ba.to_hex(),
         "FALSIFIED: Commutativity violated for primordial distinctions.\n  d0⊕d1: {}\n  d1⊕d0: {}",
-        ab.id(),
-        ba.id()
+        ab.to_hex(),
+        ba.to_hex()
     );
 
-    println!("    Primordial commutativity verified: {}", ab.id());
+    println!("    Primordial commutativity verified: {}", ab.to_hex());
 
     // ============================================================
     // TEST 2: Derived distinctions
@@ -63,14 +63,14 @@ fn test_falsify_commutativity() {
     let result2 = engine.synthesize(&b, &a);
 
     assert_eq!(
-        result1.id(),
-        result2.id(),
+        result1.to_hex(),
+        result2.to_hex(),
         "FALSIFIED: Commutativity violated for derived distinctions.\n  a⊕b: {}\n  b⊕a: {}",
-        result1.id(),
-        result2.id()
+        result1.to_hex(),
+        result2.to_hex()
     );
 
-    println!("    Derived commutativity verified: {}", result1.id());
+    println!("    Derived commutativity verified: {}", result1.to_hex());
 
     // ============================================================
     // TEST 3: Complex nested distinctions
@@ -84,14 +84,14 @@ fn test_falsify_commutativity() {
     let result4 = engine.synthesize(&d, &c);
 
     assert_eq!(
-        result3.id(),
-        result4.id(),
+        result3.to_hex(),
+        result4.to_hex(),
         "FALSIFIED: Commutativity violated for complex distinctions.\n  c⊕d: {}\n  d⊕c: {}",
-        result3.id(),
-        result4.id()
+        result3.to_hex(),
+        result4.to_hex()
     );
 
-    println!("    Complex commutativity verified: {}", result3.id());
+    println!("    Complex commutativity verified: {}", result3.to_hex());
 
     // ============================================================
     // REPORTING

@@ -82,7 +82,7 @@ fn test_commitment_multi_node_consensus() {
     println!("✓ Leader finalized batch\n");
 
     // INVARIANT CHECK: Leader's state advanced
-    let final_root = agents[0].get_current_root().id().to_string();
+    let final_root = agents[0].get_current_root().to_hex();
 
     assert_ne!(previous_root, final_root, "INVARIANT VIOLATION: State did not advance after batch");
 
@@ -214,7 +214,7 @@ fn test_commitment_across_epoch_boundary() {
     println!("Initial epoch: {}", initial_epoch);
 
     // Process batch at epoch 0
-    let root = leader_node.get_current_root().id().to_string();
+    let root = leader_node.get_current_root().to_hex();
     let batch_epoch_0 = TransactionBatch {
         transactions: vec![TransactionAction { nonce: 0, data: vec![1, 2, 3] }],
         previous_root: root,
@@ -338,13 +338,13 @@ fn test_network_partition_recovery() {
     }
 
     let partition_a_roots: Vec<String> =
-        partition_a.iter().map(|a| a.get_current_root().id().to_string()).collect();
+        partition_a.iter().map(|a| a.get_current_root().to_hex()).collect();
 
     println!("✓ Partition A converged: {}", partition_a_roots[0]);
 
     // Partition B is idle (network partition)
     let partition_b_roots: Vec<String> =
-        partition_b.iter().map(|a| a.get_current_root().id().to_string()).collect();
+        partition_b.iter().map(|a| a.get_current_root().to_hex()).collect();
 
     println!("✓ Partition B idle: {}", partition_b_roots[0]);
 
@@ -360,7 +360,7 @@ fn test_network_partition_recovery() {
     println!("Network partition healed - syncing...");
 
     for b_agent in partition_b.iter_mut() {
-        let root = b_agent.get_current_root().id().to_string();
+        let root = b_agent.get_current_root().to_hex();
         let batch = TransactionBatch {
             transactions: vec![
                 TransactionAction { nonce: 0, data: vec![1, 2, 3] },
@@ -377,7 +377,7 @@ fn test_network_partition_recovery() {
     let all_roots: Vec<String> = partition_a
         .iter()
         .chain(partition_b.iter())
-        .map(|a| a.get_current_root().id().to_string())
+        .map(|a| a.get_current_root().to_hex())
         .collect();
 
     let first = &all_roots[0];

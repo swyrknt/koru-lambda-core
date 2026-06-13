@@ -29,8 +29,8 @@ fn test_falsify_wasm_native_divergence() {
     let wasm = WasmEngine::new();
 
     // Test 1: Primordial distinctions
-    assert_eq!(wasm.d0_id(), native.d0().id(), "FALSIFIED: WASM Δ₀ ≠ Native Δ₀");
-    assert_eq!(wasm.d1_id(), native.d1().id(), "FALSIFIED: WASM Δ₁ ≠ Native Δ₁");
+    assert_eq!(wasm.d0_id(), native.d0().to_hex(), "FALSIFIED: WASM Δ₀ ≠ Native Δ₀");
+    assert_eq!(wasm.d1_id(), native.d1().to_hex(), "FALSIFIED: WASM Δ₁ ≠ Native Δ₁");
 
     // Test 2: Synthesis chain
     let d0 = wasm.d0_id();
@@ -42,7 +42,7 @@ fn test_falsify_wasm_native_divergence() {
 
     assert_eq!(
         wasm_d2,
-        native_d2.id(),
+        native_d2.to_hex(),
         "FALSIFIED: synthesis(Δ₀, Δ₁) diverged between WASM and native"
     );
 
@@ -50,7 +50,7 @@ fn test_falsify_wasm_native_divergence() {
     let wasm_d3 = wasm.synthesize(&wasm_d2, &d0).unwrap();
     let native_d3 = native.synthesize(&native_d2, native.d0());
 
-    assert_eq!(wasm_d3, native_d3.id(), "FALSIFIED: Extended synthesis chain diverged");
+    assert_eq!(wasm_d3, native_d3.to_hex(), "FALSIFIED: Extended synthesis chain diverged");
 
     println!("  ✓ Determinism preserved across FFI boundary");
     println!("  ✓ synthesis(Δ₀, Δ₁) identical: {}", &wasm_d2[..16]);

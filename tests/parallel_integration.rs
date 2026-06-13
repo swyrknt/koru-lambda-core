@@ -28,7 +28,7 @@ fn test_concurrent_engine_synthesis() {
             for i in 0..100 {
                 let byte = ((thread_id * 100 + i) % 256) as u8;
                 let d = byte.to_canonical_structure(&engine_clone);
-                results.push(d.id().to_string());
+                results.push(d.to_hex());
             }
 
             results
@@ -51,7 +51,7 @@ fn test_concurrent_engine_synthesis() {
     let engine2 = Arc::new(DistinctionEngine::new());
     let byte_42 = 42u8.to_canonical_structure(&engine);
     let byte_42_again = 42u8.to_canonical_structure(&engine2);
-    assert_eq!(byte_42.id(), byte_42_again.id());
+    assert_eq!(byte_42.to_hex(), byte_42_again.to_hex());
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn test_concurrent_batch_processors() {
                         nonce: i,
                         data: vec![processor_id as u8, i as u8],
                     }],
-                    previous_root: processor.get_current_root().id().to_string(),
+                    previous_root: processor.get_current_root().to_hex(),
                 };
 
                 let action = ParallelAction {
@@ -111,7 +111,7 @@ fn test_concurrent_batch_processors() {
             (
                 processor.batches_processed(),
                 processor.expected_nonce(),
-                processor.get_current_root().id().to_string(),
+                processor.get_current_root().to_hex(),
             )
         });
 
@@ -182,7 +182,7 @@ fn test_concurrent_synthesis_determinism() {
                 current = engine_clone.synthesize(&current, &byte_d);
             }
 
-            current.id().to_string()
+            current.to_hex()
         });
 
         handles.push(handle);
@@ -225,7 +225,7 @@ fn test_high_concurrency_stress() {
                 current = engine_clone.synthesize(&current, &byte_d);
             }
 
-            current.id().to_string()
+            current.to_hex()
         });
 
         handles.push(handle);
@@ -252,7 +252,7 @@ fn test_parallel_batch_large_workload() {
     let num_batches: u64 = 1_000;
     let tx_per_batch: u64 = 10;
 
-    let mut current_root = processor.get_current_root().id().to_string();
+    let mut current_root = processor.get_current_root().to_hex();
 
     for batch_idx in 0..num_batches {
         let transactions: Vec<TransactionAction> = (0..tx_per_batch)
@@ -268,7 +268,7 @@ fn test_parallel_batch_large_workload() {
             ParallelAction { batches: vec![batch], strategy: ProcessingStrategy::Sequential };
 
         let new_root = processor.synthesize_action(action, &engine);
-        current_root = new_root.id().to_string();
+        current_root = new_root.to_hex();
     }
 
     // Verify final state
@@ -288,7 +288,7 @@ fn test_cross_thread_state_consistency() {
         let d0 = engine1.d0().clone();
         let d1 = engine1.d1().clone();
         let genesis = engine1.synthesize(&d0, &d1);
-        genesis.id().to_string()
+        genesis.to_hex()
     });
 
     let genesis_id = handle1.join().expect("Thread 1 panicked");
@@ -299,7 +299,7 @@ fn test_cross_thread_state_consistency() {
         let d0 = engine2.d0().clone();
         let d1 = engine2.d1().clone();
         let genesis = engine2.synthesize(&d0, &d1);
-        genesis.id().to_string()
+        genesis.to_hex()
     });
 
     let genesis_id2 = handle2.join().expect("Thread 2 panicked");
@@ -321,7 +321,7 @@ fn test_parallel_synthesizer_vs_sequential() {
         .iter()
         .map(|&byte| {
             let d = byte.to_canonical_structure(&engine);
-            d.id().to_string()
+            d.to_hex()
         })
         .collect();
 

@@ -26,8 +26,8 @@ mod coherence_helpers {
         let mut node_map: HashMap<String, NodeIndex> = HashMap::new();
 
         for distinction in &distinctions {
-            let node_idx = graph.add_node(distinction.id().to_string());
-            node_map.insert(distinction.id().to_string(), node_idx);
+            let node_idx = graph.add_node(distinction.to_hex());
+            node_map.insert(distinction.to_hex(), node_idx);
         }
 
         for (id_a, id_b) in &relationships {
@@ -134,7 +134,7 @@ fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng
             graph.node_identifiers().map(|idx| (graph[idx].clone(), idx)).collect();
 
         let a = distinctions.choose(rng).unwrap().clone();
-        let a_idx = id_to_idx.get(a.id());
+        let a_idx = id_to_idx.get(&a.to_hex());
 
         let b = if let Some(&idx_a) = a_idx {
             let mut neighborhood = HashSet::new();
@@ -150,8 +150,8 @@ fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng
             let neighborhood_distinctions: Vec<_> = distinctions
                 .iter()
                 .filter(|d| {
-                    if let Some(&idx) = id_to_idx.get(d.id()) {
-                        neighborhood.contains(&idx) && d.id() != a.id()
+                    if let Some(&idx) = id_to_idx.get(&d.to_hex()) {
+                        neighborhood.contains(&idx) && d.to_hex() != a.to_hex()
                     } else {
                         false
                     }
@@ -163,7 +163,7 @@ fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng
                 neighborhood_distinctions.choose(rng).unwrap().clone()
             } else {
                 let others: Vec<_> =
-                    distinctions.iter().filter(|d| d.id() != a.id()).cloned().collect();
+                    distinctions.iter().filter(|d| d.to_hex() != a.to_hex()).cloned().collect();
                 if others.is_empty() {
                     continue;
                 }
@@ -171,7 +171,7 @@ fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng
             }
         } else {
             let others: Vec<_> =
-                distinctions.iter().filter(|d| d.id() != a.id()).cloned().collect();
+                distinctions.iter().filter(|d| d.to_hex() != a.to_hex()).cloned().collect();
             if others.is_empty() {
                 continue;
             }
@@ -197,7 +197,7 @@ fn evolve_subprocess(
 
         let subprocess_distinctions: Vec<_> = all_distinctions
             .iter()
-            .filter(|d| subprocess_node_ids.contains(d.id()))
+            .filter(|d| subprocess_node_ids.contains(&d.to_hex()))
             .cloned()
             .collect();
 
@@ -207,7 +207,7 @@ fn evolve_subprocess(
 
         let a = subprocess_distinctions.choose(rng).unwrap().clone();
         let b_options: Vec<_> =
-            subprocess_distinctions.iter().filter(|d| d.id() != a.id()).cloned().collect();
+            subprocess_distinctions.iter().filter(|d| d.to_hex() != a.to_hex()).cloned().collect();
 
         if b_options.is_empty() {
             continue;

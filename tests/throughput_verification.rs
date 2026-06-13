@@ -28,7 +28,7 @@ fn test_100k_txs_throughput_verification() {
     println!("Worker cores: {}", processor.worker_count());
 
     let start = Instant::now();
-    let mut current_root = processor.get_current_root().id().to_string();
+    let mut current_root = processor.get_current_root().to_hex();
 
     for batch_idx in 0..num_batches {
         let transactions: Vec<TransactionAction> = (0..batch_size)
@@ -44,7 +44,7 @@ fn test_100k_txs_throughput_verification() {
             ParallelAction { batches: vec![batch], strategy: ProcessingStrategy::Sequential };
 
         let new_root = processor.synthesize_action(action, &engine);
-        current_root = new_root.id().to_string();
+        current_root = new_root.to_hex();
 
         // Progress indicator
         if (batch_idx + 1) % 100 == 0 {
@@ -154,9 +154,9 @@ fn test_core_synthesis_raw_throughput() {
 
     println!("Time: {:.2}s", duration.as_secs_f64());
     println!("Throughput: {:.0} ops/s", ops_per_sec);
-    println!("Final distinction: {}", current.id());
+    println!("Final distinction: {}", current.to_hex());
 
-    assert!(!current.id().is_empty());
+    assert!(!current.to_hex().is_empty());
 
     if ops_per_sec >= 100_000.0 {
         println!("✅ Core synthesis exceeds 100k ops/s target!");
@@ -200,7 +200,7 @@ fn test_multi_batch_action_throughput() {
 
         let batch = TransactionBatch {
             transactions,
-            previous_root: processor.get_current_root().id().to_string(),
+            previous_root: processor.get_current_root().to_hex(),
         };
 
         let action =
@@ -264,7 +264,7 @@ fn test_sustained_throughput_stability() {
 
         let batch = TransactionBatch {
             transactions,
-            previous_root: processor.get_current_root().id().to_string(),
+            previous_root: processor.get_current_root().to_hex(),
         };
 
         let action =
