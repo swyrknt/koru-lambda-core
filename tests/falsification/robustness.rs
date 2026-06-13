@@ -29,8 +29,8 @@ mod graph_helpers {
 
         // Add all distinction nodes
         for distinction in &distinctions {
-            let node_idx = graph.add_node(distinction.id().to_string());
-            node_map.insert(distinction.id().to_string(), node_idx);
+            let node_idx = graph.add_node(distinction.to_hex());
+            node_map.insert(distinction.to_hex(), node_idx);
         }
 
         // Add all relationship edges
@@ -143,7 +143,7 @@ fn test_falsify_uniform_vulnerability() {
         // Higher degree nodes get higher probability
         let weights: Vec<f64> = distinctions
             .iter()
-            .map(|d| (node_degrees.get(d.id()).copied().unwrap_or(0) + 1) as f64)
+            .map(|d| (node_degrees.get(&d.to_hex()).copied().unwrap_or(0) + 1) as f64)
             .collect();
 
         // Select two DIFFERENT parents using weighted selection
@@ -340,7 +340,7 @@ fn test_falsify_random_degree_distribution() {
         let weights: Vec<f64> = distinctions
             .iter()
             .map(|d| {
-                let node_idx = graph.node_identifiers().find(|&n| graph[n] == d.id());
+                let node_idx = graph.node_identifiers().find(|&n| graph[n] == d.to_hex());
                 if let Some(idx) = node_idx {
                     (graph.neighbors(idx).count() + 1) as f64
                 } else {

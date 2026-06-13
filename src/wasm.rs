@@ -55,14 +55,14 @@ impl WasmEngine {
     /// Note: Primordial IDs ("0", "1") return as UTF-8 bytes, synthesized IDs return as binary
     #[wasm_bindgen(js_name = d0Id)]
     pub fn d0_id(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.d0().id())
+        id_to_bytes(self.inner.d0().to_hex())
     }
 
     /// Get primordial distinction Δ₁ ID as raw bytes
     /// Note: Primordial IDs ("0", "1") return as UTF-8 bytes, synthesized IDs return as binary
     #[wasm_bindgen(js_name = d1Id)]
     pub fn d1_id(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.d1().id())
+        id_to_bytes(self.inner.d1().to_hex())
     }
 
     /// Synthesize two distinctions by their IDs (as strings)
@@ -81,7 +81,7 @@ impl WasmEngine {
             .ok_or_else(|| JsValue::from_str(&format!("Distinction not found: {}", id_b)))?;
 
         let result = self.inner.synthesize(&a, &b);
-        Ok(id_to_bytes(result.id()))
+        Ok(id_to_bytes(result.to_hex()))
     }
 
     /// Batch synthesis benchmark - runs n iterations inside WASM
@@ -127,7 +127,7 @@ impl WasmNetworkAgent {
     /// Get network agent's current root as raw bytes (from LocalCausalAgent trait)
     #[wasm_bindgen(js_name = currentRoot)]
     pub fn current_root(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.get_current_root().id())
+        id_to_bytes(self.inner.get_current_root().to_hex())
     }
 
     /// Get consensus state root as raw bytes (managed by validator inside agent)
@@ -142,7 +142,7 @@ impl WasmNetworkAgent {
     pub fn join_peer(&mut self, peer_id: &str) -> Result<Vec<u8>, JsValue> {
         let peer = PeerIdentity::new(peer_id.to_string(), &self.engine);
         let new_root = self.inner.join_peer(peer, &self.engine);
-        Ok(id_to_bytes(new_root.id()))
+        Ok(id_to_bytes(new_root.to_hex()))
     }
 
     /// Bulk join multiple peers - eliminates FFI overhead for batch operations
@@ -154,7 +154,7 @@ impl WasmNetworkAgent {
             let peer = PeerIdentity::new(peer_id, &self.engine);
             new_root = self.inner.join_peer(peer, &self.engine);
         }
-        Ok(id_to_bytes(new_root.id()))
+        Ok(id_to_bytes(new_root.to_hex()))
     }
 
     /// Advance epoch - agent synthesizes NetworkAction::EpochAdvanced
@@ -162,7 +162,7 @@ impl WasmNetworkAgent {
     #[wasm_bindgen(js_name = advanceEpoch)]
     pub fn advance_epoch(&mut self) -> Result<Vec<u8>, JsValue> {
         let new_root = self.inner.advance_epoch(&self.engine);
-        Ok(id_to_bytes(new_root.id()))
+        Ok(id_to_bytes(new_root.to_hex()))
     }
 
     /// Get current epoch
@@ -257,7 +257,7 @@ impl WasmNetworkAgent {
             .finalize_batch(batch, hash, &self.engine)
             .map_err(|e| JsValue::from_str(&e))?;
 
-        Ok(id_to_bytes(result.id()))
+        Ok(id_to_bytes(result.to_hex()))
     }
 }
 
@@ -288,7 +288,7 @@ impl WasmValidator {
     /// Get validator's current root as raw bytes (from LocalCausalAgent trait)
     #[wasm_bindgen(js_name = currentRoot)]
     pub fn current_root(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.get_current_root().id())
+        id_to_bytes(self.inner.get_current_root().to_hex())
     }
 
     /// Get expected nonce for next transaction
@@ -306,7 +306,7 @@ impl WasmValidator {
 
         match self.inner.validate_batch(batch, &self.engine) {
             crate::subsystems::BatchValidationResult::Valid(new_root) => {
-                Ok(id_to_bytes(new_root.id()))
+                Ok(id_to_bytes(new_root.to_hex()))
             },
             crate::subsystems::BatchValidationResult::Rejected(reason) => {
                 Err(JsValue::from_str(&reason))
@@ -324,7 +324,7 @@ impl WasmValidator {
                     nonce: self.inner.expected_nonce(),
                     data: vec![1, 2, 3],
                 }],
-                previous_root: self.inner.get_current_root().id().to_string(),
+                previous_root: self.inner.get_current_root().to_hex(),
             };
             let _ = self.inner.validate_batch(batch, &self.engine);
         }
@@ -357,7 +357,7 @@ impl WasmCommitmentAgent {
     /// Get commitment agent's current root as raw bytes (from LocalCausalAgent trait)
     #[wasm_bindgen(js_name = currentRoot)]
     pub fn current_root(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.get_current_root().id())
+        id_to_bytes(self.inner.get_current_root().to_hex())
     }
 
     /// Get expected nonce for next commitment
@@ -373,17 +373,22 @@ impl WasmCommitmentAgent {
     }
 }
 
-/// Convert distinction ID to bytes
-/// - Hex strings (64 chars for SHA256) are decoded to 32 bytes
-/// - Short IDs like "0", "1" are returned as UTF-8 bytes
-fn id_to_bytes(id: &str) -> Vec<u8> {
-    // SHA256 hex strings are 64 characters
-    if id.len() == 64 {
-        hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec())
-    } else {
-        // Primordial or short IDs - return as UTF-8
-        id.as_bytes().to_vec()
+/// Convert distinction ID to bytes.
+///
+/// Post step 3 of the foundation sub-branch, every Distinction's `.to_hex()`
+/// is a 32-character (16-byte) lowercase hex string. The legacy 64-char
+/// branch is retained for safety while sub-branch #10 (impl/wasm-bytes-on-wire)
+/// rewrites WASM to bytes-canonical.
+fn id_to_bytes(id: impl AsRef<str>) -> Vec<u8> {
+    let id = id.as_ref();
+    if id.len() == 32 {
+        return hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec());
     }
+    if id.len() == 64 {
+        return hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec());
+    }
+    // Primordial or short IDs - return as UTF-8.
+    id.as_bytes().to_vec()
 }
 
 /// Helper for hex decoding (simple implementation)
@@ -419,8 +424,8 @@ mod tests {
         let wasm_engine = WasmEngine::new();
 
         // WASM must have same primordial IDs as native (compare hex)
-        assert_eq!(to_hex(&wasm_engine.d0_id()), native_engine.d0().id());
-        assert_eq!(to_hex(&wasm_engine.d1_id()), native_engine.d1().id());
+        assert_eq!(to_hex(&wasm_engine.d0_id()), native_engine.d0().to_hex());
+        assert_eq!(to_hex(&wasm_engine.d1_id()), native_engine.d1().to_hex());
 
         // Initial counts must match
         assert_eq!(wasm_engine.distinction_count(), native_engine.distinction_count());
@@ -435,8 +440,8 @@ mod tests {
         let wasm_engine = WasmEngine::new();
 
         // Get IDs as hex strings for synthesis input
-        let d0_id = native_engine.d0().id();
-        let d1_id = native_engine.d1().id();
+        let d0_id = native_engine.d0().to_hex();
+        let d1_id = native_engine.d1().to_hex();
 
         // Synthesize via WASM (returns bytes)
         let wasm_result =
@@ -446,7 +451,7 @@ mod tests {
         let native_result = native_engine.synthesize(native_engine.d0(), native_engine.d1());
 
         // Results MUST be identical (determinism) - compare hex
-        assert_eq!(to_hex(&wasm_result), native_result.id());
+        assert_eq!(to_hex(&wasm_result), native_result.to_hex());
     }
 
     /// Test: WASM respects Axiom of Symmetry
@@ -455,8 +460,8 @@ mod tests {
     fn test_wasm_axiom_symmetry() {
         let native_engine = DistinctionEngine::new();
         let wasm_engine = WasmEngine::new();
-        let d0 = native_engine.d0().id();
-        let d1 = native_engine.d1().id();
+        let d0 = native_engine.d0().to_hex();
+        let d1 = native_engine.d1().to_hex();
 
         let ab = wasm_engine.synthesize(d0, d1).unwrap();
         let ba = wasm_engine.synthesize(d1, d0).unwrap();
@@ -471,7 +476,7 @@ mod tests {
     fn test_wasm_axiom_irreflexivity() {
         let native_engine = DistinctionEngine::new();
         let wasm_engine = WasmEngine::new();
-        let d0 = native_engine.d0().id();
+        let d0 = native_engine.d0().to_hex();
 
         let result = wasm_engine.synthesize(d0, d0).unwrap();
 

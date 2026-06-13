@@ -137,7 +137,7 @@ impl StructuralCompactor {
 
         // Initialize all distinctions with degree 0
         for d in &distinctions {
-            degree_map.insert(d.id().to_string(), 0);
+            degree_map.insert(d.to_hex(), 0);
         }
 
         // Count relationships (each relationship connects two nodes)
@@ -227,7 +227,7 @@ impl StructuralCompactor {
             cold_count,
             archived_count: self.archived_set.len(),
             compaction_operations: self.compaction_count,
-            current_root: self.local_root.id().to_string(),
+            current_root: self.local_root.to_hex(),
         }
     }
 
@@ -311,7 +311,7 @@ mod tests {
 
         assert_eq!(compactor.compaction_count, 0);
         assert_eq!(compactor.archived_set.len(), 0);
-        assert!(!compactor.get_current_root().id().is_empty());
+        assert!(!compactor.get_current_root().to_hex().is_empty());
     }
 
     #[test]
@@ -336,12 +336,14 @@ mod tests {
         // b: connected to (a) = 1
         // c: connected to (a) = 1
 
-        assert!(sis_map.contains_key("0")); // d0
-        assert!(sis_map.contains_key("1")); // d1
+        let d0_id = d0.to_hex();
+        let d1_id = d1.to_hex();
+        assert!(sis_map.contains_key(&d0_id));
+        assert!(sis_map.contains_key(&d1_id));
 
         // Primordial distinctions should have highest degree
-        assert!(sis_map["0"] >= 3);
-        assert!(sis_map["1"] >= 3);
+        assert!(sis_map[&d0_id] >= 3);
+        assert!(sis_map[&d1_id] >= 3);
     }
 
     #[test]
@@ -362,8 +364,8 @@ mod tests {
         compactor.classify_thermal_states(&sis_map);
 
         // Primordials should be HOT (degree >= 3)
-        assert_eq!(compactor.get_thermal_state("0"), Some(&ThermalState::Hot));
-        assert_eq!(compactor.get_thermal_state("1"), Some(&ThermalState::Hot));
+        assert_eq!(compactor.get_thermal_state(&d0.to_hex()), Some(&ThermalState::Hot));
+        assert_eq!(compactor.get_thermal_state(&d1.to_hex()), Some(&ThermalState::Hot));
 
         // Leaf nodes should be COLD or WARM
         let stats = compactor.get_stats();
@@ -391,7 +393,7 @@ mod tests {
 
         // Same threshold and count should produce same distinction
         // (archived_ids are not included in canonicalization)
-        assert_eq!(d1.id(), d2.id());
+        assert_eq!(d1.to_hex(), d2.to_hex());
     }
 
     #[test]
@@ -434,13 +436,13 @@ mod tests {
 
         // Perform compaction via synthesize_action
         let action = compactor.compact(&engine);
-        let initial_root = compactor.get_current_root().id().to_string();
+        let initial_root = compactor.get_current_root().to_hex();
 
         let new_root = compactor.synthesize_action(action, &engine);
 
         // Verify root changed (causal synthesis occurred)
-        assert_ne!(new_root.id(), &initial_root);
-        assert_eq!(new_root.id(), compactor.get_current_root().id());
+        assert_ne!(new_root.to_hex(), initial_root);
+        assert_eq!(new_root.to_hex(), compactor.get_current_root().to_hex());
     }
 
     #[test]

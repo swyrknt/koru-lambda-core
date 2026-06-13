@@ -63,7 +63,7 @@ fn sorted_distinctions(engine: &DistinctionEngine) -> Vec<String> {
     let mut v: Vec<String> = engine
         .get_distinctions_snapshot()
         .into_iter()
-        .map(|d| d.id().to_string())
+        .map(|d| d.to_hex())
         .collect();
     v.sort();
     v
@@ -159,7 +159,7 @@ fn run_program_capture_ids(engine: &DistinctionEngine, program: &[(usize, usize)
         let a = universe[*i].clone();
         let b = universe[*j].clone();
         let c = engine.synthesize(&a, &b);
-        ids.push(c.id().to_string());
+        ids.push(c.to_hex());
         universe.push(c);
     }
     ids

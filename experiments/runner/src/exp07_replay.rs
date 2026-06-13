@@ -42,12 +42,12 @@ fn engines_equal(a: &DistinctionEngine, b: &DistinctionEngine) -> bool {
     let mut a_ids: Vec<String> = a
         .get_distinctions_snapshot()
         .into_iter()
-        .map(|d| d.id().to_string())
+        .map(|d| d.to_hex())
         .collect();
     let mut b_ids: Vec<String> = b
         .get_distinctions_snapshot()
         .into_iter()
-        .map(|d| d.id().to_string())
+        .map(|d| d.to_hex())
         .collect();
     a_ids.sort();
     b_ids.sort();
@@ -72,15 +72,20 @@ fn replay(log: &[(String, String)]) -> (DistinctionEngine, f64) {
     let engine = DistinctionEngine::new();
     let t0 = Instant::now();
     for (a_id, b_id) in log {
-        // Look up parents in this engine; fallback to constructing
-        // (the engine requires Distinction references -- we reconstruct
-        // them from ids for replay).
+        // Look up parents in this engine; for properly ordered logs the
+        // parents always pre-exist. The fallback uses `from_hex` to
+        // reconstruct the value from the persisted hex string — this only
+        // hits if the log is replayed out-of-order, where the structural
+        // invariant of synthesize() still holds (content addressing is
+        // order-independent; see Exp 7 / Exp 12).
         let a = engine
             .get_distinction_by_id(a_id)
-            .unwrap_or_else(|| Distinction::new(a_id.clone()));
+            .or_else(|| Distinction::from_hex(a_id).ok())
+            .expect("malformed parent id in synthesis log");
         let b = engine
             .get_distinction_by_id(b_id)
-            .unwrap_or_else(|| Distinction::new(b_id.clone()));
+            .or_else(|| Distinction::from_hex(b_id).ok())
+            .expect("malformed parent id in synthesis log");
         let _ = engine.synthesize(&a, &b);
     }
     let elapsed = t0.elapsed();

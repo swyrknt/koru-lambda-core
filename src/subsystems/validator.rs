@@ -111,10 +111,10 @@ impl ConsensusValidator {
         engine: &Arc<DistinctionEngine>,
     ) -> BatchValidationResult {
         // Verify causal chain: batch must reference current root
-        if batch.previous_root != self.local_root.id() {
+        if batch.previous_root != self.local_root.to_hex() {
             return BatchValidationResult::Rejected(format!(
                 "Invalid previous root: expected {}, got {}",
-                self.local_root.id(),
+                self.local_root.to_hex(),
                 batch.previous_root
             ));
         }
@@ -162,9 +162,9 @@ impl ConsensusValidator {
         self.expected_nonce = nonce;
     }
 
-    /// Get current state root ID
-    pub fn state_root_id(&self) -> &str {
-        self.local_root.id()
+    /// Get current state root ID as a 32-character hex string.
+    pub fn state_root_id(&self) -> String {
+        self.local_root.to_hex()
     }
 }
 
@@ -233,9 +233,9 @@ mod tests {
         match result {
             BatchValidationResult::Valid(new_root) => {
                 // New root should be different from genesis
-                assert_ne!(new_root.id(), &genesis_root);
+                assert_ne!(new_root.to_hex(), genesis_root);
                 // Validator state should match new root
-                assert_eq!(new_root.id(), validator.state_root_id());
+                assert_eq!(new_root.to_hex(), validator.state_root_id());
                 assert_eq!(validator.expected_nonce(), 1);
             },
             BatchValidationResult::Rejected(reason) => {

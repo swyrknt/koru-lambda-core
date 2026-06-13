@@ -62,8 +62,8 @@ fn test_falsify_non_deterministic_convergence() {
         agent2.join_peer(peer.clone(), &engine);
     }
 
-    let root1_phase1 = agent1.get_current_root().id().to_string();
-    let root2_phase1 = agent2.get_current_root().id().to_string();
+    let root1_phase1 = agent1.get_current_root().to_hex();
+    let root2_phase1 = agent2.get_current_root().to_hex();
 
     println!("    Agent 1 root: {}...", &root1_phase1[..16]);
     println!("    Agent 2 root: {}...", &root2_phase1[..16]);
@@ -99,8 +99,8 @@ fn test_falsify_non_deterministic_convergence() {
     assert!(result1.is_ok());
     assert!(result2.is_ok());
 
-    let root1_phase2 = agent1.get_current_root().id().to_string();
-    let root2_phase2 = agent2.get_current_root().id().to_string();
+    let root1_phase2 = agent1.get_current_root().to_hex();
+    let root2_phase2 = agent2.get_current_root().to_hex();
 
     println!("    Agent 1 root: {}...", &root1_phase2[..16]);
     println!("    Agent 2 root: {}...", &root2_phase2[..16]);
@@ -119,8 +119,8 @@ fn test_falsify_non_deterministic_convergence() {
     agent1.advance_epoch(&engine);
     agent2.advance_epoch(&engine);
 
-    let root1_phase3 = agent1.get_current_root().id().to_string();
-    let root2_phase3 = agent2.get_current_root().id().to_string();
+    let root1_phase3 = agent1.get_current_root().to_hex();
+    let root2_phase3 = agent2.get_current_root().to_hex();
 
     assert_eq!(
         root1_phase3, root2_phase3,
@@ -295,7 +295,7 @@ fn test_falsify_fork_possibility() {
 
     canonical_agent.advance_epoch(&engine);
 
-    let canonical_root = canonical_agent.get_current_root().id().to_string();
+    let canonical_root = canonical_agent.get_current_root().to_hex();
     println!("    Canonical root: {}...", &canonical_root[..16]);
 
     // ============================================================
@@ -310,7 +310,7 @@ fn test_falsify_fork_possibility() {
 
     fork_attempt_agent.advance_epoch(&engine);
 
-    let fork_root = fork_attempt_agent.get_current_root().id().to_string();
+    let fork_root = fork_attempt_agent.get_current_root().to_hex();
     println!("    Fork attempt root: {}...", &fork_root[..16]);
 
     // ============================================================
@@ -341,7 +341,7 @@ fn test_falsify_fork_possibility() {
 
     reordered_agent.advance_epoch(&engine);
 
-    let reordered_root = reordered_agent.get_current_root().id().to_string();
+    let reordered_root = reordered_agent.get_current_root().to_hex();
 
     // Different input order → different root (this is expected!)
     // But this is NOT a fork - it's a different causal history
@@ -386,7 +386,7 @@ fn test_falsify_event_causality_loss() {
     let engine = Arc::new(DistinctionEngine::new());
     let mut agent = NetworkAgent::new(&engine);
 
-    let genesis_root = agent.get_current_root().id().to_string();
+    let genesis_root = agent.get_current_root().to_hex();
 
     // ============================================================
     // EVENT SEQUENCE: Track causal chain
@@ -398,18 +398,18 @@ fn test_falsify_event_causality_loss() {
     // Event 1: Peer join
     let peer1 = PeerIdentity::new("peer_1".to_string(), &engine);
     agent.join_peer(peer1, &engine);
-    let root1 = agent.get_current_root().id().to_string();
+    let root1 = agent.get_current_root().to_hex();
     roots.push(root1.clone());
 
     // Event 2: Another peer join
     let peer2 = PeerIdentity::new("peer_2".to_string(), &engine);
     agent.join_peer(peer2, &engine);
-    let root2 = agent.get_current_root().id().to_string();
+    let root2 = agent.get_current_root().to_hex();
     roots.push(root2.clone());
 
     // Event 3: Epoch advance
     agent.advance_epoch(&engine);
-    let root3 = agent.get_current_root().id().to_string();
+    let root3 = agent.get_current_root().to_hex();
     roots.push(root3);
 
     // ============================================================

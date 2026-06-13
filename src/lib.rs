@@ -1,3 +1,4 @@
+pub mod distinction_hex;
 pub mod engine;
 pub mod ffi;
 pub mod primitives;
@@ -29,7 +30,7 @@ mod tests {
         let result = engine.synthesize(&d1, &d1);
 
         // A distinction synthesized with itself yields itself
-        assert_eq!(result.id(), d1.id());
+        assert_eq!(result.as_bytes(), d1.as_bytes());
         assert_eq!(engine.distinction_count(), 2); // No new distinctions
         assert_eq!(engine.relationship_count(), 1); // No new relationships
     }
@@ -48,7 +49,7 @@ mod tests {
         let c_ba = engine2.synthesize(&d1_2, &d0_2);
 
         // Symmetry - order independence in synthesis
-        assert_eq!(c_ab.id(), c_ba.id());
+        assert_eq!(c_ab.as_bytes(), c_ba.as_bytes());
     }
 
     #[test]
@@ -68,22 +69,23 @@ mod tests {
         let (distinctions, relationships) = engine.get_state_snapshot_unsynchronized();
 
         // Verify the new distinction exists
-        assert!(distinctions.iter().any(|d| d.id() == c.id()));
+        assert!(distinctions.iter().any(|d| d.as_bytes() == c.as_bytes()));
 
-        // Verify relationships with canonical ordering
-        let rel_c_d0 = if d0.id() < c.id() {
-            (d0.id().to_string(), c.id().to_string())
+        // Verify relationships with canonical ordering (Relationship is
+        // currently a (String, String) hex tuple; step 6 retypes it).
+        let rel_c_d0 = if d0.to_hex() < c.to_hex() {
+            (d0.to_hex(), c.to_hex())
         } else {
-            (c.id().to_string(), d0.id().to_string())
+            (c.to_hex(), d0.to_hex())
         };
 
-        let rel_c_d1 = if d1.id() < c.id() {
-            (d1.id().to_string(), c.id().to_string())
+        let rel_c_d1 = if d1.to_hex() < c.to_hex() {
+            (d1.to_hex(), c.to_hex())
         } else {
-            (c.id().to_string(), d1.id().to_string())
+            (c.to_hex(), d1.to_hex())
         };
 
-        // The original relationship ("0", "1") plus two new relationships = 3 total
+        // d0/d1 primordials + synthesized c → 2 new relationships + 1 existing = 3 total.
         assert!(relationships.contains(&rel_c_d0));
         assert!(relationships.contains(&rel_c_d1));
         assert_eq!(engine.relationship_count(), 3);
@@ -104,7 +106,7 @@ mod tests {
         let c2 = engine.synthesize(&d0, &d1);
 
         // Timeless consistency - repeated synthesis yields identical results
-        assert_eq!(c1.id(), c2.id());
+        assert_eq!(c1.as_bytes(), c2.as_bytes());
         assert_eq!(engine.distinction_count(), distinctions_1);
         assert_eq!(engine.relationship_count(), relationships_1);
     }
@@ -116,11 +118,11 @@ mod tests {
         // Test that same byte produces same distinction
         let d1 = ByteMapping::map_byte_to_distinction(42, &engine);
         let d2 = ByteMapping::map_byte_to_distinction(42, &engine);
-        assert_eq!(d1.id(), d2.id());
+        assert_eq!(d1.as_bytes(), d2.as_bytes());
 
         // Test that different bytes produce different distinctions
         let d3 = ByteMapping::map_byte_to_distinction(43, &engine);
-        assert_ne!(d1.id(), d3.id());
+        assert_ne!(d1.as_bytes(), d3.as_bytes());
     }
 
     #[test]
@@ -133,6 +135,6 @@ mod tests {
         let d2 = ByteMapping::map_byte_to_distinction(255, &engine);
 
         // Should produce the same distinction
-        assert_eq!(d1.id(), d2.id());
+        assert_eq!(d1.as_bytes(), d2.as_bytes());
     }
 }

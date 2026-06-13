@@ -134,7 +134,7 @@ fn test_e2e_multi_node_consensus() {
 
         // Verify all nodes have same network state
         let network_roots: Vec<String> =
-            nodes.iter().map(|n| n.get_current_root().id().to_string()).collect();
+            nodes.iter().map(|n| n.get_current_root().to_hex()).collect();
 
         assert!(
             network_roots.iter().all(|r| r == &network_roots[0]),
@@ -159,7 +159,7 @@ fn test_e2e_multi_node_consensus() {
 
     // All nodes should have same network root
     let final_roots: Vec<String> =
-        nodes.iter().map(|n| n.get_current_root().id().to_string()).collect();
+        nodes.iter().map(|n| n.get_current_root().to_hex()).collect();
 
     let consensus_root = &final_roots[0];
     assert!(

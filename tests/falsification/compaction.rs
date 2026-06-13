@@ -169,7 +169,7 @@ fn test_falsify_compaction_causality_loss() {
     let engine = Arc::new(DistinctionEngine::new());
     let mut compactor = StructuralCompactor::new(&engine);
 
-    let initial_root = compactor.get_current_root().id().to_string();
+    let initial_root = compactor.get_current_root().to_hex();
 
     // ============================================================
     // OPERATION: Sequential compaction
@@ -186,8 +186,8 @@ fn test_falsify_compaction_causality_loss() {
 
     // Verify causal transition
     assert_ne!(
-        root1.id(),
-        &initial_root,
+        root1.to_hex(),
+        initial_root,
         "FALSIFIED: Compaction failed to update root (causality broken)"
     );
 
@@ -203,8 +203,8 @@ fn test_falsify_compaction_causality_loss() {
 
     // Verify causal chain continues
     assert_ne!(
-        root2.id(),
-        root1.id(),
+        root2.to_hex(),
+        root1.to_hex(),
         "FALSIFIED: Second compaction failed to extend causal chain"
     );
 
@@ -229,8 +229,8 @@ fn test_falsify_compaction_causality_loss() {
     let root_det2 = compactor3.synthesize_action(action_deterministic, &engine2);
 
     assert_eq!(
-        root_det1.id(),
-        root_det2.id(),
+        root_det1.to_hex(),
+        root_det2.to_hex(),
         "FALSIFIED: Compaction is non-deterministic (same action → different roots)"
     );
 

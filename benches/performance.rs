@@ -308,7 +308,7 @@ fn bench_parallel_batch_processing(c: &mut Criterion) {
                 let mut processor = ParallelBatchProcessor::new(&engine);
 
                 b.iter(|| {
-                    let mut current_root = processor.get_current_root().id().to_string();
+                    let mut current_root = processor.get_current_root().to_hex();
 
                     for i in 0..num_batches {
                         let batch = TransactionBatch {
@@ -325,7 +325,7 @@ fn bench_parallel_batch_processing(c: &mut Criterion) {
                         };
 
                         let new_root = processor.synthesize_action(action, &engine);
-                        current_root = new_root.id().to_string();
+                        current_root = new_root.to_hex();
                     }
 
                     black_box(processor.batches_processed())
@@ -357,7 +357,7 @@ fn bench_parallel_byte_canonicalization(c: &mut Criterion) {
                     .iter()
                     .map(|&byte| {
                         let d = byte.to_canonical_structure(&engine);
-                        d.id().to_string()
+                        d.to_hex()
                     })
                     .collect();
 
@@ -396,8 +396,8 @@ fn bench_parallel_synthesis(c: &mut Criterion) {
             let synthesizer = ParallelSynthesizer::new(engine.clone());
 
             // Create distinction ID pairs
-            let d0_id = engine.d0().id().to_string();
-            let d1_id = engine.d1().id().to_string();
+            let d0_id = engine.d0().to_hex();
+            let d1_id = engine.d1().to_hex();
             let pairs: Vec<(String, String)> =
                 (0..num_ops).map(|_| (d0_id.clone(), d1_id.clone())).collect();
 
@@ -430,7 +430,7 @@ fn bench_multi_batch_parallel(c: &mut Criterion) {
                 let mut processor = ParallelBatchProcessor::new(&engine);
 
                 b.iter(|| {
-                    let initial_root = processor.get_current_root().id().to_string();
+                    let initial_root = processor.get_current_root().to_hex();
                     let current_root = initial_root.clone();
 
                     // Create batches

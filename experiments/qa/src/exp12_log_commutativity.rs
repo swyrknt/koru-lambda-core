@@ -58,8 +58,8 @@ fn synth_and_log(
 ) -> Distinction {
     let child = engine.synthesize(a, b);
     log.lock().unwrap().push(LogEntry {
-        parent_a: a.id().to_string(),
-        parent_b: b.id().to_string(),
+        parent_a: a.to_hex(),
+        parent_b: b.to_hex(),
     });
     child
 }
@@ -83,7 +83,7 @@ fn engine_state_hash(engine: &DistinctionEngine) -> (BTreeSet<String>, BTreeSet<
     let distinctions: BTreeSet<String> = engine
         .get_distinctions_snapshot()
         .iter()
-        .map(|d| d.id().to_string())
+        .map(|d| d.to_hex())
         .collect();
     let relationships: BTreeSet<(String, String)> = engine
         .get_relationships_snapshot()
@@ -218,8 +218,8 @@ fn main() {
                     let child = engine_c.synthesize(&seeds_c[i], &seeds_c[j]);
                     let _ = child;
                     log_c.lock().unwrap().push(LogEntry {
-                        parent_a: seeds_c[i].id().to_string(),
-                        parent_b: seeds_c[j].id().to_string(),
+                        parent_a: seeds_c[i].to_hex(),
+                        parent_b: seeds_c[j].to_hex(),
                     });
                 }
             }));
@@ -284,7 +284,7 @@ fn main() {
     let replay_seeds = build_seeds(&replay_engine);
     let seed_map: HashMap<String, Distinction> = replay_seeds
         .iter()
-        .map(|d| (d.id().to_string(), d.clone()))
+        .map(|d| (d.to_hex(), d.clone()))
         .collect();
     // Build id -> distinction map incrementally from log
     let mut id_map: HashMap<String, Distinction> = seed_map;
@@ -294,7 +294,7 @@ fn main() {
         match (a, b) {
             (Some(a), Some(b)) => {
                 let child = replay_engine.synthesize(&a, &b);
-                id_map.insert(child.id().to_string(), child);
+                id_map.insert(child.to_hex(), child);
             }
             _ => {
                 // Parent not yet materialized: means the log entry references a parent

@@ -219,9 +219,9 @@ impl CommitmentAgent {
         self.commitments_processed
     }
 
-    /// Get commitment root ID
-    pub fn commitment_root_id(&self) -> &str {
-        self.local_root.id()
+    /// Get commitment root ID as a 32-character hex string.
+    pub fn commitment_root_id(&self) -> String {
+        self.local_root.to_hex()
     }
 }
 
@@ -421,7 +421,7 @@ mod tests {
         let d2 = commitment2.to_canonical_structure(&engine);
 
         // Same commitment -> same distinction
-        assert_eq!(d1.id(), d2.id());
+        assert_eq!(d1.to_hex(), d2.to_hex());
     }
 
     #[test]
@@ -439,7 +439,7 @@ mod tests {
         let engine = Arc::new(DistinctionEngine::new());
         let mut agent = CommitmentAgent::new(&engine);
 
-        let initial_root = agent.get_current_root().id().to_string();
+        let initial_root = agent.get_current_root().to_hex();
 
         let batch = TransactionBatch {
             transactions: vec![TransactionAction { nonce: 0, data: vec![1, 2, 3] }],
@@ -452,8 +452,8 @@ mod tests {
         let new_root = agent.synthesize_action(commitment.clone(), &engine);
 
         // Verify state changed
-        assert_ne!(new_root.id(), &initial_root);
-        assert_eq!(new_root.id(), agent.get_current_root().id());
+        assert_ne!(new_root.to_hex(), initial_root);
+        assert_eq!(new_root.to_hex(), agent.get_current_root().to_hex());
         assert_eq!(agent.expected_nonce(), 1);
         assert_eq!(agent.commitments_processed(), 1);
     }
@@ -471,11 +471,11 @@ mod tests {
         // Invalid nonce (expected 0, got 5)
         let bad_commitment = BatchCommitment::compute(&batch, 5, 0, "leader".to_string());
 
-        let initial_root = agent.get_current_root().id().to_string();
+        let initial_root = agent.get_current_root().to_hex();
         let result = agent.synthesize_action(bad_commitment, &engine);
 
         // State should be unchanged
-        assert_eq!(result.id(), &initial_root);
+        assert_eq!(result.to_hex(), initial_root);
         assert_eq!(agent.expected_nonce(), 0);
         assert_eq!(agent.commitments_processed(), 0);
     }

@@ -11,12 +11,12 @@ pub mod helpers {
     /// Verifies that two distinctions have identical IDs
     pub fn assert_identical_ids(d1: &Distinction, d2: &Distinction, path_description: &str) {
         assert_eq!(
-            d1.id(),
-            d2.id(),
+            d1.to_hex(),
+            d2.to_hex(),
             "FALSIFIED: Path dependence detected. {} yielded different results.\n  Path 1 ID: {}\n  Path 2 ID: {}",
             path_description,
-            d1.id(),
-            d2.id()
+            d1.to_hex(),
+            d2.to_hex()
         );
     }
 

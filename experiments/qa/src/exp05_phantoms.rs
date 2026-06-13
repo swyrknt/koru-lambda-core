@@ -66,12 +66,12 @@ fn main() {
         let after_distinctions = engine.distinction_count();
         let after_rels = engine.relationship_count();
 
-        println!("  byte 0x41 -> id = {}", byte_d.id());
+        println!("  byte 0x41 -> id = {}", byte_d.to_hex());
         println!("  engine.distinction_count: before={} after={}", before_distinctions, after_distinctions);
         println!("  engine.relationship_count: before={} after={}", before_rels, after_rels);
 
-        let lookup = engine.get_distinction_by_id(byte_d.id());
-        println!("  engine.get_distinction_by_id(byte_id) = {:?}", lookup.as_ref().map(|d| d.id().to_string()));
+        let lookup = engine.get_distinction_by_id(&byte_d.to_hex());
+        println!("  engine.get_distinction_by_id(byte_id) = {:?}", lookup.as_ref().map(|d| d.to_hex()));
 
         if lookup.is_none() && after_distinctions == 2 {
             println!("  VERDICT: CONFIRMED -- byte lookup produces an ID unknown to the engine.");
@@ -92,15 +92,15 @@ fn main() {
         let registered_ids: HashSet<String> = engine
             .get_distinctions_snapshot()
             .iter()
-            .map(|d| d.id().to_string())
+            .map(|d| d.to_hex())
             .collect();
         let referenced_ids = ids_referenced_in_relationships(&engine);
 
         let phantoms: HashSet<_> = referenced_ids.difference(&registered_ids).cloned().collect();
 
-        println!("  child.id = {}", child.id());
-        println!("  child is registered?  {}", registered_ids.contains(child.id()));
-        println!("  byte_d.id is registered? {}", registered_ids.contains(byte_d.id()));
+        println!("  child.id = {}", child.to_hex());
+        println!("  child is registered?  {}", registered_ids.contains(&child.to_hex()));
+        println!("  byte_d.id is registered? {}", registered_ids.contains(&byte_d.to_hex()));
         println!("  distinctions registered: {}", registered_ids.len());
         println!("  distinct IDs in relationships: {}", referenced_ids.len());
         println!("  phantom IDs (referenced but NOT registered): {}", phantoms.len());
@@ -110,7 +110,7 @@ fn main() {
 
         // One phantom expected: byte_d.id itself, since we never synthesized
         // the 8-step chain in THIS engine.
-        assert!(phantoms.contains(byte_d.id()));
+        assert!(phantoms.contains(&byte_d.to_hex()));
         println!("  ASSERT ok: byte_d.id is phantom");
     }
 
@@ -126,14 +126,14 @@ fn main() {
         let mut byte_ids = Vec::new();
         for b in 0u8..=255 {
             let d = b.to_canonical_structure(&engine);
-            byte_ids.push(d.id().to_string());
+            byte_ids.push(d.to_hex());
             let _ = engine.synthesize(&d0, &d);
         }
 
         let registered_ids: HashSet<String> = engine
             .get_distinctions_snapshot()
             .iter()
-            .map(|d| d.id().to_string())
+            .map(|d| d.to_hex())
             .collect();
         let referenced_ids = ids_referenced_in_relationships(&engine);
         let phantoms: HashSet<_> = referenced_ids.difference(&registered_ids).cloned().collect();
@@ -180,10 +180,10 @@ fn main() {
         println!("  After synthesizing the 8-step chain for byte 0x41 in the real engine:");
         println!("    distinction_count = {}", engine.distinction_count());
         println!("    relationship_count = {}", engine.relationship_count());
-        println!("    terminal id = {}", current.id());
+        println!("    terminal id = {}", current.to_hex());
         let cache_id = ByteMapping::map_byte_to_distinction(byte, &engine);
-        println!("    cache-reported id = {}", cache_id.id());
-        assert_eq!(current.id(), cache_id.id(), "chain terminal must equal cache id (determinism)");
+        println!("    cache-reported id = {}", cache_id.to_hex());
+        assert_eq!(current.to_hex(), cache_id.to_hex(), "chain terminal must equal cache id (determinism)");
         println!("  ASSERT ok: chain terminal matches cache id (proves fix is equivalent)");
 
         // How many *new* nodes would a fix add per byte?

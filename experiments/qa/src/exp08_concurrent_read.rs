@@ -44,7 +44,7 @@ fn synth_with_index(
     b: &Distinction,
 ) -> Distinction {
     // Pre-check: irreflexive case wouldn't create a child
-    if a.id() == b.id() {
+    if a.to_hex() == b.to_hex() {
         return engine.synthesize(a, b);
     }
     // First commit to engine
@@ -54,13 +54,13 @@ fn synth_with_index(
     // Only record as a new child if it's truly new (avoid duplicates in idx)
     if after > before {
         index
-            .entry(a.id().to_string())
+            .entry(a.to_hex())
             .or_default()
-            .push(child.id().to_string());
+            .push(child.to_hex());
         index
-            .entry(b.id().to_string())
+            .entry(b.to_hex())
             .or_default()
-            .push(child.id().to_string());
+            .push(child.to_hex());
     }
     child
 }
@@ -136,7 +136,7 @@ fn main() {
     for _ in 0..NUM_READER_SWEEPS {
         // Snap the external reverse index for d0
         let children_snap: Vec<String> = index_r
-            .get(d0.id())
+            .get(&d0.to_hex())
             .map(|e| e.value().clone())
             .unwrap_or_default();
 
@@ -144,11 +144,12 @@ fn main() {
 
         // Snap engine relationships in the same tight moment
         let rels = engine_r.get_relationships_snapshot();
+        let d0_hex = d0.to_hex();
         let mut engine_children_of_d0 = std::collections::HashSet::new();
         for (a, b) in &rels {
-            if a == d0.id() {
+            if a == &d0_hex {
                 engine_children_of_d0.insert(b.clone());
-            } else if b == d0.id() {
+            } else if b == &d0_hex {
                 engine_children_of_d0.insert(a.clone());
             }
         }
@@ -235,25 +236,25 @@ fn main() {
             a: &Distinction,
             b: &Distinction,
         ) -> Distinction {
-            if a.id() == b.id() {
+            if a.to_hex() == b.to_hex() {
                 return engine.synthesize(a, b);
             }
             // Compute predicted child id (replicating engine semantics)
             use sha2::{Digest, Sha256};
-            let (first, second) = if a.id() < b.id() {
-                (a.id(), b.id())
+            let (first, second) = if a.to_hex() < b.to_hex() {
+                (a.to_hex(), b.to_hex())
             } else {
-                (b.id(), a.id())
+                (b.to_hex(), a.to_hex())
             };
             let new_id_str = format!("{}:{}", first, second);
             let new_id = format!("{:x}", Sha256::digest(new_id_str.as_bytes()));
             // Push into index BEFORE engine commit
             index
-                .entry(a.id().to_string())
+                .entry(a.to_hex())
                 .or_default()
                 .push(new_id.clone());
             index
-                .entry(b.id().to_string())
+                .entry(b.to_hex())
                 .or_default()
                 .push(new_id.clone());
             // Artificial delay simulating any inter-thread stall between
@@ -298,15 +299,16 @@ fn main() {
         let mut orphans_total = 0u64;
         for _ in 0..SWEEPS {
             let children_snap: Vec<String> = index
-                .get(d0.id())
+                .get(&d0.to_hex())
                 .map(|e| e.value().clone())
                 .unwrap_or_default();
             let rels = engine.get_relationships_snapshot();
+            let d0_hex = d0.to_hex();
             let mut eng_children = std::collections::HashSet::new();
             for (a, b) in &rels {
-                if a == d0.id() {
+                if a == &d0_hex {
                     eng_children.insert(b.clone());
-                } else if b == d0.id() {
+                } else if b == &d0_hex {
                     eng_children.insert(a.clone());
                 }
             }

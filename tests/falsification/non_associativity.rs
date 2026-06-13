@@ -25,7 +25,7 @@ use koru_lambda_core::DistinctionEngine;
 /// Measurement:
 /// 1. Construct distinction X via: (a⊕b)⊕c
 /// 2. Construct distinction Y via: (a⊕c)⊕b
-/// 3. Verify X.id() ≠ Y.id() (non-associativity preserved)
+/// 3. Verify X.to_hex() ≠ Y.to_hex() (non-associativity preserved)
 ///
 /// NOTE: This test PASSES when the two constructions yield DIFFERENT
 /// IDs, confirming that construction history is preserved.
@@ -57,7 +57,7 @@ fn test_falsify_unintended_associativity() {
     let ab = engine1.synthesize(&a1, &b1);
     let result1 = engine1.synthesize(&ab, &c1);
 
-    println!("    Result 1 ID: {}", result1.id());
+    println!("    Result 1 ID: {}", result1.to_hex());
 
     // ============================================================
     // PATH 2: (a⊕c)⊕b
@@ -73,18 +73,18 @@ fn test_falsify_unintended_associativity() {
     let ac = engine2.synthesize(&a2, &c2);
     let result2 = engine2.synthesize(&ac, &b2);
 
-    println!("    Result 2 ID: {}", result2.id());
+    println!("    Result 2 ID: {}", result2.to_hex());
 
     // ============================================================
     // ASSERTION: Results should be DIFFERENT
     // ============================================================
     assert_ne!(
-        result1.id(),
-        result2.id(),
+        result1.to_hex(),
+        result2.to_hex(),
         "FALSIFIED: Unintended associativity detected! Construction history is lost.\n  \
          This indicates (a⊕b)⊕c = (a⊕c)⊕b, which violates the design intent.\n  \
          Both paths yielded: {}",
-        result1.id()
+        result1.to_hex()
     );
 
     // ============================================================
@@ -94,8 +94,8 @@ fn test_falsify_unintended_associativity() {
     println!("  Non-associativity verified:");
     println!("    (a⊕b)⊕c ≠ (a⊕c)⊕b");
     println!("  Construction history is preserved");
-    println!("  Path 1 result: {}", result1.id());
-    println!("  Path 2 result: {}", result2.id());
+    println!("  Path 1 result: {}", result1.to_hex());
+    println!("  Path 2 result: {}", result2.to_hex());
 }
 
 /// Falsification Test: Construction History Preservation
@@ -147,29 +147,29 @@ fn test_falsify_construction_history_loss() {
     let step1_c = engine3.synthesize(&d0, &d1);
     let result_c = engine3.synthesize(&step1_c, &step1_c);
 
-    println!("  Sequence 1 ID: {}", result_a.id());
-    println!("  Sequence 2 ID: {}", result_b.id());
-    println!("  Sequence 3 ID: {}", result_c.id());
+    println!("  Sequence 1 ID: {}", result_a.to_hex());
+    println!("  Sequence 2 ID: {}", result_b.to_hex());
+    println!("  Sequence 3 ID: {}", result_c.to_hex());
 
     // ============================================================
     // ASSERTION: All three should be DIFFERENT
     // ============================================================
 
     assert_ne!(
-        result_a.id(),
-        result_b.id(),
+        result_a.to_hex(),
+        result_b.to_hex(),
         "FALSIFIED: Sequences 1 and 2 produced identical results (history loss)"
     );
 
     assert_ne!(
-        result_a.id(),
-        result_c.id(),
+        result_a.to_hex(),
+        result_c.to_hex(),
         "FALSIFIED: Sequences 1 and 3 produced identical results (history loss)"
     );
 
     assert_ne!(
-        result_b.id(),
-        result_c.id(),
+        result_b.to_hex(),
+        result_c.to_hex(),
         "FALSIFIED: Sequences 2 and 3 produced identical results (history loss)"
     );
 

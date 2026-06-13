@@ -1,25 +1,118 @@
 use dashmap::DashMap;
 use sha2::{Digest, Sha256};
+use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 
+/// Identity hasher for keys whose bytes are already uniformly distributed
+/// (i.e., SHA256-derived).
+///
+/// For each 16-byte `write` call, XORs in the leading 8 bytes (interpreted
+/// as little-endian `u64`) at a per-write bit-rotation. The length-prefix
+/// writes that the stdlib `Hash for [u8; N]` impl emits (8 bytes) are
+/// ignored.
+///
+/// This handles both `[u8; 16]` single-array keys (one 16-byte data write
+/// → state = first 8 bytes of array) and `([u8; 16], [u8; 16])` tuple
+/// keys (two 16-byte data writes → state = `a8 XOR (b8 rotated)`), which
+/// is critical for relationship tuples where many distinct edges share
+/// `d0` or `d1` as the min element.
+///
+/// # Safety
+///
+/// Sound only when the keys are byte arrays of length 16 whose leading
+/// bytes are uniformly distributed. Used here on `[u8; 16]` (Distinction
+/// IDs) and `([u8; 16], [u8; 16])` tuples (canonical parent-pair
+/// relationships). Both satisfy the precondition: bytes are SHA256
+/// outputs (or the primordials `[0;16]` / `[1,0,…,0]`, exactly two
+/// pinned values not subject to adversarial collision).
+///
+/// Per Exp 14 (2026): 6–13× hash speedup vs the default SipHash on
+/// SHA256-distributed keys.
+#[derive(Default)]
+pub struct IdentityHasher {
+    state: u64,
+    writes: u32,
+}
+
+impl Hasher for IdentityHasher {
+    fn finish(&self) -> u64 {
+        self.state
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        // The stdlib `Hash for [u8; N]` impl writes the length as a
+        // `usize` prefix (8 bytes on 64-bit) BEFORE each array data
+        // write (16 bytes). We only capture 16-byte writes (the data
+        // payloads), accumulating into the state via XOR with a
+        // per-write bit rotation so that the second element of a
+        // tuple key contributes to the bucket.
+        if bytes.len() != 16 {
+            return;
+        }
+        let mut buf = [0u8; 8];
+        buf.copy_from_slice(&bytes[..8]);
+        let v = u64::from_le_bytes(buf);
+        // Rotate by a multiple of 17 (coprime with 64) per write so
+        // that successive elements end up in distinct bit positions.
+        let rot = (self.writes.wrapping_mul(17)) & 63;
+        self.state ^= v.rotate_left(rot);
+        self.writes = self.writes.wrapping_add(1);
+    }
+}
+
+/// Build-hasher alias for [`IdentityHasher`].
+pub(crate) type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>;
+
 /// A distinction is the fundamental unit of the system.
-/// A distinction is defined solely by its unique identifier.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+///
+/// # Representation
+///
+/// A `Distinction` carries a single canonical 16-byte ID — the first 16
+/// bytes of `SHA256(min_parent || max_parent)` for synthesized
+/// distinctions, or `[0; 16]` / `[1, 0, ..., 0]` for the primordial Δ₀
+/// and Δ₁ respectively.
+///
+/// `Distinction` is `Clone + PartialEq + Eq + Hash + Display + Debug`.
+///
+/// # Construction
+///
+/// The byte field is `pub(crate)` and there is **no public constructor**.
+/// External code obtains a `Distinction` value only through:
+///
+/// - `engine.synthesize(a, b)` — the canonical path
+/// - `engine.d0() / engine.d1()` — the primordials
+/// - `engine.get_distinction_by_id(hex_str)` — lookup of a known ID
+/// - `Distinction::from_hex(hex_str)` — explicit hex parse (the value
+///   produced here is well-formed bytes; whether the engine recognises
+///   it as a registered distinction is a separate question)
+///
+/// This closes the foreign-ID poisoning class structurally at compile
+/// time (Exp 9 / V1 / N3 / N4) — no defensive runtime checks needed.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Distinction {
-    id: String,
+    /// Canonical 16-byte ID. Authoritative identity.
+    pub(crate) bytes: [u8; 16],
 }
 
 impl Distinction {
-    pub fn new(id: String) -> Self {
-        Self { id }
+    /// Returns the canonical 16-byte ID of this distinction.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8; 16] {
+        &self.bytes
     }
 
-    pub fn id(&self) -> &str {
-        &self.id
+    /// Internal constructor from raw bytes.
+    pub(crate) fn from_bytes_internal(bytes: [u8; 16]) -> Self {
+        Self { bytes }
     }
 }
 
 /// Type alias for a canonical relationship between two distinctions.
+///
+/// Stored internally as `([u8; 16], [u8; 16])`; the public alias remains
+/// `(String, String)` during steps 4–5 of the foundation sub-branch so
+/// existing callers continue to compile. Step 5 mechanically rewrites
+/// callers to the byte tuple; step 6 retypes this alias to
+/// `([u8; 16], [u8; 16])`.
 pub type Relationship = (String, String);
 
 /// Type alias for a complete state snapshot.
@@ -35,26 +128,36 @@ pub type StateSnapshot = (Vec<Distinction>, Vec<Relationship>);
 /// Concurrency Model: Uses interior mutability via DashMap to allow concurrent
 /// synthesis operations from multiple threads. The engine can be safely shared via
 /// Arc<DistinctionEngine> across threads without requiring mutable access.
+/// Internal alias: byte-keyed Distinction store, IdentityHasher-hashed.
+type AllDistinctionsMap = DashMap<[u8; 16], Distinction, IdentityBuildHasher>;
+
+/// Internal alias: canonical-pair relationship set, IdentityHasher-hashed.
+type RelationshipMap = DashMap<([u8; 16], [u8; 16]), (), IdentityBuildHasher>;
+
 #[derive(Debug)]
 pub struct DistinctionEngine {
     d0: Distinction,
     d1: Distinction,
-    all_distinctions: DashMap<String, Distinction>,
-    relationships: DashMap<Relationship, ()>,
+    all_distinctions: AllDistinctionsMap,
+    relationships: RelationshipMap,
 }
 
 impl DistinctionEngine {
     /// Creates a new engine with the two primordial distinctions.
     pub fn new() -> Self {
-        let d0 = Distinction::new("0".to_string());
-        let d1 = Distinction::new("1".to_string());
+        let mut d1_bytes = [0u8; 16];
+        d1_bytes[0] = 1;
+        let d0 = Distinction::from_bytes_internal([0u8; 16]);
+        let d1 = Distinction::from_bytes_internal(d1_bytes);
 
-        let all_distinctions = DashMap::new();
-        all_distinctions.insert(d0.id.clone(), d0.clone());
-        all_distinctions.insert(d1.id.clone(), d1.clone());
+        let all_distinctions: AllDistinctionsMap =
+            DashMap::with_hasher(IdentityBuildHasher::default());
+        all_distinctions.insert(d0.bytes, d0.clone());
+        all_distinctions.insert(d1.bytes, d1.clone());
 
-        let relationships = DashMap::new();
-        relationships.insert((d0.id.clone(), d1.id.clone()), ());
+        let relationships: RelationshipMap = DashMap::with_hasher(IdentityBuildHasher::default());
+        // d0.bytes < d1.bytes is true ([0; 16] < [1, 0, ..., 0]).
+        relationships.insert((d0.bytes, d1.bytes), ());
 
         Self { d0, d1, all_distinctions, relationships }
     }
@@ -69,22 +172,21 @@ impl DistinctionEngine {
         &self.d1
     }
 
-    /// Retrieves a cloned Distinction by its unique ID.
-    /// O(1) complexity via internal DashMap lookup.
+    /// Retrieves a cloned Distinction by its unique 32-character hex ID.
     ///
-    /// Returns None if the distinction doesn't exist.
+    /// O(1) lookup via the internal byte-keyed DashMap. Returns `None` if
+    /// the hex is malformed or the distinction isn't registered.
     ///
-    /// Thread-safe: Can be called concurrently from multiple threads.
+    /// Thread-safe: can be called concurrently from multiple threads.
     pub fn get_distinction_by_id(&self, id: &str) -> Option<Distinction> {
-        self.all_distinctions.get(id).map(|entry| entry.value().clone())
+        let parsed = Distinction::from_hex(id).ok()?;
+        self.all_distinctions.get(parsed.as_bytes()).map(|entry| entry.value().clone())
     }
 
-    /// Adds a canonical relationship between two distinctions.
-    ///
-    /// Thread-safe via DashMap interior mutability.
-    fn add_relationship(&self, id_a: &str, id_b: &str) {
-        let (min, max) = if id_a < id_b { (id_a, id_b) } else { (id_b, id_a) };
-        self.relationships.insert((min.to_string(), max.to_string()), ());
+    /// Adds a canonical relationship between two distinctions, keyed on bytes.
+    fn add_relationship(&self, a: &[u8; 16], b: &[u8; 16]) {
+        let (min, max) = if a <= b { (*a, *b) } else { (*b, *a) };
+        self.relationships.insert((min, max), ());
     }
 
     /// Synthesizes two distinctions to create a third.
@@ -100,32 +202,35 @@ impl DistinctionEngine {
     /// Uses DashMap for lock-free concurrent access.
     pub fn synthesize(&self, a: &Distinction, b: &Distinction) -> Distinction {
         // Irreflexivity - a distinction synthesized with itself yields itself
-        if a.id == b.id {
+        if a.bytes == b.bytes {
             return a.clone();
         }
 
-        // Symmetry - canonical ordering ensures order independence
-        let (first, second) = if a.id < b.id {
-            (a.id.as_str(), b.id.as_str())
-        } else {
-            (b.id.as_str(), a.id.as_str())
-        };
+        // Symmetry - canonical ordering on the 16-byte ID ensures order
+        // independence. Byte comparison; no String allocation in the hot path.
+        let (first, second) =
+            if a.bytes <= b.bytes { (&a.bytes, &b.bytes) } else { (&b.bytes, &a.bytes) };
 
-        // Deterministic synthesis using SHA256 for content-addressable structure
-        let new_id_str = format!("{}:{}", first, second);
-        let new_id = hex::encode(Sha256::digest(new_id_str.as_bytes()));
+        // Content addressing: SHA256(min || max), truncated to first 16 bytes.
+        // Per Exp 13 (2026): 0 collisions in 268M synths at 16-byte truncation.
+        let mut hasher = Sha256::new();
+        hasher.update(first);
+        hasher.update(second);
+        let digest = hasher.finalize();
+        let mut new_bytes = [0u8; 16];
+        new_bytes.copy_from_slice(&digest[..16]);
 
-        // Return existing if already synthesized (timeless consistency)
-        if let Some(existing) = self.all_distinctions.get(&new_id) {
+        // Return existing if already synthesized (timeless consistency).
+        if let Some(existing) = self.all_distinctions.get(&new_bytes) {
             return existing.clone();
         }
 
-        // Create new distinction and establish relationships
-        // Note: DashMap handles concurrent insertion safely
-        let new_distinction = Distinction::new(new_id.clone());
-        self.all_distinctions.insert(new_id.clone(), new_distinction.clone());
-        self.add_relationship(&new_id, &a.id);
-        self.add_relationship(&new_id, &b.id);
+        // Create new distinction and establish relationships.
+        // DashMap handles concurrent insertion safely.
+        let new_distinction = Distinction::from_bytes_internal(new_bytes);
+        self.all_distinctions.insert(new_bytes, new_distinction.clone());
+        self.add_relationship(&new_bytes, &a.bytes);
+        self.add_relationship(&new_bytes, &b.bytes);
 
         new_distinction
     }
@@ -138,12 +243,20 @@ impl DistinctionEngine {
         self.all_distinctions.iter().map(|entry| entry.value().clone()).collect()
     }
 
-    /// Returns a snapshot of all relationships as a Vec.
+    /// Returns a snapshot of all relationships as a Vec of canonical
+    /// `(String, String)` hex tuples.
     ///
-    /// Note: In production, prefer iterating over relationships directly
-    /// rather than creating snapshots.
+    /// Translates the internal byte-keyed storage to the public
+    /// `Relationship = (String, String)` shape on the way out. Step 6 retypes
+    /// the alias and removes the per-entry allocation.
     pub fn get_relationships_snapshot(&self) -> Vec<Relationship> {
-        self.relationships.iter().map(|entry| entry.key().clone()).collect()
+        self.relationships
+            .iter()
+            .map(|entry| {
+                let (a, b) = entry.key();
+                (hex::encode(a), hex::encode(b))
+            })
+            .collect()
     }
 
     /// Returns a complete state snapshot.
@@ -209,5 +322,83 @@ impl Default for DistinctionEngine {
 impl DistinctionEngine {
     pub fn new_shared() -> Arc<Self> {
         Arc::new(Self::new())
+    }
+}
+
+#[cfg(test)]
+mod identity_hasher_tests {
+    use super::*;
+    use std::collections::HashSet;
+    use std::hash::Hash;
+
+    fn hash_one<K: Hash>(k: &K) -> u64 {
+        let mut h = IdentityHasher::default();
+        k.hash(&mut h);
+        h.finish()
+    }
+
+    #[test]
+    fn identity_hash_of_byte_array_is_first_8_bytes_le() {
+        let mut arr = [0u8; 16];
+        arr[..8].copy_from_slice(&0xdead_beef_cafe_babe_u64.to_le_bytes());
+        let h = hash_one(&arr);
+        assert_eq!(h, 0xdead_beef_cafe_babe);
+    }
+
+    #[test]
+    fn identity_hash_of_tuple_mixes_both_elements() {
+        // Two tuples with equal first element but different second element
+        // must produce distinct hashes, otherwise relationships rooted
+        // on `d0` / `d1` would all bucket-collide.
+        let mut a = [0u8; 16];
+        a[0..8].copy_from_slice(&1u64.to_le_bytes());
+        let mut b1 = [0u8; 16];
+        b1[0] = 7;
+        let mut b2 = [0u8; 16];
+        b2[0] = 13;
+        let h1 = hash_one(&(a, b1));
+        let h2 = hash_one(&(a, b2));
+        assert_ne!(h1, h2, "tuple hash must depend on the second element");
+    }
+
+    #[test]
+    fn one_million_sha256_prefixes_collision_free() {
+        // Drive 1M distinct inputs through SHA256 and take the first 16
+        // bytes (mirroring the engine's `synthesize` truncation). The
+        // first 8 bytes — what IdentityHasher reads — must be all
+        // distinct, otherwise the engine's DashMap shards would degrade
+        // catastrophically.
+        let mut set: HashSet<u64> = HashSet::with_capacity(1_000_000);
+        for i in 0u64..1_000_000 {
+            let digest = Sha256::digest(i.to_le_bytes());
+            let mut arr = [0u8; 16];
+            arr.copy_from_slice(&digest[..16]);
+            let h = hash_one(&arr);
+            assert!(set.insert(h), "u64-prefix collision at i={i}");
+        }
+        assert_eq!(set.len(), 1_000_000);
+    }
+
+    #[test]
+    fn primordial_pinned_relationships_distinct() {
+        // The two primordial-rooted relationships `(d0, d1)` exist by
+        // construction; subsequent novel synths add `(d_min, parent)`
+        // pairs. With `d0 = [0; 16]` and many `parent` values, the
+        // hashes must spread across buckets.
+        let d0 = [0u8; 16];
+        let mut d1 = [0u8; 16];
+        d1[0] = 1;
+        let h_01 = hash_one(&(d0, d1));
+        let mut set: HashSet<u64> = HashSet::with_capacity(10_000);
+        set.insert(h_01);
+        for i in 0u64..10_000 {
+            let digest = Sha256::digest(i.to_le_bytes());
+            let mut p = [0u8; 16];
+            p.copy_from_slice(&digest[..16]);
+            let h = hash_one(&(d0, p));
+            assert!(set.insert(h), "d0-rooted relationship hash collision at i={i}");
+        }
+        // 10 001 distinct hashes (the `(d0, d1)` seed plus 10K novel).
+        assert_eq!(set.len(), 10_001);
     }
 }

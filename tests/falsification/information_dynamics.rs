@@ -26,8 +26,8 @@ mod dynamics_helpers {
         let mut node_map: HashMap<String, NodeIndex> = HashMap::new();
 
         for distinction in &distinctions {
-            let node_idx = graph.add_node(distinction.id().to_string());
-            node_map.insert(distinction.id().to_string(), node_idx);
+            let node_idx = graph.add_node(distinction.to_hex());
+            node_map.insert(distinction.to_hex(), node_idx);
         }
 
         for (id_a, id_b) in &relationships {
@@ -170,7 +170,7 @@ fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng
 
         // Select first distinction randomly
         let a = distinctions.choose(rng).unwrap().clone();
-        let a_idx = id_to_idx.get(a.id());
+        let a_idx = id_to_idx.get(&a.to_hex());
 
         // Try to find neighbor within 2 hops
         let b = if let Some(&idx_a) = a_idx {
@@ -189,8 +189,8 @@ fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng
             let neighborhood_distinctions: Vec<_> = distinctions
                 .iter()
                 .filter(|d| {
-                    if let Some(&idx) = id_to_idx.get(d.id()) {
-                        neighborhood.contains(&idx) && d.id() != a.id()
+                    if let Some(&idx) = id_to_idx.get(&d.to_hex()) {
+                        neighborhood.contains(&idx) && d.to_hex() != a.to_hex()
                     } else {
                         false
                     }
@@ -203,7 +203,7 @@ fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng
             } else {
                 // Fallback to random selection
                 let others: Vec<_> =
-                    distinctions.iter().filter(|d| d.id() != a.id()).cloned().collect();
+                    distinctions.iter().filter(|d| d.to_hex() != a.to_hex()).cloned().collect();
                 if others.is_empty() {
                     continue;
                 }
@@ -212,7 +212,7 @@ fn evolve_locally(engine: &mut DistinctionEngine, steps: usize, rng: &mut StdRng
         } else {
             // Fallback if node not in graph
             let others: Vec<_> =
-                distinctions.iter().filter(|d| d.id() != a.id()).cloned().collect();
+                distinctions.iter().filter(|d| d.to_hex() != a.to_hex()).cloned().collect();
             if others.is_empty() {
                 continue;
             }

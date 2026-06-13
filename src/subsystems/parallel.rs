@@ -120,10 +120,10 @@ impl ParallelBatchProcessor {
         engine: &Arc<DistinctionEngine>,
     ) -> BatchValidationResult {
         // Verify causal chain
-        if batch.previous_root != self.local_root.id() {
+        if batch.previous_root != self.local_root.to_hex() {
             return BatchValidationResult::Rejected(format!(
                 "Invalid previous root: expected {}, got {}",
-                self.local_root.id(),
+                self.local_root.to_hex(),
                 batch.previous_root
             ));
         }
@@ -157,9 +157,9 @@ impl ParallelBatchProcessor {
         BatchValidationResult::Valid(current_state)
     }
 
-    /// Get current state
-    pub fn state_root_id(&self) -> &str {
-        self.local_root.id()
+    /// Get current state root as a 32-character hex string.
+    pub fn state_root_id(&self) -> String {
+        self.local_root.to_hex()
     }
 
     /// Get expected nonce
@@ -238,7 +238,7 @@ impl ParallelSynthesizer {
                 match (d_a, d_b) {
                     (Some(a), Some(b)) => {
                         let result = self.engine.synthesize(&a, &b);
-                        result.id().to_string()
+                        result.to_hex()
                     },
                     _ => String::new(),
                 }
@@ -256,7 +256,7 @@ impl ParallelSynthesizer {
             .into_par_iter()
             .map(|byte| {
                 let distinction = byte.to_canonical_structure(&self.engine);
-                distinction.id().to_string()
+                distinction.to_hex()
             })
             .collect()
     }
@@ -327,7 +327,7 @@ mod tests {
                 ParallelAction { batches: vec![batch], strategy: ProcessingStrategy::Sequential };
 
             let new_root = processor.synthesize_action(action, &engine);
-            current_root = new_root.id().to_string();
+            current_root = new_root.to_hex();
         }
 
         assert_eq!(processor.expected_nonce(), 10);
@@ -363,7 +363,7 @@ mod tests {
 
         assert_eq!(processor.worker_count(), 4);
         assert_eq!(processor.expected_nonce(), 5);
-        assert_eq!(processor.state_root_id(), genesis.id());
+        assert_eq!(processor.state_root_id(), genesis.to_hex());
 
         // Create with auto-detect (0 = auto)
         let processor2 = ParallelBatchProcessor::from_root(genesis, 0, 0);
