@@ -152,10 +152,17 @@ pub unsafe extern "C" fn koru_agent_validator_count(agent: *const KoruAgent) -> 
     agent.validator_count()
 }
 
-/// Get current state root ID (returns allocated C string)
+/// Get current consensus state root as a 32-character lowercase hex C string.
+///
+/// The returned string is the hex encoding of the 16-byte canonical
+/// Distinction ID held by the agent's consensus validator. The C signature
+/// is unchanged from v1.2.0; the internal path is now explicitly
+/// `as_bytes()` + `hex::encode` rather than relying on a cached String
+/// inside `Distinction`.
 ///
 /// # Safety
-/// agent must be valid pointer. Caller must free returned string with koru_free_string.
+/// agent must be a valid pointer. Caller must free returned string with
+/// `koru_free_string`.
 #[no_mangle]
 pub unsafe extern "C" fn koru_agent_state_root(agent: *const KoruAgent) -> *mut c_char {
     if agent.is_null() {
@@ -163,9 +170,12 @@ pub unsafe extern "C" fn koru_agent_state_root(agent: *const KoruAgent) -> *mut 
     }
 
     let agent = &*(agent as *const NetworkAgent);
-    let root_id = agent.consensus_state_root();
+    // Bytes-on-wire architecture (DECISION 5.5): the engine produces a
+    // canonical [u8; 16]; the FFI human surface emits it as 32-char hex.
+    let hex_root = agent.consensus_state_root();
+    debug_assert_eq!(hex_root.len(), 32, "hex root must be 32 chars");
 
-    match CString::new(root_id) {
+    match CString::new(hex_root) {
         Ok(s) => s.into_raw(),
         Err(_) => std::ptr::null_mut(),
     }
