@@ -41,10 +41,10 @@ fn main() {
 
     println!(
         "id lengths -> d0={} d1={} deep={} deep2={}",
-        d0.id().len(),
-        d1.id().len(),
-        deep.id().len(),
-        deep2.id().len()
+        d0.to_hex().len(),
+        d1.to_hex().len(),
+        deep.to_hex().len(),
+        deep2.to_hex().len()
     );
 
     // 1. Raw clone on short id (primordial, length 1).
@@ -54,7 +54,7 @@ fn main() {
     let clone_long = bench("clone long id (len=64)", iters, || deep.clone());
 
     // 3. String allocation alone (produce a fresh String of length 64).
-    let dummy = deep.id().to_string();
+    let dummy = deep.to_hex();
     let string_clone = bench("String clone len=64", iters, || dummy.clone());
 
     // 4. End-to-end saturated synthesize (repeated call, same pair).

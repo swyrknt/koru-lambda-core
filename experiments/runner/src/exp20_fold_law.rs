@@ -52,7 +52,7 @@ fn fold_byte_into_engine(byte: u8, engine: &DistinctionEngine) -> Vec<Distinctio
 fn deg_of(engine: &DistinctionEngine, d: &Distinction) -> u32 {
     let mut count = 0u32;
     for (a, b) in engine.get_relationships_snapshot() {
-        if a == *d.id() || b == *d.id() {
+        if a == *d.to_hex() || b == *d.to_hex() {
             count += 1;
         }
     }

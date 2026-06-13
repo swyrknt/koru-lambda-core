@@ -14,7 +14,7 @@
 // READ-ONLY against src/.
 
 use koru_lambda_core::{
-    BatchValidationResult, ConsensusValidator, Distinction, DistinctionEngine, TransactionAction,
+    BatchValidationResult, ConsensusValidator, DistinctionEngine, TransactionAction,
     TransactionBatch,
 };
 use std::collections::HashSet;
@@ -88,7 +88,7 @@ fn main() {
                 println!(
                     "  validated in {:?}: new root = {}...",
                     elapsed,
-                    &root.id()[..16]
+                    &root.to_hex()[..16]
                 );
                 println!(
                     "  engine grew: distinctions +{}, relationships +{}",
@@ -196,7 +196,7 @@ fn main() {
         let registered: HashSet<String> = engine
             .get_distinctions_snapshot()
             .into_iter()
-            .map(|d| d.id().to_string())
+            .map(|d| d.to_hex())
             .collect();
         let referenced = relationship_participants(&engine);
         let phantoms: Vec<&String> = referenced.difference(&registered).collect();
@@ -208,23 +208,21 @@ fn main() {
         }
     }
 
-    // --- F: from_root accepts arbitrary Distinction ---
+    // --- F: from_root accepts arbitrary Distinction — STRUCTURALLY CLOSED in v2.0 ---
     println!("\n-- F: from_root(foreign_distinction, nonce) --");
     {
-        let engine = Arc::new(DistinctionEngine::new());
-        let foreign = Distinction::new("deadbeef".repeat(8));
-        let validator = ConsensusValidator::from_root(foreign.clone(), 0);
-        let in_engine = engine
-            .get_distinction_by_id(validator.state_root_id())
-            .is_some();
-        println!("  validator.state_root_id = {}", validator.state_root_id());
-        println!("  registered in engine    = {}", in_engine);
-        if !in_engine {
-            println!("  VERDICT: from_root admits a foreign / unanchored root with zero check.");
-            println!("  validator.rs:90-92 stores the externally-built Distinction as");
-            println!("  local_root. Subsequent validate_batch will synthesize children whose");
-            println!("  parent IS this phantom. v2.0 (pub(crate) field) closes this.");
-        }
+        println!("  v2.0 closure: Distinction has no public constructor. The only");
+        println!("  Distinction values an external caller can pass to from_root are");
+        println!("  engine-derived (synthesize/d0/d1) or from_hex-parsed (well-formed");
+        println!("  bytes). Foreign-bytes-as-string injection is no longer possible.");
+        println!();
+        println!("  The original probe body called Distinction::new(\"deadbeef\".repeat(8)).");
+        println!("  Against v2.0 it does not compile.");
+        println!();
+        println!("  Causal-provenance (\"is this root anchored in MY history?\") remains");
+        println!("  a separate concern — addressed by V6 (joint restore_state) in");
+        println!("  sub-branch #7.");
+        println!("  VERDICT: STRUCTURALLY CLOSED.");
     }
 
     // --- G: set_expected_nonce desync ---

@@ -58,10 +58,10 @@ fn run_t1_direct(iterations: usize) -> bool {
     let mut deviations = 0usize;
     for i in 0..iterations {
         let next = engine.synthesize(&s, &s);
-        if next.id() != seed.id() {
+        if next.to_hex() != seed.to_hex() {
             deviations += 1;
             if deviations <= 3 {
-                eprintln!("  T1 deviation at i={} : id={}", i, next.id());
+                eprintln!("  T1 deviation at i={} : id={}", i, next.to_hex());
             }
         }
         s = next;
@@ -98,8 +98,8 @@ fn run_t2_mediated_varying(checkpoints: &[usize]) -> bool {
     let mut s = engine.d0().clone();
 
     let mut seen: HashSet<String> = HashSet::new();
-    seen.insert(s.id().to_string());
-    let mut trajectory: Vec<String> = vec![s.id().to_string()];
+    seen.insert(s.to_hex());
+    let mut trajectory: Vec<String> = vec![s.to_hex()];
 
     let (d_before, _) = snapshot_and_check(&engine, "T2/pre", 0);
 
@@ -114,13 +114,13 @@ fn run_t2_mediated_varying(checkpoints: &[usize]) -> bool {
         let inner = engine.synthesize(&s, &obs);
         let s_next = engine.synthesize(&inner, &s);
 
-        if !seen.insert(s_next.id().to_string()) {
+        if !seen.insert(s_next.to_hex()) {
             collisions += 1;
             if collisions <= 3 {
-                eprintln!("  T2 COLLISION at depth {} : id={}", n + 1, s_next.id());
+                eprintln!("  T2 COLLISION at depth {} : id={}", n + 1, s_next.to_hex());
             }
         }
-        trajectory.push(s_next.id().to_string());
+        trajectory.push(s_next.to_hex());
         s = s_next;
 
         if next_cp < checkpoints.len() && (n + 1) == checkpoints[next_cp] {
@@ -179,8 +179,8 @@ fn run_t3_mediated_constant(checkpoints: &[usize]) -> bool {
     let mut s = engine.d0().clone();
 
     let mut seen: HashSet<String> = HashSet::new();
-    seen.insert(s.id().to_string());
-    let mut trajectory: Vec<String> = vec![s.id().to_string()];
+    seen.insert(s.to_hex());
+    let mut trajectory: Vec<String> = vec![s.to_hex()];
 
     let (d_before, _) = snapshot_and_check(&engine, "T3/pre", 0);
 
@@ -192,16 +192,16 @@ fn run_t3_mediated_constant(checkpoints: &[usize]) -> bool {
         let inner = engine.synthesize(&s, &d1);
         let s_next = engine.synthesize(&inner, &s);
 
-        if s_next.id() == s.id() && fixed_point_step.is_none() {
+        if s_next.to_hex() == s.to_hex() && fixed_point_step.is_none() {
             fixed_point_step = Some(n + 1);
         }
-        if !seen.insert(s_next.id().to_string()) {
+        if !seen.insert(s_next.to_hex()) {
             collisions += 1;
             if collisions <= 3 {
-                eprintln!("  T3 COLLISION at depth {} : id={}", n + 1, s_next.id());
+                eprintln!("  T3 COLLISION at depth {} : id={}", n + 1, s_next.to_hex());
             }
         }
-        trajectory.push(s_next.id().to_string());
+        trajectory.push(s_next.to_hex());
         s = s_next;
 
         if next_cp < checkpoints.len() && (n + 1) == checkpoints[next_cp] {

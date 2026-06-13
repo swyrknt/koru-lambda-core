@@ -198,8 +198,9 @@ fn run_single(n: usize, m: usize, alpha: f64, seed: u64) -> RunResult {
     let mut total_degree = Vec::with_capacity(n);
     let mut freq_f64 = Vec::with_capacity(n);
     for (i, d) in pool.iter().enumerate() {
-        let before = *degree_before.get(d.id()).unwrap_or(&0) as f64;
-        let after = *degree_after.get(d.id()).unwrap_or(&0) as f64;
+        let hex = d.to_hex();
+        let before = *degree_before.get(&hex).unwrap_or(&0) as f64;
+        let after = *degree_after.get(&hex).unwrap_or(&0) as f64;
         delta_degree.push(after - before);
         total_degree.push(after);
         freq_f64.push(freq[i] as f64);
@@ -242,8 +243,10 @@ fn sanity_saturation() {
     let b = engine.synthesize(&a, &d1);
     let c = engine.synthesize(&b, &d1);
     let deg_before = degree_map(&engine);
-    let a_deg0 = *deg_before.get(a.id()).unwrap_or(&0);
-    let c_deg0 = *deg_before.get(c.id()).unwrap_or(&0);
+    let a_hex = a.to_hex();
+    let c_hex = c.to_hex();
+    let a_deg0 = *deg_before.get(&a_hex).unwrap_or(&0);
+    let c_deg0 = *deg_before.get(&c_hex).unwrap_or(&0);
     let k = 10_000usize;
     let r_before = engine.relationship_count();
     let d_before = engine.distinction_count();
@@ -253,8 +256,8 @@ fn sanity_saturation() {
     let r_after = engine.relationship_count();
     let d_after = engine.distinction_count();
     let deg_after = degree_map(&engine);
-    let a_deg1 = *deg_after.get(a.id()).unwrap_or(&0);
-    let c_deg1 = *deg_after.get(c.id()).unwrap_or(&0);
+    let a_deg1 = *deg_after.get(&a_hex).unwrap_or(&0);
+    let c_deg1 = *deg_after.get(&c_hex).unwrap_or(&0);
     println!(
         "K={} repeats. d: {} -> {} (delta {}). r: {} -> {} (delta {}).",
         k,

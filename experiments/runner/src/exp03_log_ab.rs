@@ -100,7 +100,7 @@ fn run_design(
                 let d1 = engine.d1().clone();
                 let mut current = seed;
                 for _ in 0..per {
-                    log.append(current.id(), d1.id());
+                    log.append(&current.to_hex(), &d1.to_hex());
                     current = engine.synthesize(&current, &d1);
                 }
                 current

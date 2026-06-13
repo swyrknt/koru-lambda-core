@@ -33,8 +33,8 @@ pub fn build_chain_with_log(novel_steps: usize) -> (DistinctionEngine, Vec<(Stri
 
     let mut current = engine.d0().clone();
     for _ in 0..novel_steps {
-        let a = current.id().to_string();
-        let b = d1.id().to_string();
+        let a = current.to_hex();
+        let b = d1.to_hex();
         log.push((a, b));
         current = engine.synthesize(&current, &d1);
     }
