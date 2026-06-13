@@ -3,49 +3,54 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 /// A distinction is the fundamental unit of the system.
-/// A distinction is defined solely by its unique identifier.
 ///
 /// # Representation
 ///
-/// During the foundation sub-branch (steps 2–6), `Distinction` carries both
-/// the legacy `id: String` (hex of full SHA256, or `"0"`/`"1"` for primordials)
-/// and the new `bytes: [u8; 16]` (canonical 16-byte ID — first 16 bytes of
-/// SHA256). The `id` field remains the authoritative identity for the
-/// engine's DashMaps until step 3 swaps the field type entirely; `bytes`
-/// gives consumers an early API path. Equality / hashing still go through
-/// the String to keep DashMaps deterministic.
+/// A `Distinction` is identified by its canonical 16-byte ID
+/// (`bytes: [u8; 16]`), the first 16 bytes of `SHA256(min_parent || max_parent)`
+/// (or `[0; 16]` for the primordial Δ₀ and `[1, 0, ..., 0]` for Δ₁).
+///
+/// During the foundation sub-branch (steps 3–6) a derived `id: String`
+/// field is cached so `.id() -> &str` callers continue to compile. Step 6
+/// removes the cached String and `.id()`; consumers use `as_bytes()` for
+/// raw bytes or `to_hex()` for display.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Distinction {
+    /// Cached 32-character lowercase hex of `bytes`. Carried during
+    /// steps 3–5 so the legacy `.id() -> &str` accessor keeps working;
+    /// removed in step 6.
     id: String,
-    /// 16-byte canonical ID (first 16 bytes of SHA256 hex-decoded, or
-    /// `[0; 16]` for d0, `[1, 0, ..., 0]` for d1). Derived from `id`
-    /// during construction; once step 3 lands this becomes the only field.
+    /// Canonical 16-byte ID. Authoritative identity field. Step 3 made
+    /// this the source of truth for `synthesize()`; step 6 removes the
+    /// cached String above; step 7 makes this field `pub(crate)`.
     bytes: [u8; 16],
 }
 
 impl Distinction {
+    /// Legacy constructor: parses the supplied String back into the
+    /// 16-byte canonical representation. Step 7 removes this entirely
+    /// (`Distinction::new` is dropped from the public surface).
     pub fn new(id: String) -> Self {
         let bytes = derive_bytes_from_legacy_id(&id);
-        Self { id, bytes }
+        // Renormalize id to the canonical 32-char hex form to keep `id`
+        // and `bytes` consistent.
+        Self { id: hex::encode(bytes), bytes }
     }
 
-    /// Accessor for the legacy hex-string ID surface. Removed in step 6 of
-    /// the foundation sub-branch.
+    /// Accessor for the cached hex-string ID. Removed in step 6 of the
+    /// foundation sub-branch.
     pub fn id(&self) -> &str {
         &self.id
     }
 
     /// Returns the canonical 16-byte ID of this distinction.
-    ///
-    /// Post step 3, this is the only authoritative representation.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8; 16] {
         &self.bytes
     }
 
-    /// Internal constructor from raw bytes. Used by `distinction_hex::from_hex`
-    /// and by the engine's hot path post step 3. The String `id` is
-    /// derived from the bytes for transitional compatibility.
+    /// Internal constructor from raw bytes. The only callable Distinction
+    /// constructor post step 7 (when `Distinction::new` is removed).
     pub(crate) fn from_bytes_internal(bytes: [u8; 16]) -> Self {
         Self { id: hex::encode(bytes), bytes }
     }
@@ -53,36 +58,45 @@ impl Distinction {
 
 /// Derive the canonical 16-byte representation from a legacy String id.
 ///
+/// Only invoked by the soon-to-be-removed `Distinction::new(String)` (step 7).
+///
 /// Handles:
 /// - Primordials `"0"` → `[0; 16]`, `"1"` → `[1, 0, ..., 0]`
-/// - 64-char SHA256 hex → first 16 bytes
+/// - 32-char hex → decode directly (post-step-3 ids)
+/// - 64-char SHA256 hex → first 16 bytes (pre-step-3 ids)
 /// - Anything else → SHA256 the string and take first 16 bytes (covers
-///   foreign IDs minted via `Distinction::new` while that surface still
-///   exists)
+///   foreign IDs minted via `Distinction::new` until step 7 closes that
+///   surface structurally)
 fn derive_bytes_from_legacy_id(id: &str) -> [u8; 16] {
     match id {
-        "0" => [0u8; 16],
+        "0" => return [0u8; 16],
         "1" => {
             let mut b = [0u8; 16];
             b[0] = 1;
-            b
+            return b;
         },
-        _ => {
-            if id.len() == 64 {
-                if let Ok(bytes) = hex::decode(id) {
-                    let mut arr = [0u8; 16];
-                    arr.copy_from_slice(&bytes[..16]);
-                    return arr;
-                }
-            }
-            // Fallback: hash whatever was supplied. This covers
-            // foreign-ID inputs (Exp 9) that step 7 closes structurally.
-            let digest = Sha256::digest(id.as_bytes());
-            let mut arr = [0u8; 16];
-            arr.copy_from_slice(&digest[..16]);
-            arr
-        },
+        _ => {},
     }
+    if id.len() == 32 {
+        if let Ok(bytes) = hex::decode(id) {
+            let mut arr = [0u8; 16];
+            arr.copy_from_slice(&bytes);
+            return arr;
+        }
+    }
+    if id.len() == 64 {
+        if let Ok(bytes) = hex::decode(id) {
+            let mut arr = [0u8; 16];
+            arr.copy_from_slice(&bytes[..16]);
+            return arr;
+        }
+    }
+    // Fallback: hash whatever was supplied. Covers foreign-ID inputs
+    // (Exp 9) that step 7 closes structurally.
+    let digest = Sha256::digest(id.as_bytes());
+    let mut arr = [0u8; 16];
+    arr.copy_from_slice(&digest[..16]);
+    arr
 }
 
 /// Type alias for a canonical relationship between two distinctions.
@@ -112,8 +126,10 @@ pub struct DistinctionEngine {
 impl DistinctionEngine {
     /// Creates a new engine with the two primordial distinctions.
     pub fn new() -> Self {
-        let d0 = Distinction::new("0".to_string());
-        let d1 = Distinction::new("1".to_string());
+        let mut d1_bytes = [0u8; 16];
+        d1_bytes[0] = 1;
+        let d0 = Distinction::from_bytes_internal([0u8; 16]);
+        let d1 = Distinction::from_bytes_internal(d1_bytes);
 
         let all_distinctions = DashMap::new();
         all_distinctions.insert(d0.id.clone(), d0.clone());
@@ -166,32 +182,38 @@ impl DistinctionEngine {
     /// Uses DashMap for lock-free concurrent access.
     pub fn synthesize(&self, a: &Distinction, b: &Distinction) -> Distinction {
         // Irreflexivity - a distinction synthesized with itself yields itself
-        if a.id == b.id {
+        if a.bytes == b.bytes {
             return a.clone();
         }
 
-        // Symmetry - canonical ordering ensures order independence
-        let (first, second) = if a.id < b.id {
-            (a.id.as_str(), b.id.as_str())
-        } else {
-            (b.id.as_str(), a.id.as_str())
-        };
+        // Symmetry - canonical ordering on the 16-byte ID ensures order
+        // independence. Byte comparison; no String allocation in the hot path.
+        let (first, second) =
+            if a.bytes <= b.bytes { (&a.bytes, &b.bytes) } else { (&b.bytes, &a.bytes) };
 
-        // Deterministic synthesis using SHA256 for content-addressable structure
-        let new_id_str = format!("{}:{}", first, second);
-        let new_id = hex::encode(Sha256::digest(new_id_str.as_bytes()));
+        // Content addressing: SHA256(min || max), truncated to first 16 bytes.
+        // Per Exp 13 (2026): 0 collisions in 268M synths at 16-byte truncation.
+        let mut hasher = Sha256::new();
+        hasher.update(first);
+        hasher.update(second);
+        let digest = hasher.finalize();
+        let mut new_bytes = [0u8; 16];
+        new_bytes.copy_from_slice(&digest[..16]);
 
-        // Return existing if already synthesized (timeless consistency)
-        if let Some(existing) = self.all_distinctions.get(&new_id) {
+        let new_id_hex = hex::encode(new_bytes);
+
+        // Return existing if already synthesized (timeless consistency).
+        // DashMap key is still the hex String; step 4 switches to bytes.
+        if let Some(existing) = self.all_distinctions.get(&new_id_hex) {
             return existing.clone();
         }
 
-        // Create new distinction and establish relationships
-        // Note: DashMap handles concurrent insertion safely
-        let new_distinction = Distinction::new(new_id.clone());
-        self.all_distinctions.insert(new_id.clone(), new_distinction.clone());
-        self.add_relationship(&new_id, &a.id);
-        self.add_relationship(&new_id, &b.id);
+        // Create new distinction and establish relationships.
+        // DashMap handles concurrent insertion safely.
+        let new_distinction = Distinction::from_bytes_internal(new_bytes);
+        self.all_distinctions.insert(new_id_hex.clone(), new_distinction.clone());
+        self.add_relationship(&new_id_hex, &a.id);
+        self.add_relationship(&new_id_hex, &b.id);
 
         new_distinction
     }
