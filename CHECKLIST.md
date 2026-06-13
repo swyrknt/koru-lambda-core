@@ -35,7 +35,7 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 3. **Phase 4 — Settle Section 5 decisions** — **COMPLETE** (all 9 locked; details in Section 5 below)
 4. **Phase 2 — Quick wins** — **COMPLETE** (commits `727f7f9`, `7265bfd`, `6b247d3`, `36d4cdd` merged in `00fcdb3`)
 5. **Phase 3 — ByteMapping fix** — **COMPLETE** (commit `86747db` merged in `58a7ff5`; Phase 1.5 probe re-run confirms phantoms 253 → 0)
-6. **Phase 6 — Implement v2.0** (Sections 1.5–1.10 + Section 2; including Tier 0 consensus-correctness fixes per DECISION 5.1: bundle, not patch)
+6. **Phase 6 — Implement v2.0** — **IN PROGRESS** (1 of 11 sub-branches merged: `529ae5e` foundation)
 7. **Phase 7 — `SECURITY.md` + CHANGELOG finalization + Cargo.toml bump 1.2.0 → 2.0.0 + integration PR to `dev`**
 8. **Phase 8 — Consumer migration** (ALIS, koru-protocol)
 
@@ -45,11 +45,7 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 
 ### 1.1 Live bugs in engine core
 - [x] **ByteMapping phantom parents** — `primitives.rs:26–38` builds cache against a throwaway engine. Byte-derived IDs exist in relationships but not in `all_distinctions`. Violates `r = 2d − 3` semantically. *(Exp 5, qa)* — DONE in commit `86747db` (Phase 3). Static cache + throwaway engine removed; `map_byte_to_distinction` now folds each byte through the calling engine, registering the full chain. Phase 1.5 probe re-run confirms phantom count 253 → 0; distinction_count = unique_parent_ids. 103 tests still pass.
-- [ ] **Foreign-ID acceptance** — public `Distinction::new(String)` (`engine.rs:13`) lets external callers mint IDs. *(Exp 9, qa)*
-  - 1MB ID → 7.3 ms/synth (225× DoS slowdown).
-  - Cross-engine ID → silent phantom parent in receiver.
-  - Empty / colon-containing strings accepted.
-  - **Structural fix = TODO #6 (`pub(crate)`)**. Do not patch with runtime length checks (theory drift).
+- [x] **Foreign-ID acceptance** — public `Distinction::new(String)` (`engine.rs:13`) lets external callers mint IDs. *(Exp 9, qa)* — DONE in Phase 6 sub-branch #1 (merge `529ae5e`, foundation step 7). `Distinction` field is now `pub(crate)`; no public constructor exists; `Distinction::new(String)` removed entirely. Foreign-ID poisoning closed structurally at compile time. V1, N3, N4 (in addition to this engine-level item) all closed by the same change — see Section 2.1.
 - [x] **Snapshot tearing** — `get_state_snapshot` (`engine.rs:154–156`) does two independent DashMap iterations. *(Exp 6, qa)* — DONE in commit `36d4cdd` (Phase 2). Renamed to `get_state_snapshot_unsynchronized`; tearing semantics documented in docstring; 8 call sites updated across src/, tests/, experiments/qa/.
 
 ### 1.2 Performance / cleanup (no theory impact)
@@ -173,8 +169,8 @@ All 8 binaries persisted clippy-clean AND run. Logs at `experiments/findings/run
 - [x] Baseline saved to `experiments/findings/baseline.md`
 
 **New baseline-derived items:**
-- [ ] CLAUDE.md says "114 tests" but actual is 103. Update doc (add to 1.4).
-- [ ] `tests/falsification/wasm_consistency.rs` is broken under `--features wasm` — pre-existing test code that expects a wire format the wasm wrapper doesn't deliver. Fix as part of Section 1.8 wasm work.
+- [x] CLAUDE.md says "114 tests" but actual is 103. → DONE in commit `7265bfd` (Phase 2). Per Phase 6 #1, count is now **117** tests post-foundation.
+- [ ] `tests/falsification/wasm_consistency.rs` is broken under `--features wasm` — pre-existing test code that expects a wire format the wasm wrapper doesn't deliver. Fix as part of Section 1.8 wasm work (sub-branch #10).
 - [ ] Pre-existing experiments (`exp01-12`) have ~20 clippy warnings (`type_complexity`, `manual_div_ceil`, `dead_code`). Either fix as cleanup or scope the "no warnings" promise to `src/` + `tests/`. Recommended: fix. Low priority but easy.
 
 ---
@@ -315,20 +311,41 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 
 | Category | Items | Status |
 |---|---|---|
-| Section 1.1–1.3 — Engine FIX (original 14 items) | 14 | not started |
-| Section 1.4 — CLAUDE.md doc drift | 7 | not started |
-| Section 1.5 — Consensus-correctness bugs (MUST NOT SHIP) | 3 | not started |
-| Section 1.6 — Consensus hardening | 8 | not started |
-| Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | not started |
-| Section 1.8 — WASM bytes-on-wire + helpers | 9 | not started |
-| Section 1.9 — Compactor cleanup | 4 | not started |
-| Section 1.10 — Architectural cleanup | 2 | not started |
+| Section 1.1–1.3 — Engine FIX | 14 | **3 of 14 done** (snapshot rename, ByteMapping fix, foreign-ID via pub(crate)) |
+| Section 1.4 — CLAUDE.md doc drift | 8 | **complete** (Phase 2) |
+| Section 1.5 — Consensus-correctness bugs (MUST NOT SHIP) | 3 | not started (Phase 6 sub-branch #6) |
+| Section 1.6 — Consensus hardening | 8 | not started (Phase 6 sub-branch #7) |
+| Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | not started (Phase 6 sub-branch #8) |
+| Section 1.8 — WASM bytes-on-wire + helpers | 9 | not started (Phase 6 sub-branch #10) |
+| Section 1.9 — Compactor cleanup | 4 | not started (Phase 6 sub-branch #9) |
+| Section 1.10 — Architectural cleanup | 2 | not started (Phase 6 sub-branch #2) |
 | Section 1.11 — Phase 1 follow-up | 13 | **complete** |
 | Section 1.12 — Baseline measurement | 4 | **complete** |
-| Section 2 — IMPLEMENT (all v2.0) | 14 | not started |
+| Section 2.1 — Type-level changes | 5 | **complete** (Phase 6 sub-branch #1, merge `529ae5e`) |
+| Section 2.2 — Traversal API | 4 | not started (Phase 6 sub-branch #5) |
+| Section 2.3 — Synthesis log | 3 | not started (Phase 6 sub-branch #4) |
+| Section 2.4 — Invariant tripwire | 1 | not started (Phase 6 sub-branch #3) |
 | Section 3 — AUDIT (Phase 1) | 7 subsystems | **complete** |
 | Section 4 — VALIDATE | 4 claims | **complete** |
 | Section 5 — DECIDE | 9 | **complete (all locked)** |
+
+**Current test count:** 117 (post Phase 6 #1; was 103 at baseline). Clippy clean. `Cargo.toml` at `1.2.0`.
+
+**Phase 6 sub-branch tracker:**
+
+| # | Sub-branch | Status |
+|---|---|---|
+| 1 | `impl/foundation-distinction-bytes` | ✅ merged `529ae5e` |
+| 2 | `cleanup/parallel-batch-processor` | ⬜ unblocked, can dispatch |
+| 3 | `impl/invariant-tripwire` | ⬜ unblocked, can dispatch |
+| 4 | `impl/synthesis-log` | ⬜ unblocked, can dispatch |
+| 5 | `impl/traversal-api` | ⬜ unblocked, can dispatch (also fixes Phase 6 #1's flagged test perf regression) |
+| 6 | `fix/tier-0-consensus-correctness` | ⬜ unblocked (sequential lead for #7 + #8) |
+| 7 | `fix/consensus-hardening` | ⏸ waits on #6 |
+| 8 | `fix/ffi-hardening` | ⏸ waits on #6 (commitment.rs interaction) |
+| 9 | `cleanup/compactor` | ⏸ waits on #5 (uses traversal API) |
+| 10 | `impl/wasm-bytes-on-wire` | ⬜ unblocked once WASM toolchain confirmed |
+| 11 | `docs/changelog-finalize` | ⏸ last (after all others) |
 
 **To call the project "completely theory-aligned, clean, high-quality, bug-free":**
 - All of Section 1.1–1.10 must be closed.
