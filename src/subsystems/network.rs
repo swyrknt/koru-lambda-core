@@ -38,9 +38,9 @@ impl PeerIdentity {
         Self { id, distinction }
     }
 
-    /// Get peer's distinction ID
-    pub fn distinction_id(&self) -> &str {
-        self.distinction.id()
+    /// Get peer's distinction ID as a 32-character hex string.
+    pub fn distinction_id(&self) -> String {
+        self.distinction.to_hex()
     }
 }
 
@@ -334,8 +334,8 @@ impl NetworkAgent {
         &self.validator_set
     }
 
-    /// Get current consensus state root
-    pub fn consensus_state_root(&self) -> &str {
+    /// Get current consensus state root as a 32-character hex string.
+    pub fn consensus_state_root(&self) -> String {
         self.validator.state_root_id()
     }
 
@@ -346,7 +346,7 @@ impl NetworkAgent {
             validator_count: self.validator_set.len(),
             events_processed: self.events_processed,
             consensus_nonce: self.validator.expected_nonce(),
-            network_root: self.local_root.id().to_string(),
+            network_root: self.local_root.to_hex(),
         }
     }
 
@@ -418,7 +418,7 @@ mod tests {
         assert_eq!(agent.current_epoch(), 0);
         assert_eq!(agent.validator_count(), 0);
         assert_eq!(agent.ftw_duration(), 2000);
-        assert!(!agent.get_current_root().id().is_empty());
+        assert!(!agent.get_current_root().to_hex().is_empty());
     }
 
     #[test]
@@ -441,14 +441,14 @@ mod tests {
         let engine = Arc::new(DistinctionEngine::new());
         let mut agent = NetworkAgent::new(&engine);
 
-        let initial_root = agent.get_current_root().id().to_string();
+        let initial_root = agent.get_current_root().to_hex();
 
         // Join first peer
         let peer1 = PeerIdentity::new("validator_1".to_string(), &engine);
         let new_root = agent.join_peer(peer1.clone(), &engine);
 
         // Network root should change
-        assert_ne!(new_root.id(), &initial_root);
+        assert_ne!(new_root.to_hex(), initial_root);
         assert_eq!(agent.validator_count(), 1);
 
         // Join second peer
@@ -504,13 +504,13 @@ mod tests {
 
         assert_eq!(agent.current_epoch(), 0);
 
-        let initial_root = agent.get_current_root().id().to_string();
+        let initial_root = agent.get_current_root().to_hex();
 
         // Advance epoch
         let new_root = agent.advance_epoch(&engine);
 
         assert_eq!(agent.current_epoch(), 1);
-        assert_ne!(new_root.id(), &initial_root);
+        assert_ne!(new_root.to_hex(), initial_root);
 
         // Advance again
         agent.advance_epoch(&engine);
@@ -530,7 +530,7 @@ mod tests {
         let d2 = action2.to_canonical_structure(&engine);
 
         // Same action → same distinction (determinism)
-        assert_eq!(d1.id(), d2.id());
+        assert_eq!(d1.to_hex(), d2.to_hex());
     }
 
     #[test]
@@ -538,7 +538,7 @@ mod tests {
         let engine = Arc::new(DistinctionEngine::new());
         let mut agent = NetworkAgent::new(&engine);
 
-        let initial_root = agent.get_current_root().id().to_string();
+        let initial_root = agent.get_current_root().to_hex();
 
         // Synthesize an action
         let peer = PeerIdentity::new("peer_1".to_string(), &engine);
@@ -547,8 +547,8 @@ mod tests {
         let new_root = agent.synthesize_action(action, &engine);
 
         // Root should change (causal synthesis)
-        assert_ne!(new_root.id(), &initial_root);
-        assert_eq!(new_root.id(), agent.get_current_root().id());
+        assert_ne!(new_root.to_hex(), initial_root);
+        assert_eq!(new_root.to_hex(), agent.get_current_root().to_hex());
 
         // Events counter should increment
         let stats = agent.get_stats();

@@ -3,17 +3,19 @@ use sha2::{Digest, Sha256};
 use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 
-/// Identity hasher for keys whose first 8 bytes are already uniformly
-/// distributed (i.e., SHA256-derived).
+/// Identity hasher for keys whose bytes are already uniformly distributed
+/// (i.e., SHA256-derived).
 ///
-/// Captures the leading 8 bytes of the first 16-byte `write` call and
-/// returns them as a `u64`. Subsequent writes (and the 8-byte length-
-/// prefix writes that the stdlib `Hash for [u8; N]` impl emits before
-/// each array slice) are ignored.
+/// For each 16-byte `write` call, XORs in the leading 8 bytes (interpreted
+/// as little-endian `u64`) at a per-write bit-rotation. The length-prefix
+/// writes that the stdlib `Hash for [u8; N]` impl emits (8 bytes) are
+/// ignored.
 ///
-/// For tuple keys `(K1, K2)` where `K1: [u8; 16]`, only the first 8 bytes
-/// of `K1` end up in the hash — sufficient because `K1` is itself a
-/// content-addressed 16-byte SHA256 prefix, uniformly distributed.
+/// This handles both `[u8; 16]` single-array keys (one 16-byte data write
+/// → state = first 8 bytes of array) and `([u8; 16], [u8; 16])` tuple
+/// keys (two 16-byte data writes → state = `a8 XOR (b8 rotated)`), which
+/// is critical for relationship tuples where many distinct edges share
+/// `d0` or `d1` as the min element.
 ///
 /// # Safety
 ///
@@ -29,7 +31,7 @@ use std::sync::Arc;
 #[derive(Default)]
 pub struct IdentityHasher {
     state: u64,
-    captured: bool,
+    writes: u32,
 }
 
 impl Hasher for IdentityHasher {
@@ -38,16 +40,22 @@ impl Hasher for IdentityHasher {
     }
     fn write(&mut self, bytes: &[u8]) {
         // The stdlib `Hash for [u8; N]` impl writes the length as a
-        // `usize` prefix (8 bytes on 64-bit) BEFORE the array data
-        // (16 bytes). We want the first 8 bytes of the *data* — so we
-        // skip any write whose length is not the full 16-byte array.
-        if self.captured || bytes.len() != 16 {
+        // `usize` prefix (8 bytes on 64-bit) BEFORE each array data
+        // write (16 bytes). We only capture 16-byte writes (the data
+        // payloads), accumulating into the state via XOR with a
+        // per-write bit rotation so that the second element of a
+        // tuple key contributes to the bucket.
+        if bytes.len() != 16 {
             return;
         }
         let mut buf = [0u8; 8];
         buf.copy_from_slice(&bytes[..8]);
-        self.state = u64::from_le_bytes(buf);
-        self.captured = true;
+        let v = u64::from_le_bytes(buf);
+        // Rotate by a multiple of 17 (coprime with 64) per write so
+        // that successive elements end up in distinct bit positions.
+        let rot = (self.writes.wrapping_mul(17)) & 63;
+        self.state ^= v.rotate_left(rot);
+        self.writes = self.writes.wrapping_add(1);
     }
 }
 
@@ -392,11 +400,10 @@ mod identity_hasher_tests {
     }
 
     #[test]
-    fn identity_hash_of_tuple_picks_first_element() {
+    fn identity_hash_of_tuple_mixes_both_elements() {
         // Two tuples with equal first element but different second element
-        // must hash to the same value (the captured-only-first-write
-        // invariant). This is sound because the *full* PartialEq still
-        // distinguishes them in the DashMap bucket.
+        // must produce distinct hashes, otherwise relationships rooted
+        // on `d0` / `d1` would all bucket-collide.
         let mut a = [0u8; 16];
         a[0..8].copy_from_slice(&1u64.to_le_bytes());
         let mut b1 = [0u8; 16];
@@ -405,8 +412,7 @@ mod identity_hasher_tests {
         b2[0] = 13;
         let h1 = hash_one(&(a, b1));
         let h2 = hash_one(&(a, b2));
-        assert_eq!(h1, h2);
-        assert_eq!(h1, 1);
+        assert_ne!(h1, h2, "tuple hash must depend on the second element");
     }
 
     #[test]
@@ -425,5 +431,28 @@ mod identity_hasher_tests {
             assert!(set.insert(h), "u64-prefix collision at i={i}");
         }
         assert_eq!(set.len(), 1_000_000);
+    }
+
+    #[test]
+    fn primordial_pinned_relationships_distinct() {
+        // The two primordial-rooted relationships `(d0, d1)` exist by
+        // construction; subsequent novel synths add `(d_min, parent)`
+        // pairs. With `d0 = [0; 16]` and many `parent` values, the
+        // hashes must spread across buckets.
+        let d0 = [0u8; 16];
+        let mut d1 = [0u8; 16];
+        d1[0] = 1;
+        let h_01 = hash_one(&(d0, d1));
+        let mut set: HashSet<u64> = HashSet::with_capacity(10_000);
+        set.insert(h_01);
+        for i in 0u64..10_000 {
+            let digest = Sha256::digest(i.to_le_bytes());
+            let mut p = [0u8; 16];
+            p.copy_from_slice(&digest[..16]);
+            let h = hash_one(&(d0, p));
+            assert!(set.insert(h), "d0-rooted relationship hash collision at i={i}");
+        }
+        // 10 001 distinct hashes (the `(d0, d1)` seed plus 10K novel).
+        assert_eq!(set.len(), 10_001);
     }
 }
