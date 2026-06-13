@@ -53,6 +53,16 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   (so `(d0, X)` edges don't bucket-collide); (c) 1 M random SHA256 prefixes
   produce 1 M distinct hashes; (d) 10 K `(d0, X)` edges land in 10 K
   distinct buckets.
+- **`DistinctionEngine::check_structural_invariant() -> bool`** — returns
+  whether the engine satisfies `r = 2d - 3` (the binary-parentage invariant
+  — every novel synthesis adds 1 node + 2 relationships) (CHECKLIST 2.4 /
+  Phase 6 sub-branch #3). Intended for tests and quiescent diagnostics;
+  explicitly NOT a hot-path `debug_assert!` because mid-`synthesize`
+  transients (insert distinction → add rel A → add rel B) are visible to a
+  concurrent reader and would fire spurious assertions under 8-thread
+  concurrent synthesis. The structural correctness of the invariant under
+  release-mode concurrent synthesis is verified at scale by Exp 2 (2026,
+  zero deviations at 5M synths) and `tests/falsification/structural_coherence.rs`.
 
 ### Changed (breaking)
 
