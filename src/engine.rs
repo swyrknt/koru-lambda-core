@@ -4,18 +4,84 @@ use std::sync::Arc;
 
 /// A distinction is the fundamental unit of the system.
 /// A distinction is defined solely by its unique identifier.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+///
+/// # Representation
+///
+/// During the foundation sub-branch (steps 2–6), `Distinction` carries both
+/// the legacy `id: String` (hex of full SHA256, or `"0"`/`"1"` for primordials)
+/// and the new `bytes: [u8; 16]` (canonical 16-byte ID — first 16 bytes of
+/// SHA256). The `id` field remains the authoritative identity for the
+/// engine's DashMaps until step 3 swaps the field type entirely; `bytes`
+/// gives consumers an early API path. Equality / hashing still go through
+/// the String to keep DashMaps deterministic.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Distinction {
     id: String,
+    /// 16-byte canonical ID (first 16 bytes of SHA256 hex-decoded, or
+    /// `[0; 16]` for d0, `[1, 0, ..., 0]` for d1). Derived from `id`
+    /// during construction; once step 3 lands this becomes the only field.
+    bytes: [u8; 16],
 }
 
 impl Distinction {
     pub fn new(id: String) -> Self {
-        Self { id }
+        let bytes = derive_bytes_from_legacy_id(&id);
+        Self { id, bytes }
     }
 
+    /// Accessor for the legacy hex-string ID surface. Removed in step 6 of
+    /// the foundation sub-branch.
     pub fn id(&self) -> &str {
         &self.id
+    }
+
+    /// Returns the canonical 16-byte ID of this distinction.
+    ///
+    /// Post step 3, this is the only authoritative representation.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8; 16] {
+        &self.bytes
+    }
+
+    /// Internal constructor from raw bytes. Used by `distinction_hex::from_hex`
+    /// and by the engine's hot path post step 3. The String `id` is
+    /// derived from the bytes for transitional compatibility.
+    pub(crate) fn from_bytes_internal(bytes: [u8; 16]) -> Self {
+        Self { id: hex::encode(bytes), bytes }
+    }
+}
+
+/// Derive the canonical 16-byte representation from a legacy String id.
+///
+/// Handles:
+/// - Primordials `"0"` → `[0; 16]`, `"1"` → `[1, 0, ..., 0]`
+/// - 64-char SHA256 hex → first 16 bytes
+/// - Anything else → SHA256 the string and take first 16 bytes (covers
+///   foreign IDs minted via `Distinction::new` while that surface still
+///   exists)
+fn derive_bytes_from_legacy_id(id: &str) -> [u8; 16] {
+    match id {
+        "0" => [0u8; 16],
+        "1" => {
+            let mut b = [0u8; 16];
+            b[0] = 1;
+            b
+        },
+        _ => {
+            if id.len() == 64 {
+                if let Ok(bytes) = hex::decode(id) {
+                    let mut arr = [0u8; 16];
+                    arr.copy_from_slice(&bytes[..16]);
+                    return arr;
+                }
+            }
+            // Fallback: hash whatever was supplied. This covers
+            // foreign-ID inputs (Exp 9) that step 7 closes structurally.
+            let digest = Sha256::digest(id.as_bytes());
+            let mut arr = [0u8; 16];
+            arr.copy_from_slice(&digest[..16]);
+            arr
+        },
     }
 }
 
