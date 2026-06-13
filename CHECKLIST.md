@@ -183,12 +183,17 @@ All 8 binaries persisted clippy-clean AND run. Logs at `experiments/findings/run
 
 All items ship together in 2.0.0. The structural type changes and the additive APIs land in the same release so consumers migrate once.
 
-### 2.1 Type-level changes (structural, theory-strengthening)
-- [ ] `Distinction([u8; 16])` — truncated SHA256. Content addressing preserved. *(Exp 13: 0 collisions in 268M; Exp 15: 4.2× faster end-to-end)*
-- [ ] `pub(crate)` on the field + private constructor — closes foreign-ID poisoning structurally. No external code can mint IDs.
-- [ ] `BuildHasherDefault<IdentityHasher>` on internal DashMaps — 6–13× hash speedup. Safe ONLY with byte keys. *(Exp 14)*
-- [ ] **DECISION 5.5: hex serialization layer** — `Distinction::to_hex(&self) -> String`, `Distinction::from_hex(s: &str) -> Result<Self, ParseError>`, `impl Display for Distinction`, `impl Debug for Distinction`. New file `src/hex.rs` (or extend `primitives.rs`). ~30 LOC. Independent of the engine; substrate stays pure bytes.
-- [ ] FFI: existing `*mut c_char` returns become `hex::encode(state_root.as_bytes())`. Add new byte-native accessors for binary surfaces (`[u8; 16]`). *(Exp 17: 0 existing signature changes; ~25 LOC internal + additive byte APIs)*
+### 2.1 Type-level changes (structural, theory-strengthening) — DONE in Phase 6 sub-branch #1 (merge `529ae5e`)
+- [x] `Distinction([u8; 16])` — truncated SHA256 (first 16 bytes, MSB). Content addressing preserved. Copy + Eq + Hash + Display + Debug. Primordials `[0u8; 16]` and `[1, 0, ...]`. *(Exp 13: 0 collisions in 268M; foundation step 3)*
+- [x] `pub(crate)` on the field + no public constructor — closes foreign-ID poisoning structurally. *(foundation step 7)*
+- [x] `IdentityHasher` on internal DashMaps via `BuildHasherDefault<IdentityHasher>` — 17-bit rotation XOR accumulator (deeper than plan's "leading 8 bytes" — necessary for tuple keys because d0/d1 first bytes are pinned). 1M random SHA256 prefixes → 1M distinct buckets verified. *(foundation step 4)*
+- [x] Hex serialization layer in `src/distinction_hex.rs` (231 LOC). `to_hex` / `from_hex` / `impl Display` / `impl Debug` / serde adapter for `#[serde(with = "distinction_hex")]`. Module is `pub` (consumers need to name the path). *(foundation steps 1-2)*
+- [x] FFI: `*mut c_char` returns use `hex::encode(distinction.as_bytes())`. Public C signatures unchanged. Hex strings now 32 chars (was 64). *(foundation step 8)*
+
+**Performance signals (Phase 6 #1 preliminary):**
+- `exp10_throughput` 8-thread: 2.6M → 15.3M ops/s (5.9×)
+- `test_batch_validation_performance`: 2979 → 7207 batches/s (2.4×)
+- Test count: 103 → 117 (+14 new tests in distinction_hex + identity_hasher)
 
 ### 2.2 Additive APIs (new public surface)
 - [ ] `degree(d: &Distinction) -> usize` — O(1) via `DashMap<Distinction, AtomicUsize>`.
