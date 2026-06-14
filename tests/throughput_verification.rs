@@ -1,34 +1,37 @@
-/// Throughput Verification Test
-///
-/// Final verification that the system achieves 100,000+ tx/s throughput target.
-/// This test validates the end-to-end performance goal for Phase 8.
+//! Throughput verification.
+//!
+//! Validates that the system achieves 100,000+ tx/s throughput. v2.0 history:
+//! formerly exercised the deleted `ParallelBatchProcessor` — which the
+//! Phase 1 parallel-audit identified as a duplicate of `ConsensusValidator`
+//! with a misnamed "Parallel" prefix. The tests are now expressed against
+//! `ConsensusValidator` and `BatchSynthesizer` directly (CHECKLIST Section
+//! 1.10 / Phase 6 sub-branch #2).
+
 use koru_lambda_core::{
-    Canonicalizable, DistinctionEngine, LocalCausalAgent, ParallelAction, ParallelBatchProcessor,
-    ParallelSynthesizer, ProcessingStrategy, TransactionAction, TransactionBatch,
+    BatchSynthesizer, BatchValidationResult, Canonicalizable, ConsensusValidator,
+    DistinctionEngine, TransactionAction, TransactionBatch,
 };
 use std::sync::Arc;
 use std::time::Instant;
 
 #[test]
 fn test_100k_txs_throughput_verification() {
-    // Primary verification: Can we process 100,000 transactions?
+    // Primary verification: can we process 100,000 transactions?
 
     let engine = Arc::new(DistinctionEngine::new());
-    let mut processor = ParallelBatchProcessor::new(&engine);
+    let mut validator = ConsensusValidator::new(&engine);
 
-    // Configuration
-    let total_transactions = 100_000;
-    let batch_size = 100; // 100 tx per batch
-    let num_batches = total_transactions / batch_size; // 1000 batches
+    let total_transactions = 100_000usize;
+    let batch_size = 100usize;
+    let num_batches = total_transactions / batch_size;
 
     println!("\n=== 100k Transaction Throughput Verification ===");
-    println!("Total transactions: {}", total_transactions);
-    println!("Batch size: {}", batch_size);
-    println!("Number of batches: {}", num_batches);
-    println!("Worker cores: {}", processor.worker_count());
+    println!("Total transactions: {total_transactions}");
+    println!("Batch size: {batch_size}");
+    println!("Number of batches: {num_batches}");
 
     let start = Instant::now();
-    let mut current_root = processor.get_current_root().to_hex();
+    let mut current_root = validator.state_root_id();
 
     for batch_idx in 0..num_batches {
         let transactions: Vec<TransactionAction> = (0..batch_size)
@@ -40,23 +43,18 @@ fn test_100k_txs_throughput_verification() {
 
         let batch = TransactionBatch { transactions, previous_root: current_root.clone() };
 
-        let action =
-            ParallelAction { batches: vec![batch], strategy: ProcessingStrategy::Sequential };
+        match validator.validate_batch(batch, &engine) {
+            BatchValidationResult::Valid(new_root) => current_root = new_root.to_hex(),
+            BatchValidationResult::Rejected(reason) => panic!("batch rejected: {reason}"),
+        }
 
-        let new_root = processor.synthesize_action(action, &engine);
-        current_root = new_root.to_hex();
-
-        // Progress indicator
         if (batch_idx + 1) % 100 == 0 {
             let elapsed = start.elapsed().as_secs_f64();
             let tx_processed = (batch_idx + 1) * batch_size;
             let current_rate = tx_processed as f64 / elapsed;
             println!(
-                "Progress: {}/{} batches ({} tx) - {:.0} tx/s",
-                batch_idx + 1,
-                num_batches,
-                tx_processed,
-                current_rate
+                "Progress: {}/{num_batches} batches ({tx_processed} tx) - {current_rate:.0} tx/s",
+                batch_idx + 1
             );
         }
     }
@@ -66,76 +64,62 @@ fn test_100k_txs_throughput_verification() {
 
     println!("\n=== Results ===");
     println!("Total time: {:.2}s", duration.as_secs_f64());
-    println!("Throughput: {:.0} tx/s", tx_per_sec);
-    println!("Batches processed: {}", processor.batches_processed());
-    println!("Final nonce: {}", processor.expected_nonce());
+    println!("Throughput: {tx_per_sec:.0} tx/s");
+    println!("Final nonce: {}", validator.expected_nonce());
 
-    // Verification
-    assert_eq!(processor.batches_processed(), num_batches as u64);
-    assert_eq!(processor.expected_nonce(), total_transactions as u64);
-
-    // Performance assertion
-    println!("\nTarget: 100,000 tx/s");
-    println!("Achieved: {:.0} tx/s", tx_per_sec);
+    assert_eq!(validator.expected_nonce(), total_transactions as u64);
 
     if tx_per_sec >= 100_000.0 {
-        println!("✅ TARGET MET! ({:.1}x target)", tx_per_sec / 100_000.0);
+        println!("\u{2705} TARGET MET! ({:.1}x target)", tx_per_sec / 100_000.0);
     } else {
         let percentage = (tx_per_sec / 100_000.0) * 100.0;
-        println!("⚡ Achieved {:.1}% of target", percentage);
-        println!(
-            "Note: Engine throughput is 174k ops/s, bottleneck is sequential batch processing"
-        );
+        println!("Achieved {percentage:.1}% of target");
     }
 }
 
 #[test]
-fn test_parallel_synthesis_throughput() {
-    // Verify ParallelSynthesizer can achieve high throughput
+fn test_batch_synthesis_throughput() {
+    // Verify BatchSynthesizer can achieve high byte canonicalization throughput.
 
     let engine = Arc::new(DistinctionEngine::new());
-    let synthesizer = ParallelSynthesizer::new(Arc::clone(&engine));
+    let synthesizer = BatchSynthesizer::new(Arc::clone(&engine));
 
-    let total_bytes = 100_000;
+    let total_bytes = 100_000usize;
 
-    println!("\n=== Parallel Synthesis Throughput ===");
-    println!("Total bytes: {}", total_bytes);
+    println!("\n=== Batch Synthesis Throughput ===");
+    println!("Total bytes: {total_bytes}");
 
     let data: Vec<u8> = (0..total_bytes).map(|i| (i % 256) as u8).collect();
 
     let start = Instant::now();
-    let results = synthesizer.canonicalize_bytes_parallel(data);
+    let results = synthesizer.canonicalize_bytes_batch(data);
     let duration = start.elapsed();
 
     let bytes_per_sec = total_bytes as f64 / duration.as_secs_f64();
 
     println!("Time: {:.2}s", duration.as_secs_f64());
-    println!("Throughput: {:.0} bytes/s", bytes_per_sec);
+    println!("Throughput: {bytes_per_sec:.0} bytes/s");
     println!("Results: {} distinctions", results.len());
 
     assert_eq!(results.len(), total_bytes);
 
-    // Each byte requires 8 synthesis operations (binary path)
+    // Each byte requires 8 synthesis operations (binary path).
     let synthesis_ops = total_bytes * 8;
     let ops_per_sec = synthesis_ops as f64 / duration.as_secs_f64();
 
-    println!("Synthesis operations: {}", synthesis_ops);
-    println!("Synthesis throughput: {:.0} ops/s", ops_per_sec);
-
-    if ops_per_sec >= 100_000.0 {
-        println!("✅ Parallel synthesis exceeds 100k ops/s!");
-    }
+    println!("Synthesis operations: {synthesis_ops}");
+    println!("Synthesis throughput: {ops_per_sec:.0} ops/s");
 }
 
 #[test]
 fn test_core_synthesis_raw_throughput() {
-    // Verify core engine can sustain 100k+ synthesis ops/s
+    // Verify core engine can sustain 100k+ synthesis ops/s.
 
     let engine = Arc::new(DistinctionEngine::new());
-    let num_operations = 100_000;
+    let num_operations = 100_000usize;
 
     println!("\n=== Core Synthesis Raw Throughput ===");
-    println!("Operations: {}", num_operations);
+    println!("Operations: {num_operations}");
 
     let start = Instant::now();
 
@@ -153,44 +137,38 @@ fn test_core_synthesis_raw_throughput() {
     let ops_per_sec = num_operations as f64 / duration.as_secs_f64();
 
     println!("Time: {:.2}s", duration.as_secs_f64());
-    println!("Throughput: {:.0} ops/s", ops_per_sec);
+    println!("Throughput: {ops_per_sec:.0} ops/s");
     println!("Final distinction: {}", current.to_hex());
 
     assert!(!current.to_hex().is_empty());
 
     if ops_per_sec >= 100_000.0 {
-        println!("✅ Core synthesis exceeds 100k ops/s target!");
+        println!("\u{2705} Core synthesis exceeds 100k ops/s target!");
         println!("Achievement: {:.1}x target", ops_per_sec / 100_000.0);
-    } else {
-        println!(
-            "Core synthesis: {:.0} ops/s ({:.1}% of target)",
-            ops_per_sec,
-            (ops_per_sec / 100_000.0) * 100.0
-        );
     }
 }
 
 #[test]
-fn test_multi_batch_action_throughput() {
-    // Test processing multiple batches in a single action
+fn test_multi_batch_throughput() {
+    // Test processing many small batches in sequence.
 
     let engine = Arc::new(DistinctionEngine::new());
-    let mut processor = ParallelBatchProcessor::new(&engine);
+    let mut validator = ConsensusValidator::new(&engine);
 
-    let total_actions = 10_000;
-    let tx_per_batch = 10;
+    let total_actions = 10_000usize;
+    let tx_per_batch = 10usize;
     let total_tx = total_actions * tx_per_batch;
 
-    println!("\n=== Batch Action Throughput ===");
-    println!("Total actions: {}", total_actions);
-    println!("Tx per batch: {}", tx_per_batch);
-    println!("Total transactions: {}", total_tx);
+    println!("\n=== Multi-batch Throughput ===");
+    println!("Total actions: {total_actions}");
+    println!("Tx per batch: {tx_per_batch}");
+    println!("Total transactions: {total_tx}");
 
     let start = Instant::now();
-    let mut tx_count = 0;
+    let mut tx_count = 0usize;
+    let mut current_root = validator.state_root_id();
 
     for action_idx in 0..total_actions {
-        // Process one batch at a time to maintain proper nonce sequencing
         let transactions: Vec<TransactionAction> = (0..tx_per_batch)
             .map(|tx_idx| TransactionAction {
                 nonce: (tx_count + tx_idx) as u64,
@@ -198,26 +176,20 @@ fn test_multi_batch_action_throughput() {
             })
             .collect();
 
-        let batch = TransactionBatch {
-            transactions,
-            previous_root: processor.get_current_root().to_hex(),
-        };
+        let batch = TransactionBatch { transactions, previous_root: current_root.clone() };
 
-        let action =
-            ParallelAction { batches: vec![batch], strategy: ProcessingStrategy::Sequential };
-
-        let _new_root = processor.synthesize_action(action, &engine);
+        match validator.validate_batch(batch, &engine) {
+            BatchValidationResult::Valid(new_root) => current_root = new_root.to_hex(),
+            BatchValidationResult::Rejected(reason) => panic!("batch rejected: {reason}"),
+        }
         tx_count += tx_per_batch;
 
         if (action_idx + 1) % 100 == 0 {
             let elapsed = start.elapsed().as_secs_f64();
             let current_rate = tx_count as f64 / elapsed;
             println!(
-                "Progress: {}/{} actions ({} tx) - {:.0} tx/s",
-                action_idx + 1,
-                total_actions,
-                tx_count,
-                current_rate
+                "Progress: {}/{total_actions} actions ({tx_count} tx) - {current_rate:.0} tx/s",
+                action_idx + 1
             );
         }
     }
@@ -227,32 +199,32 @@ fn test_multi_batch_action_throughput() {
 
     println!("\n=== Results ===");
     println!("Time: {:.2}s", duration.as_secs_f64());
-    println!("Throughput: {:.0} tx/s", tx_per_sec);
-    println!("Actions/s: {:.0}", total_actions as f64 / duration.as_secs_f64());
+    println!("Throughput: {tx_per_sec:.0} tx/s");
 
-    assert_eq!(processor.expected_nonce(), total_tx as u64);
+    assert_eq!(validator.expected_nonce(), total_tx as u64);
 }
 
 #[test]
 fn test_sustained_throughput_stability() {
-    // Verify throughput remains stable over extended period
+    // Verify throughput remains stable over an extended period.
 
     let engine = Arc::new(DistinctionEngine::new());
-    let mut processor = ParallelBatchProcessor::new(&engine);
+    let mut validator = ConsensusValidator::new(&engine);
 
     let duration_secs = 5;
-    let batch_size = 100;
+    let batch_size = 100usize;
 
     println!("\n=== Sustained Throughput Stability Test ===");
-    println!("Duration: {} seconds", duration_secs);
-    println!("Batch size: {}", batch_size);
+    println!("Duration: {duration_secs} seconds");
+    println!("Batch size: {batch_size}");
 
     let start = Instant::now();
-    let mut batches_processed = 0;
+    let mut batches_processed = 0usize;
     let mut samples = vec![];
 
     let mut last_sample_time = start;
-    let mut last_sample_count = 0;
+    let mut last_sample_count = 0usize;
+    let mut current_root = validator.state_root_id();
 
     while start.elapsed().as_secs() < duration_secs {
         let transactions: Vec<TransactionAction> = (0..batch_size)
@@ -262,22 +234,18 @@ fn test_sustained_throughput_stability() {
             })
             .collect();
 
-        let batch = TransactionBatch {
-            transactions,
-            previous_root: processor.get_current_root().to_hex(),
-        };
+        let batch = TransactionBatch { transactions, previous_root: current_root.clone() };
 
-        let action =
-            ParallelAction { batches: vec![batch], strategy: ProcessingStrategy::Sequential };
-
-        let _new_root = processor.synthesize_action(action, &engine);
+        match validator.validate_batch(batch, &engine) {
+            BatchValidationResult::Valid(new_root) => current_root = new_root.to_hex(),
+            BatchValidationResult::Rejected(reason) => panic!("batch rejected: {reason}"),
+        }
         batches_processed += 1;
 
-        // Sample every second
         if last_sample_time.elapsed().as_secs() >= 1 {
             let tx_this_second = (batches_processed - last_sample_count) * batch_size;
             samples.push(tx_this_second as f64);
-            println!("Second {}: {} tx/s", samples.len(), tx_this_second);
+            println!("Second {}: {tx_this_second} tx/s", samples.len());
 
             last_sample_time = Instant::now();
             last_sample_count = batches_processed;
@@ -290,20 +258,19 @@ fn test_sustained_throughput_stability() {
 
     println!("\n=== Stability Results ===");
     println!("Total time: {:.2}s", total_duration.as_secs_f64());
-    println!("Total batches: {}", batches_processed);
-    println!("Total tx: {}", total_tx);
-    println!("Average: {:.0} tx/s", avg_tx_per_sec);
+    println!("Total batches: {batches_processed}");
+    println!("Total tx: {total_tx}");
+    println!("Average: {avg_tx_per_sec:.0} tx/s");
 
     if !samples.is_empty() {
         let min = samples.iter().cloned().fold(f64::INFINITY, f64::min);
         let max = samples.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let variance = max - min;
 
-        println!("Min: {:.0} tx/s", min);
-        println!("Max: {:.0} tx/s", max);
-        println!("Variance: {:.0} tx/s ({:.1}%)", variance, (variance / avg_tx_per_sec) * 100.0);
-        println!("✅ Throughput is stable across sustained operation");
+        println!("Min: {min:.0} tx/s");
+        println!("Max: {max:.0} tx/s");
+        println!("Variance: {variance:.0} tx/s ({:.1}%)", (variance / avg_tx_per_sec) * 100.0);
     }
 
-    assert_eq!(processor.expected_nonce(), total_tx as u64);
+    assert_eq!(validator.expected_nonce(), total_tx as u64);
 }

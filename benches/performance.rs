@@ -1,8 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use koru_lambda_core::{
-    Canonicalizable, Distinction, DistinctionEngine, LocalCausalAgent, NetworkAgent,
-    ParallelAction, ParallelBatchProcessor, ParallelSynthesizer, PeerIdentity, ProcessingStrategy,
-    StructuralCompactor, TransactionAction, TransactionBatch,
+    BatchSynthesizer, Canonicalizable, ConsensusValidator, Distinction, DistinctionEngine,
+    NetworkAgent, PeerIdentity, StructuralCompactor, TransactionAction, TransactionBatch,
 };
 use std::sync::Arc;
 
@@ -291,12 +290,13 @@ fn bench_network_events(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark: Parallel batch processing
+/// Benchmark: sequential batch processing via ConsensusValidator.
 ///
-/// Measures ParallelBatchProcessor throughput.
-/// Target: 100,000+ tx/s with batched operations
-fn bench_parallel_batch_processing(c: &mut Criterion) {
-    let mut group = c.benchmark_group("parallel_batch_processing");
+/// v2.0 history: replaces the v1.2.0 `bench_parallel_batch_processing`
+/// against the deleted `ParallelBatchProcessor` (which had a Sequential
+/// body anyway per the Phase 1 parallel-audit).
+fn bench_sequential_batch_processing(c: &mut Criterion) {
+    let mut group = c.benchmark_group("sequential_batch_processing");
 
     for num_batches in [10, 100, 1_000].iter() {
         group.throughput(Throughput::Elements(*num_batches as u64));
@@ -305,10 +305,10 @@ fn bench_parallel_batch_processing(c: &mut Criterion) {
             num_batches,
             |b, &num_batches| {
                 let engine = Arc::new(DistinctionEngine::new());
-                let mut processor = ParallelBatchProcessor::new(&engine);
+                let mut validator = ConsensusValidator::new(&engine);
 
                 b.iter(|| {
-                    let mut current_root = processor.get_current_root().to_hex();
+                    let mut current_root = validator.state_root_id();
 
                     for i in 0..num_batches {
                         let batch = TransactionBatch {
@@ -319,16 +319,14 @@ fn bench_parallel_batch_processing(c: &mut Criterion) {
                             previous_root: current_root.clone(),
                         };
 
-                        let action = ParallelAction {
-                            batches: vec![batch],
-                            strategy: ProcessingStrategy::Sequential,
-                        };
-
-                        let new_root = processor.synthesize_action(action, &engine);
-                        current_root = new_root.to_hex();
+                        if let koru_lambda_core::BatchValidationResult::Valid(new_root) =
+                            validator.validate_batch(batch, &engine)
+                        {
+                            current_root = new_root.to_hex();
+                        }
                     }
 
-                    black_box(processor.batches_processed())
+                    black_box(validator.expected_nonce())
                 });
             },
         );
@@ -337,42 +335,34 @@ fn bench_parallel_batch_processing(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark: Parallel byte canonicalization
-///
-/// Compares single-threaded vs parallel byte canonicalization.
-/// Target: 1M+ bytes/s with parallelism
+/// Benchmark: byte canonicalization, sequential vs Rayon-parallel via
+/// `BatchSynthesizer`.
 fn bench_parallel_byte_canonicalization(c: &mut Criterion) {
     let mut group = c.benchmark_group("parallel_byte_canon");
 
     for size in [1_000, 10_000, 100_000].iter() {
         group.throughput(Throughput::Bytes(*size as u64));
 
-        // Single-threaded baseline
+        // Single-threaded baseline.
         group.bench_with_input(BenchmarkId::new("sequential", size), size, |b, &size| {
             let engine = Arc::new(DistinctionEngine::new());
             let data: Vec<u8> = (0..size).map(|i| (i % 256) as u8).collect();
 
             b.iter(|| {
-                let results: Vec<_> = data
-                    .iter()
-                    .map(|&byte| {
-                        let d = byte.to_canonical_structure(&engine);
-                        d.to_hex()
-                    })
-                    .collect();
-
+                let results: Vec<_> =
+                    data.iter().map(|&byte| byte.to_canonical_structure(&engine)).collect();
                 black_box(results)
             });
         });
 
-        // Parallel with Rayon
+        // Parallel with Rayon (via BatchSynthesizer).
         group.bench_with_input(BenchmarkId::new("parallel", size), size, |b, &size| {
             let engine = Arc::new(DistinctionEngine::new());
-            let synthesizer = ParallelSynthesizer::new(engine.clone());
+            let synthesizer = BatchSynthesizer::new(engine.clone());
             let data: Vec<u8> = (0..size).map(|i| (i % 256) as u8).collect();
 
             b.iter(|| {
-                let results = synthesizer.canonicalize_bytes_parallel(data.clone());
+                let results = synthesizer.canonicalize_bytes_batch(data.clone());
                 black_box(results)
             });
         });
@@ -381,10 +371,7 @@ fn bench_parallel_byte_canonicalization(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark: Parallel synthesis operations
-///
-/// Measures parallel synthesis throughput using Rayon.
-/// Target: Multi-core speedup over sequential operations
+/// Benchmark: parallel synthesis throughput via BatchSynthesizer.
 fn bench_parallel_synthesis(c: &mut Criterion) {
     let mut group = c.benchmark_group("parallel_synthesis");
 
@@ -393,76 +380,18 @@ fn bench_parallel_synthesis(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::from_parameter(num_ops), num_ops, |b, &num_ops| {
             let engine = Arc::new(DistinctionEngine::new());
-            let synthesizer = ParallelSynthesizer::new(engine.clone());
+            let synthesizer = BatchSynthesizer::new(engine.clone());
 
-            // Create distinction ID pairs
             let d0_id = engine.d0().to_hex();
             let d1_id = engine.d1().to_hex();
             let pairs: Vec<(String, String)> =
                 (0..num_ops).map(|_| (d0_id.clone(), d1_id.clone())).collect();
 
             b.iter(|| {
-                let results = synthesizer.synthesize_parallel(pairs.clone());
+                let results = synthesizer.synthesize_batch(pairs.clone());
                 black_box(results)
             });
         });
-    }
-
-    group.finish();
-}
-
-/// Benchmark: Multi-batch parallel processing
-///
-/// Measures throughput when processing multiple batches per action.
-/// Target: 100,000+ tx/s with optimal batching
-fn bench_multi_batch_parallel(c: &mut Criterion) {
-    let mut group = c.benchmark_group("multi_batch_parallel");
-    group.sample_size(10);
-
-    for batches_per_action in [10, 50, 100].iter() {
-        group.throughput(Throughput::Elements(*batches_per_action as u64 * 10)); // 10 tx per batch
-
-        group.bench_with_input(
-            BenchmarkId::from_parameter(batches_per_action),
-            batches_per_action,
-            |b, &batches_per_action| {
-                let engine = Arc::new(DistinctionEngine::new());
-                let mut processor = ParallelBatchProcessor::new(&engine);
-
-                b.iter(|| {
-                    let initial_root = processor.get_current_root().to_hex();
-                    let current_root = initial_root.clone();
-
-                    // Create batches
-                    let batches: Vec<TransactionBatch> = (0..batches_per_action)
-                        .map(|batch_idx| {
-                            let transactions: Vec<TransactionAction> = (0..10)
-                                .map(|tx_idx| TransactionAction {
-                                    nonce: (batch_idx * 10 + tx_idx) as u64,
-                                    data: vec![batch_idx as u8, tx_idx as u8],
-                                })
-                                .collect();
-
-                            TransactionBatch {
-                                transactions,
-                                previous_root: if batch_idx == 0 {
-                                    current_root.clone()
-                                } else {
-                                    String::new() // Will be updated
-                                },
-                            }
-                        })
-                        .collect();
-
-                    let action =
-                        ParallelAction { batches, strategy: ProcessingStrategy::Sequential };
-
-                    let _new_root = processor.synthesize_action(action, &engine);
-
-                    black_box(processor.batches_processed())
-                });
-            },
-        );
     }
 
     group.finish();
@@ -477,10 +406,9 @@ criterion_group!(
     bench_distributed_consensus,
     bench_byte_canonicalization,
     bench_network_events,
-    bench_parallel_batch_processing,
+    bench_sequential_batch_processing,
     bench_parallel_byte_canonicalization,
     bench_parallel_synthesis,
-    bench_multi_batch_parallel,
 );
 
 criterion_main!(benches);

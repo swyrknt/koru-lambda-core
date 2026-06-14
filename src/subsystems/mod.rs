@@ -17,9 +17,7 @@ pub use commitment::{BatchCommitment, BatchDataRequest, BatchDataResponse, Commi
 pub use compactor::{CompactionAction, CompactionStats, StructuralCompactor, ThermalState};
 pub use local_agent::{synthesize_causal_action, LocalCausalAgent};
 pub use network::{NetworkAction, NetworkAgent, NetworkStats, PeerIdentity};
-pub use parallel::{
-    ParallelAction, ParallelBatchProcessor, ParallelSynthesizer, ProcessingStrategy,
-};
+pub use parallel::BatchSynthesizer;
 pub use validator::{
     BatchValidationResult, ConsensusValidator, TransactionAction, TransactionBatch,
 };

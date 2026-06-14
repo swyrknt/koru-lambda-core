@@ -53,6 +53,15 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   (so `(d0, X)` edges don't bucket-collide); (c) 1 M random SHA256 prefixes
   produce 1 M distinct hashes; (d) 10 K `(d0, X)` edges land in 10 K
   distinct buckets.
+- **`BatchSynthesizer`** — concurrent batch-synthesis helper (CHECKLIST
+  Section 1.10 / Phase 6 sub-branch #2). Replaces the v1.2.0
+  `ParallelSynthesizer` with a tighter API: `synthesize_batch(Vec<(String,
+  String)>) -> Vec<Option<Distinction>>` returns explicit `None` for
+  missing parents instead of the v1.2.0 silent empty-string fallback that
+  the Phase 1 parallel-audit flagged. `canonicalize_bytes_batch(Vec<u8>)
+  -> Vec<Distinction>` returns the canonical distinctions directly
+  (caller no longer needs to parse hex back). Tests added for the
+  unregistered-parent / malformed-hex cases.
 - **`DistinctionEngine::check_structural_invariant() -> bool`** — returns
   whether the engine satisfies `r = 2d - 3` (the binary-parentage invariant
   — every novel synthesis adds 1 node + 2 relationships) (CHECKLIST 2.4 /
@@ -121,6 +130,20 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
 ### Deprecated
 
 ### Removed
+
+- **`ParallelBatchProcessor` (~250 LOC removed)** — misnamed Sequential-body
+  wrapper identified by the Phase 1 parallel-audit as a duplicate of
+  `ConsensusValidator` with an unused `worker_count` field and a
+  single-variant `ProcessingStrategy::Sequential` enum (CHECKLIST Section
+  1.10 / Phase 6 sub-branch #2). `ParallelAction`, `ProcessingStrategy`,
+  the internal `num_cpus` shim, the `LocalCausalAgent` impl, and the 5
+  associated tests also removed. Callers should use `ConsensusValidator`
+  directly — the duplicated `validate_batch` semantics live there.
+- **`ParallelSynthesizer`** — renamed to `BatchSynthesizer` (see Added).
+  The old name carried "parallel" in user-facing API surface where
+  parallelism is an implementation choice; the renaming also drops the
+  silent empty-string fallback for missing parents in favour of
+  `Vec<Option<Distinction>>`.
 
 - **`Distinction::new(String)` removed** (CHECKLIST 2.1 / Phase 6 sub-branch #1).
   No public constructor exists. The Distinction byte field is `pub(crate)`.
