@@ -140,10 +140,10 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
   - Fix: skip recompute after own synth, OR exclude compaction events from re-classification.
 - [ ] Replace compactor's `calculate_sis` body with `engine.degree(d)` once 2.2 traversal API lands.
 
-### 1.10 Architectural cleanup
-- [ ] **Delete `ParallelBatchProcessor`** (~250 LOC removed). It's misnamed (Sequential body, dead `worker_count` field, single-variant enum). Already covered by `ConsensusValidator`. *(audit/parallel)*
-  - Pre-flight: grep ALIS + koru-protocol for `ParallelBatchProcessor` use before deleting.
-- [ ] Keep `ParallelSynthesizer`; rename to `BatchSynthesizer`; return `Vec<Option<Distinction>>` instead of empty-string fallback. *(audit/parallel)*
+### 1.10 Architectural cleanup — DONE in Phase 6 sub-branch #2 (merge `b45c434`)
+- [x] **Delete `ParallelBatchProcessor`** (~250 LOC removed). Misnamed Sequential body, dead `worker_count` field, single-variant enum. *(audit/parallel)*
+  - Consumer grep confirmed: zero `ParallelBatchProcessor` use in koru/koru-protocol or koru/koru-node; ALIS does not use it either. Safe to delete.
+- [x] `ParallelSynthesizer` renamed to `BatchSynthesizer`; return type `Vec<Option<Distinction>>` replaces v1.2.0 silent empty-string fallback. *(audit/parallel)*
 
 ### 1.11 Phase 1 empirical follow-up — COMPLETE
 
@@ -202,8 +202,8 @@ All items ship together in 2.0.0. The structural type changes and the additive A
 - [ ] `DistinctionEngine::without_log()` constructor or `log` feature flag for memory-sensitive consumers.
 - [ ] Serde derives on log entry type (`bincode` round-trip 25 ms / 14 ms at 1M). *(Exp 7)*
 
-### 2.4 Invariant tripwire
-- [ ] `debug_assert!(self.relationship_count() == 2 * self.distinction_count() - 3)` inside `synthesize()` on the novel path. Zero release cost, future-regression tripwire.
+### 2.4 Invariant tripwire — DONE in Phase 6 sub-branch #3 (merge `550125a`)
+- [x] Plan was `debug_assert!(r == 2*d - 3)` inside `synthesize()` on the novel path. Implementation found it fundamentally racy under concurrent synthesis (8-thread `test_parallel_synthesizer` triggers it on transient mid-synthesize states between `insert distinction` and the two `add_relationship` calls). Refactored as quiescent-mode `pub fn check_structural_invariant(&self) -> bool` — callers from tests / diagnostics can invoke when no writers are active. Three new unit tests assert the invariant on genesis, 100-step chain, saturated repeats. The release-mode correctness of the invariant under concurrent synthesis is verified at scale by Exp 2 (5M synths, zero deviations) and `tests/falsification/structural_coherence.rs`.
 
 ### 2.5 Consumer coordination
 - [ ] ALIS (`/Users/sawyerkent/Projects/alis-ai/`) — pins `koru-lambda-core = "1.2"`. Bump to 2.0 after engine release.
@@ -318,13 +318,13 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | not started (Phase 6 sub-branch #8) |
 | Section 1.8 — WASM bytes-on-wire + helpers | 9 | not started (Phase 6 sub-branch #10) |
 | Section 1.9 — Compactor cleanup | 4 | not started (Phase 6 sub-branch #9) |
-| Section 1.10 — Architectural cleanup | 2 | not started (Phase 6 sub-branch #2) |
+| Section 1.10 — Architectural cleanup | 2 | **complete** (Phase 6 sub-branch #2, merge `b45c434`) |
 | Section 1.11 — Phase 1 follow-up | 13 | **complete** |
 | Section 1.12 — Baseline measurement | 4 | **complete** |
 | Section 2.1 — Type-level changes | 5 | **complete** (Phase 6 sub-branch #1, merge `529ae5e`) |
 | Section 2.2 — Traversal API | 4 | not started (Phase 6 sub-branch #5) |
 | Section 2.3 — Synthesis log | 3 | not started (Phase 6 sub-branch #4) |
-| Section 2.4 — Invariant tripwire | 1 | not started (Phase 6 sub-branch #3) |
+| Section 2.4 — Invariant tripwire | 1 | **complete** (Phase 6 sub-branch #3, merge `550125a`) |
 | Section 3 — AUDIT (Phase 1) | 7 subsystems | **complete** |
 | Section 4 — VALIDATE | 4 claims | **complete** |
 | Section 5 — DECIDE | 9 | **complete (all locked)** |
@@ -336,8 +336,8 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | # | Sub-branch | Status |
 |---|---|---|
 | 1 | `impl/foundation-distinction-bytes` | ✅ merged `529ae5e` |
-| 2 | `cleanup/parallel-batch-processor` | ⬜ unblocked, can dispatch |
-| 3 | `impl/invariant-tripwire` | ⬜ unblocked, can dispatch |
+| 2 | `cleanup/parallel-batch-processor` | ✅ merged `b45c434` |
+| 3 | `impl/invariant-tripwire` | ✅ merged `550125a` |
 | 4 | `impl/synthesis-log` | ⬜ unblocked, can dispatch |
 | 5 | `impl/traversal-api` | ⬜ unblocked, can dispatch (also fixes Phase 6 #1's flagged test perf regression) |
 | 6 | `fix/tier-0-consensus-correctness` | ⬜ unblocked (sequential lead for #7 + #8) |
