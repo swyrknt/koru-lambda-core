@@ -12,9 +12,8 @@ pub use engine::{Distinction, DistinctionEngine, Relationship};
 pub use primitives::{ByteMapping, Canonicalizable};
 pub use subsystems::{
     synthesize_causal_action, BatchCommitment, BatchDataRequest, BatchDataResponse,
-    BatchValidationResult, CommitmentAgent, CompactionAction, CompactionStats, ConsensusValidator,
-    LocalCausalAgent, NetworkAction, NetworkAgent, NetworkStats, ParallelAction,
-    ParallelBatchProcessor, ParallelSynthesizer, PeerIdentity, ProcessingStrategy,
+    BatchSynthesizer, BatchValidationResult, CommitmentAgent, CompactionAction, CompactionStats,
+    ConsensusValidator, LocalCausalAgent, NetworkAction, NetworkAgent, NetworkStats, PeerIdentity,
     StructuralCompactor, ThermalState, TransactionAction, TransactionBatch,
 };
 
