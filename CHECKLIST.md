@@ -322,8 +322,8 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 1.11 — Phase 1 follow-up | 13 | **complete** |
 | Section 1.12 — Baseline measurement | 4 | **complete** |
 | Section 2.1 — Type-level changes | 5 | **complete** (Phase 6 sub-branch #1, merge `529ae5e`) |
-| Section 2.2 — Traversal API | 4 | not started (Phase 6 sub-branch #5) |
-| Section 2.3 — Synthesis log | 3 | not started (Phase 6 sub-branch #4) |
+| Section 2.2 — Traversal API | 4 | **complete** (Phase 6 sub-branch #5, merge `e648117`) |
+| Section 2.3 — Synthesis log | 3 | **complete** (Phase 6 sub-branch #4, merge `91ee3b2`) |
 | Section 2.4 — Invariant tripwire | 1 | **complete** (Phase 6 sub-branch #3, merge `550125a`) |
 | Section 3 — AUDIT (Phase 1) | 7 subsystems | **complete** |
 | Section 4 — VALIDATE | 4 claims | **complete** |
@@ -338,8 +338,8 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | 1 | `impl/foundation-distinction-bytes` | ✅ merged `529ae5e` |
 | 2 | `cleanup/parallel-batch-processor` | ✅ merged `b45c434` |
 | 3 | `impl/invariant-tripwire` | ✅ merged `550125a` |
-| 4 | `impl/synthesis-log` | ⬜ unblocked, can dispatch |
-| 5 | `impl/traversal-api` | ⬜ unblocked, can dispatch (also fixes Phase 6 #1's flagged test perf regression) |
+| 4 | `impl/synthesis-log` | ✅ merged `91ee3b2` |
+| 5 | `impl/traversal-api` | ✅ merged `e648117` (also closed #1's 107s test regression → 0.02s) |
 | 6 | `fix/tier-0-consensus-correctness` | ⬜ unblocked (sequential lead for #7 + #8) |
 | 7 | `fix/consensus-hardening` | ⏸ waits on #6 |
 | 8 | `fix/ffi-hardening` | ⏸ waits on #6 (commitment.rs interaction) |
