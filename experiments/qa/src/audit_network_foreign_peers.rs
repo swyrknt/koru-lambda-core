@@ -63,25 +63,69 @@ fn main() {
         println!("  VERDICT: STRUCTURALLY CLOSED (no longer probeable).");
     }
 
-    // D: BatchProposed truncates previous_root to 8 bytes
+    // D: BatchProposed previous_root canonicalization.
+    //
+    // v1.2.0 bug: NetworkAction::BatchProposed canonicalized previous_root
+    // via `.take(8)` over the raw UTF-8 bytes — meaning any two strings
+    // sharing the first 8 ASCII characters folded to the same action
+    // distinction (e.g., "deadbeefAAAAAAAAAAAAAAAA" and
+    // "deadbeefBBBBBBBBBBBBBBBB" collided).
+    //
+    // v2.0 fix (Phase 6 #6): canonicalization parses previous_root via
+    // Distinction::from_hex (32-char lowercase hex). Malformed inputs
+    // (wrong length, non-hex) fall through a deterministic sentinel
+    // distinction that does not collide with any well-formed root.
+    //
+    // The original v1.2.0 demo strings ("deadbeefAAAA…" 24 chars) are
+    // malformed and therefore collapse to the sentinel — they no longer
+    // demonstrate the bug. To actually verify the fix, this section
+    // uses VALID 32-char lowercase hex inputs that share an 8-char prefix.
     {
-        println!("\n-- D: BatchProposed truncates previous_root to first 8 bytes --");
+        println!("\n-- D: BatchProposed previous_root canonicalization (N5) --");
         let engine = Arc::new(DistinctionEngine::new());
-        let batch_a = TransactionBatch {
-            transactions: vec![],
-            previous_root: "deadbeefAAAAAAAAAAAAAAAA".to_string(),
-        };
-        let batch_b = TransactionBatch {
-            transactions: vec![],
-            previous_root: "deadbeefBBBBBBBBBBBBBBBB".to_string(),
-        };
+
+        // Two well-formed 32-char hex roots sharing the first 8 chars.
+        // Under the v1.2.0 .take(8) bug these collided; under the v2.0
+        // fix they must NOT collide.
+        let root_a = "deadbeefaaaaaaaaaaaaaaaaaaaaaaaa".to_string();
+        let root_b = "deadbeefbbbbbbbbbbbbbbbbbbbbbbbb".to_string();
+        let batch_a = TransactionBatch { transactions: vec![], previous_root: root_a };
+        let batch_b = TransactionBatch { transactions: vec![], previous_root: root_b };
         let act_a = NetworkAction::BatchProposed { batch: batch_a }.to_canonical_structure(&engine);
         let act_b = NetworkAction::BatchProposed { batch: batch_b }.to_canonical_structure(&engine);
+        println!("  well-formed roots, shared 8-char hex prefix:");
         println!("  action_a.id = {}", act_a.to_hex());
         println!("  action_b.id = {}", act_b.to_hex());
         if act_a.to_hex() == act_b.to_hex() {
-            println!("  VERDICT: CONFIRMED. Causal-chain collision on 8-byte prefix.");
-            println!("           SEVERITY: HIGH.  network.rs:73-78 .take(8)");
+            println!("  VERDICT: BUG STILL PRESENT — N5 fix has regressed.");
+            println!("           SEVERITY: HIGH.  network.rs BatchProposed canonicalization");
+        } else {
+            println!("  VERDICT: N5 CLOSED — distinct well-formed roots produce distinct actions.");
+        }
+
+        // Malformed inputs fall through the sentinel and intentionally
+        // collide there — documenting the fallback contract.
+        let act_malformed_a = NetworkAction::BatchProposed {
+            batch: TransactionBatch {
+                transactions: vec![],
+                previous_root: "deadbeefAAAAAAAAAAAAAAAA".to_string(), // 24 chars, malformed
+            },
+        }
+        .to_canonical_structure(&engine);
+        let act_malformed_b = NetworkAction::BatchProposed {
+            batch: TransactionBatch {
+                transactions: vec![],
+                previous_root: "deadbeefBBBBBBBBBBBBBBBB".to_string(),
+            },
+        }
+        .to_canonical_structure(&engine);
+        println!();
+        println!("  Malformed inputs (24 chars) fall through deterministic sentinel:");
+        println!("  malformed_a.id = {}", act_malformed_a.to_hex());
+        println!("  malformed_b.id = {}", act_malformed_b.to_hex());
+        if act_malformed_a.to_hex() == act_malformed_b.to_hex() {
+            println!("  (expected — sentinel fallback for malformed input is by-design;");
+            println!("   validator's previous_root String check rejects upstream)");
         }
     }
 

@@ -38,20 +38,33 @@ pub struct BatchCommitment {
 }
 
 impl BatchCommitment {
-    /// Compute commitment from batch + metadata
+    /// Compute commitment from batch + metadata.
     ///
-    /// Deterministically hash the batch
-    /// without needing to synthesize it first.
+    /// Deterministically hashes the batch + leader attribution without
+    /// needing to synthesize the batch into the engine first.
     ///
+    /// # Security (N6 / leader-id binding)
+    ///
+    /// `leader_id` is included in the commitment hash so that leader
+    /// attribution cannot be forged in flight. Prior to the fix in
+    /// CHECKLIST 1.5 / Phase 6 sub-branch #6, the leader id was carried
+    /// as a free-form metadata field but never hashed. An attacker
+    /// could flip the field on the wire and `verify_batch` still
+    /// passed. Phase 1.5 probe `audit_network_commitment_unbound`
+    /// demonstrated this — fixed here.
+    ///
+    /// Hash domain: `SHA256(batch_root || nonce_le || epoch_le || leader_id_bytes)`.
     pub fn compute(batch: &TransactionBatch, nonce: u64, epoch: u64, leader_id: String) -> Self {
         // Compute batch root (hash of all transaction data)
         let batch_root = Self::compute_batch_root(batch);
 
-        // Deterministic commitment: SHA256(batch_root || nonce || epoch)
         let mut hasher = Sha256::new();
         hasher.update(batch_root);
         hasher.update(nonce.to_le_bytes());
         hasher.update(epoch.to_le_bytes());
+        // N6: leader_id bound into the hash. Placed at the end so nonce
+        // and epoch keep their existing fixed offsets.
+        hasher.update(leader_id.as_bytes());
         let commitment_hash: [u8; 32] = hasher.finalize().into();
 
         Self { commitment_hash, nonce, epoch, leader_id, batch_size: batch.transactions.len() }
@@ -500,5 +513,64 @@ mod tests {
 
         let cached = agent.get_cached_batch(&commitment.commitment_hash).unwrap();
         assert_eq!(cached.0.transactions[0].data, vec![1, 2, 3]);
+    }
+
+    // === N6 / F7 regression tests (Phase 6 sub-branch #6) ===
+
+    #[test]
+    fn compute_with_different_leader_ids_produces_different_hashes() {
+        // N6: same batch + nonce + epoch but different leader ids must
+        // produce DIFFERENT commitment_hashes. Phase 1.5 probe
+        // `audit_network_commitment_unbound` demonstrated this FAILED
+        // in v1.2.0 (hashes were byte-identical).
+        let batch = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 7, data: vec![1, 2, 3] }],
+            previous_root: "genesis".to_string(),
+        };
+        let honest = BatchCommitment::compute(&batch, 7, 3, "alice".to_string());
+        let forged = BatchCommitment::compute(&batch, 7, 3, "EVE".to_string());
+
+        assert_ne!(
+            honest.commitment_hash, forged.commitment_hash,
+            "leader_id must be bound into the commitment hash (N6)"
+        );
+    }
+
+    #[test]
+    fn verify_batch_rejects_tampered_leader_id() {
+        // F7 (transitively closed by N6 fix): constructing the honest
+        // commitment, then swapping the leader_id field on a clone,
+        // must cause verify_batch to fail because the re-derived hash
+        // (which now hashes self.leader_id) diverges from
+        // self.commitment_hash.
+        let batch = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 0, data: vec![1, 2, 3] }],
+            previous_root: "genesis".to_string(),
+        };
+        let honest = BatchCommitment::compute(&batch, 0, 0, "alice".to_string());
+
+        // Honest verification passes.
+        assert!(honest.verify_batch(&batch, 0, 0));
+
+        // Clone and flip leader_id only (simulating wire tamper).
+        let mut tampered = honest.clone();
+        tampered.leader_id = "EVE".to_string();
+
+        assert!(
+            !tampered.verify_batch(&batch, 0, 0),
+            "tampered leader_id must invalidate verify_batch (F7)"
+        );
+    }
+
+    #[test]
+    fn compute_is_deterministic_for_same_leader_id() {
+        // Determinism sanity check post-N6 fix.
+        let batch = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 0, data: vec![1, 2, 3] }],
+            previous_root: "genesis".to_string(),
+        };
+        let a = BatchCommitment::compute(&batch, 0, 0, "alice".to_string());
+        let b = BatchCommitment::compute(&batch, 0, 0, "alice".to_string());
+        assert_eq!(a.commitment_hash, b.commitment_hash);
     }
 }

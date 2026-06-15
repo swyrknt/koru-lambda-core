@@ -91,26 +91,43 @@ impl ConsensusValidator {
         Self { local_root: root, expected_nonce }
     }
 
-    /// Validate a batch of transactions atomically
+    /// Validate a batch of transactions atomically.
     ///
-    /// Atomic Failure Semantics: If any transaction fails, entire batch
-    /// is rejected. This preserves causal ordering integrity.
+    /// Atomic Failure Semantics: if any transaction fails, the entire
+    /// batch is rejected. **The engine is also left unchanged on
+    /// rejection** — this validator pre-validates the batch shape
+    /// (previous_root linkage + nonce contiguity) BEFORE any
+    /// `engine.synthesize` call, so rejected batches never leak
+    /// distinctions into the engine.
+    ///
+    /// # Security (V5 / engine-leak closure)
+    ///
+    /// Prior to the fix in CHECKLIST 1.5 / Phase 6 sub-branch #6, the
+    /// loop here synthesized per-tx state mid-iteration and only
+    /// rolled back the validator's `local_root`/`expected_nonce` fields
+    /// on rejection. The engine kept the partial-prefix syntheses.
+    /// Phase 1.5 probe `exp_validator_audit` Section C demonstrated 4
+    /// distinctions leaking into the engine on a 3-tx out-of-order
+    /// rejection. After the fix, the engine distinction count delta on
+    /// any rejected batch is exactly 0.
     ///
     /// Validation steps:
-    /// 1. Verify batch references correct previous root
-    /// 2. For each transaction:
-    ///    - Verify nonce is correct (sequential)
-    ///    - Synthesize transaction into state
-    /// 3. If all succeed → return new root
-    /// 4. If any fail → reject entire batch
+    /// 1. Verify batch references correct previous root (read-only).
+    /// 2. Verify batch is non-empty (read-only).
+    /// 3. Pre-validate every nonce is contiguous starting at
+    ///    `self.expected_nonce` (read-only).
+    /// 4. Only then walk the batch and call `engine.synthesize` per tx.
+    ///    Steps 1–3 guarantee step 4 never fails partway through.
     ///
-    /// Concurrency: Thread-safe via Arc<DistinctionEngine>.
+    /// Concurrency: Thread-safe via `Arc<DistinctionEngine>`.
     pub fn validate_batch(
         &mut self,
         batch: TransactionBatch,
         engine: &Arc<DistinctionEngine>,
     ) -> BatchValidationResult {
-        // Verify causal chain: batch must reference current root
+        // ===== Pre-validation pass (read-only; no engine mutation) =====
+
+        // 1. Verify causal chain: batch must reference current root.
         if batch.previous_root != self.local_root.to_hex() {
             return BatchValidationResult::Rejected(format!(
                 "Invalid previous root: expected {}, got {}",
@@ -119,34 +136,40 @@ impl ConsensusValidator {
             ));
         }
 
-        // Validate batch is not empty
+        // 2. Validate batch is non-empty.
         if batch.transactions.is_empty() {
             return BatchValidationResult::Rejected("Empty batch".to_string());
         }
 
-        // Simulate batch synthesis to detect failures
-        let mut current_state = self.local_root.clone();
-        let mut current_nonce = self.expected_nonce;
-
+        // 3. Pre-validate the full nonce sequence (V5 fix). Walking once
+        // here means a malformed nonce in tx N+1 is detected BEFORE any
+        // of txs 0..=N synthesize into the engine.
+        let mut expected = self.expected_nonce;
         for (idx, tx) in batch.transactions.iter().enumerate() {
-            // Verify nonce is sequential
-            if tx.nonce != current_nonce {
+            if tx.nonce != expected {
                 return BatchValidationResult::Rejected(format!(
                     "Invalid nonce at tx {}: expected {}, got {}",
-                    idx, current_nonce, tx.nonce
+                    idx, expected, tx.nonce
                 ));
             }
-
-            // Synthesize transaction into state
-            // ΔNew = ΔCurrent ⊕ ΔTransaction
-            let tx_distinction = tx.to_canonical_structure(engine);
-            current_state = engine.synthesize(&current_state, &tx_distinction);
-            current_nonce += 1;
+            expected += 1;
         }
 
-        // All transactions valid - update local state
+        // ===== Commit pass (only reached if pre-validation passed) =====
+        //
+        // Every iteration here calls engine.synthesize, but pre-validation
+        // has proven none will be rejected, so engine mutations are
+        // committed regardless. The engine is append-only by design;
+        // these synthesized distinctions are part of the canonical chain.
+        let mut current_state = self.local_root.clone();
+        for tx in batch.transactions.iter() {
+            let tx_distinction = tx.to_canonical_structure(engine);
+            current_state = engine.synthesize(&current_state, &tx_distinction);
+        }
+
+        // All transactions valid — update local state.
         self.local_root = current_state.clone();
-        self.expected_nonce = current_nonce;
+        self.expected_nonce = expected;
 
         BatchValidationResult::Valid(current_state)
     }
@@ -346,5 +369,85 @@ mod tests {
         let result = validator.validate_batch(batch, &engine);
         assert!(matches!(result, BatchValidationResult::Valid(_)));
         assert_eq!(validator.expected_nonce(), 43);
+    }
+
+    // === V5 regression tests (Phase 6 sub-branch #6) ===
+
+    #[test]
+    fn validate_batch_rejection_leaves_engine_state_unchanged_for_bad_nonce() {
+        // V5: out-of-order batch (nonce 0, 2, 1) must reject without
+        // mutating engine state. Phase 1.5 probe `exp_validator_audit`
+        // Section C demonstrated 4 distinctions leaking into the engine
+        // in v1.2.0.
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut validator = ConsensusValidator::new(&engine);
+
+        let dist_before = engine.distinction_count();
+        let rel_before = engine.relationship_count();
+
+        let batch = TransactionBatch {
+            transactions: vec![
+                TransactionAction { nonce: 0, data: vec![1, 2, 3] },
+                TransactionAction { nonce: 2, data: vec![4, 5, 6] },
+                TransactionAction { nonce: 1, data: vec![7, 8, 9] },
+            ],
+            previous_root: validator.state_root_id(),
+        };
+
+        let result = validator.validate_batch(batch, &engine);
+        assert!(matches!(result, BatchValidationResult::Rejected(_)));
+
+        assert_eq!(
+            engine.distinction_count(),
+            dist_before,
+            "rejection must not leak distinctions (V5)"
+        );
+        assert_eq!(
+            engine.relationship_count(),
+            rel_before,
+            "rejection must not leak relationships (V5)"
+        );
+        assert_eq!(validator.expected_nonce(), 0);
+    }
+
+    #[test]
+    fn validate_batch_rejection_leaves_engine_state_unchanged_for_bad_previous_root() {
+        // V5 corollary: previous_root mismatch must also not synthesize.
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut validator = ConsensusValidator::new(&engine);
+
+        let dist_before = engine.distinction_count();
+        let rel_before = engine.relationship_count();
+
+        let batch = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 0, data: vec![1, 2, 3] }],
+            previous_root: "00000000000000000000000000000000".to_string(),
+        };
+
+        let result = validator.validate_batch(batch, &engine);
+        assert!(matches!(result, BatchValidationResult::Rejected(_)));
+
+        assert_eq!(engine.distinction_count(), dist_before);
+        assert_eq!(engine.relationship_count(), rel_before);
+        assert_eq!(validator.expected_nonce(), 0);
+    }
+
+    #[test]
+    fn validate_batch_first_tx_bad_nonce_also_does_not_leak() {
+        // Boundary case: even when the failing tx is the first one,
+        // engine state must be unchanged.
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut validator = ConsensusValidator::new(&engine);
+
+        let dist_before = engine.distinction_count();
+
+        let batch = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 5, data: vec![1] }], // expected 0
+            previous_root: validator.state_root_id(),
+        };
+
+        let result = validator.validate_batch(batch, &engine);
+        assert!(matches!(result, BatchValidationResult::Rejected(_)));
+        assert_eq!(engine.distinction_count(), dist_before);
     }
 }

@@ -66,16 +66,33 @@ impl Canonicalizable for NetworkAction {
                 engine.synthesize(&join_marker, &peer.distinction)
             },
             NetworkAction::BatchProposed { batch } => {
-                // Synthesize: batch_marker ⊕ previous_root_hash
-                let batch_marker = engine.d0().clone(); // d0 = "batch" event
+                // Synthesize: batch_marker ⊕ previous_root_distinction.
+                //
+                // N5: parse previous_root as a 32-char hex Distinction id
+                // rather than folding the first 8 ASCII bytes. The old
+                // code caused causal-chain collisions between any two
+                // roots sharing a hex prefix (Phase 1.5 probe
+                // `audit_network_foreign_peers` Section D demonstrated
+                // `deadbeefAAAA…` and `deadbeefBBBB…` collapsing to the
+                // same action distinction).
+                //
+                // Malformed previous_root values (wrong length, non-hex
+                // characters) fall through a deterministic sentinel
+                // (`d0 ⊕ d1`). The sentinel cannot collide with a valid
+                // `from_hex` output unless an attacker can also provide
+                // hex matching the d0⊕d1 SHA256 prefix — at which point
+                // the input was well-formed and went through the parse
+                // path anyway. The validator's separate `previous_root`
+                // String check rejects malformed inputs at the consensus
+                // layer, so the fallback is never reached on the happy
+                // path; keeping the trait infallible avoids touching
+                // every `Canonicalizable` impl.
+                let batch_marker = engine.d0().clone();
 
-                // Hash previous root for content addressing
-                let root_bytes = batch.previous_root.as_bytes();
-                let root_distinction =
-                    root_bytes.iter().take(8).fold(engine.d0().clone(), |acc, &byte| {
-                        let byte_d = byte.to_canonical_structure(engine);
-                        engine.synthesize(&acc, &byte_d)
-                    });
+                let root_distinction = match Distinction::from_hex(&batch.previous_root) {
+                    Ok(d) => d,
+                    Err(_) => engine.synthesize(engine.d0(), engine.d1()),
+                };
 
                 engine.synthesize(&batch_marker, &root_distinction)
             },
@@ -599,5 +616,103 @@ mod tests {
 
         // Nonce should now be 51
         assert_eq!(agent.consensus_validator_expected_nonce(), 51);
+    }
+
+    // === N5 regression tests (Phase 6 sub-branch #6) ===
+
+    #[test]
+    fn batch_proposed_well_formed_hex_prefix_collision_closed() {
+        // N5 mirror of audit_network_foreign_peers Section D, but with
+        // VALID 32-char lowercase hex. Two roots sharing an 8-char hex
+        // prefix MUST produce distinct action distinctions.
+        let engine = DistinctionEngine::new();
+
+        let root_c = "deadbeefaaaaaaaaaaaaaaaaaaaaaaaa".to_string();
+        let root_d = "deadbeefbbbbbbbbbbbbbbbbbbbbbbbb".to_string();
+        let act_c = NetworkAction::BatchProposed {
+            batch: TransactionBatch { transactions: vec![], previous_root: root_c },
+        }
+        .to_canonical_structure(&engine);
+        let act_d = NetworkAction::BatchProposed {
+            batch: TransactionBatch { transactions: vec![], previous_root: root_d },
+        }
+        .to_canonical_structure(&engine);
+
+        assert_ne!(
+            act_c.as_bytes(),
+            act_d.as_bytes(),
+            "well-formed roots with shared hex prefix must not collide (N5)"
+        );
+    }
+
+    #[test]
+    fn batch_proposed_distinct_full_hex_roots_produce_distinct_action_ids() {
+        // N5: two completely different 32-char hex roots produce
+        // distinct action distinctions.
+        let engine = DistinctionEngine::new();
+
+        let act_a = NetworkAction::BatchProposed {
+            batch: TransactionBatch {
+                transactions: vec![],
+                previous_root: "a".repeat(32),
+            },
+        }
+        .to_canonical_structure(&engine);
+        let act_b = NetworkAction::BatchProposed {
+            batch: TransactionBatch {
+                transactions: vec![],
+                previous_root: "b".repeat(32),
+            },
+        }
+        .to_canonical_structure(&engine);
+
+        assert_ne!(act_a.as_bytes(), act_b.as_bytes());
+    }
+
+    #[test]
+    fn batch_proposed_malformed_previous_root_falls_through_sentinel() {
+        // Malformed previous_root (empty, short, non-hex) all canonicalize
+        // through the deterministic sentinel. Documenting this fallback
+        // contract; downstream `previous_root` String check in the
+        // validator rejects the batch before this would be observed in
+        // the happy path.
+        let engine = DistinctionEngine::new();
+
+        let act_empty = NetworkAction::BatchProposed {
+            batch: TransactionBatch { transactions: vec![], previous_root: String::new() },
+        }
+        .to_canonical_structure(&engine);
+        let act_short = NetworkAction::BatchProposed {
+            batch: TransactionBatch {
+                transactions: vec![],
+                previous_root: "deadbeef".to_string(),
+            },
+        }
+        .to_canonical_structure(&engine);
+        let act_nonhex = NetworkAction::BatchProposed {
+            batch: TransactionBatch {
+                transactions: vec![],
+                previous_root: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz".to_string(),
+            },
+        }
+        .to_canonical_structure(&engine);
+
+        // All three collapse to the same sentinel-derived distinction.
+        assert_eq!(act_empty.as_bytes(), act_short.as_bytes());
+        assert_eq!(act_empty.as_bytes(), act_nonhex.as_bytes());
+
+        // A well-formed root must not collide with the sentinel bucket.
+        let act_valid = NetworkAction::BatchProposed {
+            batch: TransactionBatch {
+                transactions: vec![],
+                previous_root: "00000000000000000000000000000001".to_string(),
+            },
+        }
+        .to_canonical_structure(&engine);
+        assert_ne!(
+            act_empty.as_bytes(),
+            act_valid.as_bytes(),
+            "valid previous_root must not collide with sentinel bucket"
+        );
     }
 }

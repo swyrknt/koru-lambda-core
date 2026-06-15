@@ -1,0 +1,51 @@
+=== Audit: NetworkAgent foreign-input surface ===
+
+-- A: PeerIdentity::new with 1MB peer id --
+  Constructed in 1.987060792s
+  peer.id.len() = 1000000
+  engine.distinction_count() after = 1000009
+  VERDICT: 1MB peer id permitted, ~1M synth calls. SEVERITY: HIGH.
+
+-- B: empty peer id collapses to d0 --
+  peer("")  -> distinction = 00000000000000000000000000000000
+  d0.to_hex()         = 00000000000000000000000000000000
+  peer("") distinction == d0 ? true
+  validator_count = 1
+  VERDICT: CONFIRMED. Empty peer id impersonates primordial.
+
+-- C: from_state accepts forged Distinction as root --
+  v2.0 closure: Distinction has no public constructor; an external
+  caller cannot mint Distinction::new("FORGED_ROOT_NEVER_SYNTHESIZED").
+  The only Distinction values an attacker could pass to from_state
+  are real engine-derived values (from synthesize/d0/d1) or values
+  parsed via from_hex(32-char-hex). Either way the bytes are a
+  well-formed 16-byte SHA256 prefix.
+
+  As a smoke test, this binary builds without any Distinction::new
+  call — the historical probe body is preserved in git blame.
+  VERDICT: STRUCTURALLY CLOSED (no longer probeable).
+
+-- D: BatchProposed previous_root canonicalization (N5) --
+  well-formed roots, shared 8-char hex prefix:
+  action_a.id = 9060608206faafc30431fefd968d6eb2
+  action_b.id = 0a9c0392f8555863f3f47be2abc418c3
+  VERDICT: N5 CLOSED — distinct well-formed roots produce distinct actions.
+
+  Malformed inputs (24 chars) fall through deterministic sentinel:
+  malformed_a.id = 3309377e376d6ca3c2e3bf9885900260
+  malformed_b.id = 3309377e376d6ca3c2e3bf9885900260
+  (expected — sentinel fallback for malformed input is by-design;
+   validator's previous_root String check rejects upstream)
+
+-- E: update_local_root accepts forged Distinction --
+  v2.0 closure: same as C. The Distinction passed to
+  update_local_root is necessarily well-formed bytes. The legitimate
+  semantic question ("is this root part of MY causal history?")
+  is unrelated to byte well-formedness; it's the trait-level
+  question that Section 1.6 V6 closes with restore_state(engine,
+  root_id, nonce) (sub-branch #7's scope).
+
+  VERDICT: foreign-byte-injection STRUCTURALLY CLOSED;
+  causal-provenance check is V6's separate concern.
+
+=== Done ===
