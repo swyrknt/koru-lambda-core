@@ -1,3 +1,4 @@
+use crossbeam_queue::SegQueue;
 use dashmap::DashMap;
 use sha2::{Digest, Sha256};
 use std::hash::{BuildHasherDefault, Hasher};
@@ -134,17 +135,43 @@ type AllDistinctionsMap = DashMap<[u8; 16], Distinction, IdentityBuildHasher>;
 /// Internal alias: canonical-pair relationship set, IdentityHasher-hashed.
 type RelationshipMap = DashMap<([u8; 16], [u8; 16]), (), IdentityBuildHasher>;
 
+/// Internal alias: synthesis log entry storage. Each entry is a canonical
+/// `(min, max)` parent tuple. `Option<...>` lets `without_log()` opt out.
+type SynthesisLog = Option<SegQueue<(Distinction, Distinction)>>;
+
 #[derive(Debug)]
 pub struct DistinctionEngine {
     d0: Distinction,
     d1: Distinction,
     all_distinctions: AllDistinctionsMap,
     relationships: RelationshipMap,
+    /// Append-only synthesis log. `Some(...)` for engines constructed via
+    /// `new()`; `None` for `without_log()` engines. Each entry is a canonical
+    /// `(min, max)` parent pair, pushed on every novel synthesis. Per
+    /// Decision 5.7, canonical ordering enables future Merkle-over-log and
+    /// cross-peer log diffing without rewriting persisted logs.
+    log: SynthesisLog,
 }
 
 impl DistinctionEngine {
-    /// Creates a new engine with the two primordial distinctions.
+    /// Creates a new engine with the two primordial distinctions and an
+    /// active synthesis log.
     pub fn new() -> Self {
+        Self::new_inner(true)
+    }
+
+    /// Creates a new engine with the two primordial distinctions and no
+    /// synthesis log. Use this when persistence is not needed and the log's
+    /// memory cost (Exp 7: ~81 MB per 1M synths) is undesirable.
+    ///
+    /// Engines constructed via `without_log()` will return empty results
+    /// from `synthesis_log_snapshot()` and `0` from `synthesis_log_len()`.
+    /// All other engine behavior is unchanged.
+    pub fn without_log() -> Self {
+        Self::new_inner(false)
+    }
+
+    fn new_inner(with_log: bool) -> Self {
         let mut d1_bytes = [0u8; 16];
         d1_bytes[0] = 1;
         let d0 = Distinction::from_bytes_internal([0u8; 16]);
@@ -159,7 +186,13 @@ impl DistinctionEngine {
         // d0.bytes < d1.bytes is true ([0; 16] < [1, 0, ..., 0]).
         relationships.insert((d0.bytes, d1.bytes), ());
 
-        Self { d0, d1, all_distinctions, relationships }
+        // The seed (d0, d1) relationship is NOT pushed onto the log; the log
+        // records *novel synthesis events*, and the seed is part of the
+        // engine's initial state. Replay from an empty log against a fresh
+        // `new()` engine reproduces the seed state automatically.
+        let log = if with_log { Some(SegQueue::new()) } else { None };
+
+        Self { d0, d1, all_distinctions, relationships, log }
     }
 
     /// Returns a reference to the first primordial distinction (Δ₀).
@@ -231,6 +264,20 @@ impl DistinctionEngine {
         self.all_distinctions.insert(new_bytes, new_distinction.clone());
         self.add_relationship(&new_bytes, &a.bytes);
         self.add_relationship(&new_bytes, &b.bytes);
+
+        // Append canonical (min, max) parent tuple to the synthesis log
+        // (CHECKLIST 2.3, Decision 5.7). `first` and `second` are already
+        // canonically ordered by the comparison at line 211. Skipped on
+        // engines built via `without_log()`. A saturation race could let
+        // two threads both pass the existence check and push duplicate
+        // entries; this is benign because replay is idempotent — the
+        // second synthesize call on the duplicate pair hits saturation.
+        if let Some(log) = &self.log {
+            log.push((
+                Distinction::from_bytes_internal(*first),
+                Distinction::from_bytes_internal(*second),
+            ));
+        }
 
         new_distinction
     }
@@ -320,6 +367,44 @@ impl DistinctionEngine {
     /// Returns the total number of relationships tracked.
     pub fn relationship_count(&self) -> usize {
         self.relationships.len()
+    }
+
+    /// Returns the number of entries in the synthesis log, or `0` if the
+    /// engine was constructed via [`DistinctionEngine::without_log`].
+    ///
+    /// Each entry represents one novel `synthesize()` call. Idempotent
+    /// repeats of the same pair do not increment the count. Section 2.3.
+    pub fn synthesis_log_len(&self) -> usize {
+        self.log.as_ref().map_or(0, |q| q.len())
+    }
+
+    /// Returns a snapshot of the synthesis log as a `Vec` of canonical
+    /// `(min, max)` parent tuples in insertion order.
+    ///
+    /// Each tuple `(lo, hi)` satisfies `lo.as_bytes() <= hi.as_bytes()`
+    /// (Decision 5.7). Replaying the log against a fresh engine via
+    /// `for (a, b) in log { new_engine.synthesize(&a, &b); }` produces a
+    /// byte-identical engine state (Exp 7, Exp 12 — confirmed
+    /// order-independent).
+    ///
+    /// Implementation: drain-and-refill on the underlying `SegQueue`
+    /// (`SegQueue` has no non-destructive iterator). Concurrent writes
+    /// during the snapshot are visible in the returned `Vec`; writes
+    /// during refill end up at the tail. Both are benign because replay
+    /// is order-independent. For engines constructed via `without_log()`,
+    /// returns an empty `Vec`.
+    pub fn synthesis_log_snapshot(&self) -> Vec<(Distinction, Distinction)> {
+        let Some(log) = self.log.as_ref() else {
+            return Vec::new();
+        };
+        let mut out = Vec::with_capacity(log.len());
+        while let Some(entry) = log.pop() {
+            out.push(entry);
+        }
+        for entry in &out {
+            log.push(entry.clone());
+        }
+        out
     }
 }
 
@@ -470,5 +555,183 @@ mod structural_invariant_tests {
             let _ = engine.synthesize(&a, &b);
         }
         assert!(engine.check_structural_invariant());
+    }
+}
+
+#[cfg(test)]
+mod synthesis_log_tests {
+    use super::*;
+
+    #[test]
+    fn new_engine_has_no_log_entries() {
+        let engine = DistinctionEngine::new();
+        assert_eq!(engine.synthesis_log_len(), 0);
+        assert!(engine.synthesis_log_snapshot().is_empty());
+    }
+
+    #[test]
+    fn single_synth_logs_one_canonical_entry() {
+        let engine = DistinctionEngine::new();
+        let _ = engine.synthesize(engine.d0(), engine.d1());
+
+        let log = engine.synthesis_log_snapshot();
+        assert_eq!(log.len(), 1);
+        let (lo, hi) = &log[0];
+        // d0.bytes ([0; 16]) < d1.bytes ([1, 0, ..., 0]).
+        assert_eq!(lo.as_bytes(), engine.d0().as_bytes());
+        assert_eq!(hi.as_bytes(), engine.d1().as_bytes());
+    }
+
+    #[test]
+    fn idempotent_synth_logs_once() {
+        let engine = DistinctionEngine::new();
+        for _ in 0..100 {
+            let _ = engine.synthesize(engine.d0(), engine.d1());
+        }
+        assert_eq!(engine.synthesis_log_len(), 1);
+    }
+
+    #[test]
+    fn irreflexive_synth_does_not_log() {
+        let engine = DistinctionEngine::new();
+        let _ = engine.synthesize(engine.d0(), engine.d0());
+        let _ = engine.synthesize(engine.d1(), engine.d1());
+        assert_eq!(engine.synthesis_log_len(), 0);
+    }
+
+    #[test]
+    fn without_log_engine_logs_nothing() {
+        let engine = DistinctionEngine::without_log();
+        for i in 0..100u8 {
+            let _ = engine.synthesize(engine.d0(), engine.d1());
+            // Build a small chain so we exercise novel synthesis.
+            let d = engine.synthesize(engine.d0(), engine.d1());
+            let mut byte_d0 = [0u8; 16];
+            byte_d0[15] = i;
+            let _ = engine.synthesize(&d, &Distinction::from_bytes_internal(byte_d0));
+        }
+        assert_eq!(engine.synthesis_log_len(), 0);
+        assert!(engine.synthesis_log_snapshot().is_empty());
+    }
+
+    #[test]
+    fn log_canonical_ordering_min_first() {
+        let engine = DistinctionEngine::new();
+        // synthesize with reversed order (d1, d0); canonical entry must
+        // still be (d0, d1) — Decision 5.7.
+        let _ = engine.synthesize(engine.d1(), engine.d0());
+
+        let log = engine.synthesis_log_snapshot();
+        assert_eq!(log.len(), 1);
+        let (lo, hi) = &log[0];
+        assert!(lo.as_bytes() <= hi.as_bytes(), "log entry must be canonical (min, max)");
+        assert_eq!(lo.as_bytes(), engine.d0().as_bytes());
+        assert_eq!(hi.as_bytes(), engine.d1().as_bytes());
+    }
+
+    #[test]
+    fn log_replay_round_trip_byte_identical() {
+        // Build engine A with a varied chain.
+        let engine_a = DistinctionEngine::new();
+        let d1 = engine_a.d1().clone();
+        let mut current = engine_a.synthesize(engine_a.d0(), &d1);
+        for _ in 0..50 {
+            current = engine_a.synthesize(&current, &d1);
+        }
+        let snapshot_a = engine_a.synthesis_log_snapshot();
+        let dists_a = engine_a.distinction_count();
+        let rels_a = engine_a.relationship_count();
+
+        // Replay against fresh engine B.
+        let engine_b = DistinctionEngine::new();
+        for (a, b) in &snapshot_a {
+            let _ = engine_b.synthesize(a, b);
+        }
+        let dists_b = engine_b.distinction_count();
+        let rels_b = engine_b.relationship_count();
+
+        assert_eq!(dists_a, dists_b, "distinction count must match after replay");
+        assert_eq!(rels_a, rels_b, "relationship count must match after replay");
+
+        // Confirm the actual distinction sets match (byte-identical).
+        let mut bytes_a: Vec<[u8; 16]> =
+            engine_a.get_distinctions_snapshot().iter().map(|d| *d.as_bytes()).collect();
+        let mut bytes_b: Vec<[u8; 16]> =
+            engine_b.get_distinctions_snapshot().iter().map(|d| *d.as_bytes()).collect();
+        bytes_a.sort();
+        bytes_b.sort();
+        assert_eq!(bytes_a, bytes_b, "distinction byte sets must match");
+    }
+
+    #[test]
+    fn log_replay_shuffled_still_byte_identical() {
+        // Exp 12: replay is order-independent via content addressing.
+        let engine_a = DistinctionEngine::new();
+        let d1 = engine_a.d1().clone();
+        let mut current = engine_a.synthesize(engine_a.d0(), &d1);
+        for _ in 0..50 {
+            current = engine_a.synthesize(&current, &d1);
+        }
+        let mut snapshot_a = engine_a.synthesis_log_snapshot();
+
+        // Deterministic shuffle: reverse the log.
+        snapshot_a.reverse();
+
+        let engine_b = DistinctionEngine::new();
+        for (a, b) in &snapshot_a {
+            let _ = engine_b.synthesize(a, b);
+        }
+
+        let mut bytes_a: Vec<[u8; 16]> =
+            engine_a.get_distinctions_snapshot().iter().map(|d| *d.as_bytes()).collect();
+        let mut bytes_b: Vec<[u8; 16]> =
+            engine_b.get_distinctions_snapshot().iter().map(|d| *d.as_bytes()).collect();
+        bytes_a.sort();
+        bytes_b.sort();
+        assert_eq!(bytes_a, bytes_b, "shuffled replay must produce identical state");
+    }
+
+    #[test]
+    fn serde_round_trip_via_json() {
+        use serde::{Deserialize, Serialize};
+
+        // Wrapper that uses the existing `distinction_hex` serde adapter.
+        // Documents the canonical way for consumers to persist log entries
+        // when they want hex strings in JSON; bincode could equivalently
+        // serialize the raw bytes.
+        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+        struct LogEntry {
+            #[serde(with = "crate::distinction_hex")]
+            a: Distinction,
+            #[serde(with = "crate::distinction_hex")]
+            b: Distinction,
+        }
+
+        let engine = DistinctionEngine::new();
+        let _ = engine.synthesize(engine.d0(), engine.d1());
+        let d1 = engine.d1().clone();
+        let _ = engine.synthesize(engine.d0(), &d1);
+        let c = engine.synthesize(engine.d0(), &d1);
+        let _ = engine.synthesize(&c, &d1);
+
+        let entries: Vec<LogEntry> = engine
+            .synthesis_log_snapshot()
+            .into_iter()
+            .map(|(a, b)| LogEntry { a, b })
+            .collect();
+        let json = serde_json::to_string(&entries).expect("serialize");
+        let restored: Vec<LogEntry> = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(entries, restored);
+    }
+
+    #[test]
+    fn without_log_snapshot_returns_empty_vec() {
+        // Defensive: no panic, empty Vec, regardless of how much we synthesize.
+        let engine = DistinctionEngine::without_log();
+        for _ in 0..10 {
+            let _ = engine.synthesize(engine.d0(), engine.d1());
+        }
+        let snap = engine.synthesis_log_snapshot();
+        assert!(snap.is_empty());
     }
 }

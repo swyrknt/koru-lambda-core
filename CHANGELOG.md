@@ -53,6 +53,22 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   (so `(d0, X)` edges don't bucket-collide); (c) 1 M random SHA256 prefixes
   produce 1 M distinct hashes; (d) 10 K `(d0, X)` edges land in 10 K
   distinct buckets.
+- **Append-only synthesis log.** Each novel `synthesize()` call pushes a
+  canonical `(min, max)` parent tuple onto `DistinctionEngine`'s internal
+  `SegQueue<(Distinction, Distinction)>` (CHECKLIST Section 2.3 / Phase 6
+  sub-branch #4). Canonical ordering (per Decision 5.7) enables future
+  Merkle-over-log and cross-peer log diffing without rewriting persisted
+  logs. `DistinctionEngine::without_log()` constructor opts out for
+  memory-sensitive consumers (Exp 7: 1M synths ≈ 81 MB resident log). Public
+  API: `synthesis_log_snapshot() -> Vec<(Distinction, Distinction)>`
+  (drain-and-refill, non-destructive), `synthesis_log_len() -> usize`.
+  Replay round-trip + shuffled-replay tests assert byte-identical engine
+  state reconstruction (Exp 7, Exp 12 order-independence confirmed). Log
+  entries are serde-serializable via a `#[serde(with = "distinction_hex")]`
+  wrapper on consumer-defined entry structs.
+- `crossbeam-queue = "0.3"` direct dependency (backs the synthesis log;
+  per Exp 3, `SegQueue` measured at −7% throughput at 8 threads vs −26%
+  for `RwLock<Vec>`).
 - **`BatchSynthesizer`** — concurrent batch-synthesis helper (CHECKLIST
   Section 1.10 / Phase 6 sub-branch #2). Replaces the v1.2.0
   `ParallelSynthesizer` with a tighter API: `synthesize_batch(Vec<(String,
