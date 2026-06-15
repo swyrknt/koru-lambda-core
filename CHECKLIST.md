@@ -313,7 +313,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 |---|---|---|
 | Section 1.1–1.3 — Engine FIX | 14 | **3 of 14 done** (snapshot rename, ByteMapping fix, foreign-ID via pub(crate)) |
 | Section 1.4 — CLAUDE.md doc drift | 8 | **complete** (Phase 2) |
-| Section 1.5 — Consensus-correctness bugs (MUST NOT SHIP) | 3 | not started (Phase 6 sub-branch #6) |
+| Section 1.5 — Consensus-correctness bugs (MUST NOT SHIP) | 3 | **complete** (Phase 6 sub-branch #6, merge `b0a641a`) |
 | Section 1.6 — Consensus hardening | 8 | not started (Phase 6 sub-branch #7) |
 | Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | not started (Phase 6 sub-branch #8) |
 | Section 1.8 — WASM bytes-on-wire + helpers | 9 | not started (Phase 6 sub-branch #10) |
@@ -340,7 +340,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | 3 | `impl/invariant-tripwire` | ✅ merged `550125a` |
 | 4 | `impl/synthesis-log` | ✅ merged `91ee3b2` |
 | 5 | `impl/traversal-api` | ✅ merged `e648117` (also closed #1's 107s test regression → 0.02s) |
-| 6 | `fix/tier-0-consensus-correctness` | ⬜ unblocked (sequential lead for #7 + #8) |
+| 6 | `fix/tier-0-consensus-correctness` | ✅ merged `b0a641a` (N5, N6, V5 + F7 bonus all closed by re-run probes) |
 | 7 | `fix/consensus-hardening` | ⏸ waits on #6 |
 | 8 | `fix/ffi-hardening` | ⏸ waits on #6 (commitment.rs interaction) |
 | 9 | `cleanup/compactor` | ⏸ waits on #5 (uses traversal API) |
