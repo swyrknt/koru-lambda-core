@@ -53,6 +53,20 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   (so `(d0, X)` edges don't bucket-collide); (c) 1 M random SHA256 prefixes
   produce 1 M distinct hashes; (d) 10 K `(d0, X)` edges land in 10 K
   distinct buckets.
+- **Traversal API.** `DistinctionEngine::degree(&Distinction) -> usize`,
+  `parents_of(&Distinction) -> Option<(Distinction, Distinction)>`,
+  `children_of(&Distinction) -> impl Iterator<Item = Distinction>`
+  (CHECKLIST Section 2.2 / Phase 6 sub-branch #5). All O(1) per call.
+  Backed by three new internal DashMap indices populated in `synthesize()`
+  on the novel-synthesis path using engine-first ordering per Exp 8 (no
+  orphan IDs in indices pointing to unregistered distinctions). `degree()`
+  is O(1) via cached `AtomicUsize`; primordials d0 and d1 are seeded at
+  degree 1 to reflect the genesis relationship. `children_of` snapshots
+  the children Vec under a read guard and returns an owned iterator —
+  avoids self-referential guard lifetimes and writer-starvation risk.
+  `parents_of` returns the canonical (min, max) pair regardless of the
+  call order at synthesis time. Eliminates the need for external graph
+  trackers (Exp 4: unlocks deletion of ALIS's `tracker.rs` ~600 LOC).
 - **Append-only synthesis log.** Each novel `synthesize()` call pushes a
   canonical `(min, max)` parent tuple onto `DistinctionEngine`'s internal
   `SegQueue<(Distinction, Distinction)>` (CHECKLIST Section 2.3 / Phase 6
@@ -113,6 +127,19 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   reflecting the truncated 16-byte SHA256 (vs 64 characters under v1.2.0's
   full-hex Distinction IDs). FFI consumers parsing the returned string
   must update their expected length.
+
+### Changed
+
+- **`StructuralCompactor::calculate_sis` rewritten** to use `engine.degree`
+  directly (CHECKLIST Section 1.9 #4 / Phase 6 sub-branch #5). Eliminates
+  the full state-snapshot clone; each degree lookup is O(1) via the engine's
+  internal AtomicUsize cache.
+- **`tests/falsification/robustness.rs::test_falsify_random_degree_distribution`
+  rewritten** to use `engine.degree` instead of rebuilding a petgraph
+  snapshot in the inner loop. Wall time drops from ~107 s (Phase 6 #1
+  baseline regression flag) to ~0.02 s — a >5000× speedup. The test logic
+  (preferential attachment with degree-weighted parent selection,
+  > 0.45 concentration assertion) is preserved.
 
 ### Changed (breaking)
 

@@ -2,6 +2,7 @@ use crossbeam_queue::SegQueue;
 use dashmap::DashMap;
 use sha2::{Digest, Sha256};
 use std::hash::{BuildHasherDefault, Hasher};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 /// Identity hasher for keys whose bytes are already uniformly distributed
@@ -139,6 +140,19 @@ type RelationshipMap = DashMap<([u8; 16], [u8; 16]), (), IdentityBuildHasher>;
 /// `(min, max)` parent tuple. `Option<...>` lets `without_log()` opt out.
 type SynthesisLog = Option<SegQueue<(Distinction, Distinction)>>;
 
+/// Internal alias: forward parent index, `child -> (parent_a, parent_b)`
+/// canonical pair. IdentityHasher-hashed.
+type ParentsMap = DashMap<[u8; 16], ([u8; 16], [u8; 16]), IdentityBuildHasher>;
+
+/// Internal alias: reverse children index, `parent -> Vec<child>`.
+/// IdentityHasher-hashed.
+type ChildrenMap = DashMap<[u8; 16], Vec<[u8; 16]>, IdentityBuildHasher>;
+
+/// Internal alias: degree cache, `node -> AtomicUsize`. IdentityHasher-hashed.
+/// Each `synthesize()` novel-path call increments the degree of both parents
+/// by 1 (each gains exactly one new relationship: parent → new child).
+type DegreeMap = DashMap<[u8; 16], AtomicUsize, IdentityBuildHasher>;
+
 #[derive(Debug)]
 pub struct DistinctionEngine {
     d0: Distinction,
@@ -151,6 +165,17 @@ pub struct DistinctionEngine {
     /// Decision 5.7, canonical ordering enables future Merkle-over-log and
     /// cross-peer log diffing without rewriting persisted logs.
     log: SynthesisLog,
+    /// Forward parent index: child bytes → canonical (parent_a, parent_b)
+    /// bytes. Populated in `synthesize()` on the novel path. Section 2.2.
+    parents_index: ParentsMap,
+    /// Reverse children index: parent bytes → Vec of child bytes.
+    /// Populated in `synthesize()` on the novel path. Section 2.2.
+    children_index: ChildrenMap,
+    /// Degree cache: node bytes → AtomicUsize relationship count.
+    /// Populated in `synthesize()` on the novel path. Section 2.2.
+    /// Primordials d0 and d1 are seeded at degree 1 to reflect the
+    /// genesis (d0, d1) relationship.
+    degree_cache: DegreeMap,
 }
 
 impl DistinctionEngine {
@@ -192,7 +217,18 @@ impl DistinctionEngine {
         // `new()` engine reproduces the seed state automatically.
         let log = if with_log { Some(SegQueue::new()) } else { None };
 
-        Self { d0, d1, all_distinctions, relationships, log }
+        // Traversal indices (Section 2.2). Primordials d0 and d1 have no
+        // parents (parents_index empty for them). They have one child each
+        // post-genesis: each other (children_index empty until first
+        // synthesis registers their shared child). They have degree 1
+        // (the seed (d0, d1) relationship).
+        let parents_index: ParentsMap = DashMap::with_hasher(IdentityBuildHasher::default());
+        let children_index: ChildrenMap = DashMap::with_hasher(IdentityBuildHasher::default());
+        let degree_cache: DegreeMap = DashMap::with_hasher(IdentityBuildHasher::default());
+        degree_cache.insert(d0.bytes, AtomicUsize::new(1));
+        degree_cache.insert(d1.bytes, AtomicUsize::new(1));
+
+        Self { d0, d1, all_distinctions, relationships, log, parents_index, children_index, degree_cache }
     }
 
     /// Returns a reference to the first primordial distinction (Δ₀).
@@ -278,6 +314,29 @@ impl DistinctionEngine {
                 Distinction::from_bytes_internal(*second),
             ));
         }
+
+        // Populate traversal indices (Section 2.2). Engine-first ordering
+        // per Exp 8: distinction + relationships are inserted FIRST (above);
+        // the new indices are populated AFTER. A concurrent reader querying
+        // children_of(d) may observe slightly fewer children than
+        // all_distinctions contains. This is the safe direction — no
+        // orphan IDs in the indices pointing to unregistered distinctions.
+        // Parents store the canonical (min, max) pair.
+        self.parents_index.insert(new_bytes, (*first, *second));
+        self.children_index.entry(a.bytes).or_default().push(new_bytes);
+        self.children_index.entry(b.bytes).or_default().push(new_bytes);
+        // Each parent gains +1 degree from the new (parent → new_distinction)
+        // relationship.
+        self.degree_cache
+            .entry(a.bytes)
+            .or_insert_with(|| AtomicUsize::new(0))
+            .fetch_add(1, Ordering::Relaxed);
+        self.degree_cache
+            .entry(b.bytes)
+            .or_insert_with(|| AtomicUsize::new(0))
+            .fetch_add(1, Ordering::Relaxed);
+        // New distinction starts at degree 2 (its two parent relationships).
+        self.degree_cache.insert(new_bytes, AtomicUsize::new(2));
 
         new_distinction
     }
@@ -367,6 +426,61 @@ impl DistinctionEngine {
     /// Returns the total number of relationships tracked.
     pub fn relationship_count(&self) -> usize {
         self.relationships.len()
+    }
+
+    /// Returns the number of relationships involving this distinction.
+    /// `O(1)` via cached `AtomicUsize`. Returns `0` if the distinction is
+    /// not registered in this engine.
+    ///
+    /// Genesis: `degree(d0) == 1` and `degree(d1) == 1` (the seed
+    /// relationship). Each subsequent novel synthesis increments the degree
+    /// of both parents by 1, and the new child is initialized at degree 2.
+    ///
+    /// Section 2.2 / Phase 6 sub-branch #5.
+    pub fn degree(&self, d: &Distinction) -> usize {
+        self.degree_cache.get(&d.bytes).map(|e| e.value().load(Ordering::Relaxed)).unwrap_or(0)
+    }
+
+    /// Returns the canonical `(min, max)` parents whose synthesis produced
+    /// this distinction. `O(1)` via the forward parent index. Returns `None`
+    /// for primordials (`d0`, `d1`) and for any distinction not registered
+    /// in this engine.
+    ///
+    /// The returned pair is in canonical byte order (the smaller-bytes
+    /// parent first), regardless of the call order at synthesis time.
+    /// `engine.synthesize(d1, d0)` and `engine.synthesize(d0, d1)` produce
+    /// the same child and `parents_of(child) == Some((d0, d1))` in both
+    /// cases.
+    ///
+    /// Section 2.2 / Phase 6 sub-branch #5.
+    pub fn parents_of(&self, d: &Distinction) -> Option<(Distinction, Distinction)> {
+        self.parents_index.get(&d.bytes).map(|e| {
+            let (a, b) = *e.value();
+            (Distinction::from_bytes_internal(a), Distinction::from_bytes_internal(b))
+        })
+    }
+
+    /// Returns an iterator over the children that were produced with `d`
+    /// as one of their parents, in insertion order.
+    ///
+    /// Implementation: snapshots the children Vec under a DashMap read
+    /// guard, then returns an owned iterator. The intermediate Vec is
+    /// `Vec<[u8; 16]>` (16 bytes per element, `Copy`); conversion to
+    /// `Distinction` is free. Holding a `RefMulti` guard across the
+    /// iterator return would be self-referential w.r.t. the shard lock,
+    /// risking deadlock if a caller iterates while another writer hits
+    /// the same shard. The snapshot trades a one-time allocation per
+    /// `children_of()` call for guard-lifetime simplicity.
+    ///
+    /// For unregistered distinctions returns an empty iterator (not
+    /// `None`) — iterator semantics let callers write
+    /// `for child in engine.children_of(&d)` regardless.
+    ///
+    /// Section 2.2 / Phase 6 sub-branch #5.
+    pub fn children_of(&self, d: &Distinction) -> impl Iterator<Item = Distinction> + '_ {
+        let snapshot: Vec<[u8; 16]> =
+            self.children_index.get(&d.bytes).map(|e| e.value().clone()).unwrap_or_default();
+        snapshot.into_iter().map(Distinction::from_bytes_internal)
     }
 
     /// Returns the number of entries in the synthesis log, or `0` if the
@@ -733,5 +847,113 @@ mod synthesis_log_tests {
         }
         let snap = engine.synthesis_log_snapshot();
         assert!(snap.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod traversal_api_tests {
+    use super::*;
+
+    #[test]
+    fn degree_of_primordial_after_genesis() {
+        let engine = DistinctionEngine::new();
+        // Seeded at 1 to reflect the (d0, d1) genesis relationship.
+        assert_eq!(engine.degree(engine.d0()), 1);
+        assert_eq!(engine.degree(engine.d1()), 1);
+    }
+
+    #[test]
+    fn degree_increments_on_synthesis() {
+        let engine = DistinctionEngine::new();
+        let child = engine.synthesize(engine.d0(), engine.d1());
+        assert_eq!(engine.degree(engine.d0()), 2);
+        assert_eq!(engine.degree(engine.d1()), 2);
+        assert_eq!(engine.degree(&child), 2);
+    }
+
+    #[test]
+    fn degree_unchanged_under_saturation() {
+        let engine = DistinctionEngine::new();
+        let _ = engine.synthesize(engine.d0(), engine.d1());
+        let before = engine.degree(engine.d0());
+        for _ in 0..100 {
+            let _ = engine.synthesize(engine.d0(), engine.d1());
+        }
+        assert_eq!(engine.degree(engine.d0()), before);
+    }
+
+    #[test]
+    fn degree_of_unregistered_returns_zero() {
+        let engine = DistinctionEngine::new();
+        // 32 'f's = [0xff; 16]; vanishingly unlikely SHA256 collision.
+        let unreg = Distinction::from_hex(&"f".repeat(32)).unwrap();
+        assert_eq!(engine.degree(&unreg), 0);
+    }
+
+    #[test]
+    fn parents_of_primordials_is_none() {
+        let engine = DistinctionEngine::new();
+        assert!(engine.parents_of(engine.d0()).is_none());
+        assert!(engine.parents_of(engine.d1()).is_none());
+    }
+
+    #[test]
+    fn parents_of_child_is_canonical() {
+        let engine = DistinctionEngine::new();
+        // synth in reversed order
+        let child = engine.synthesize(engine.d1(), engine.d0());
+        let (a, b) = engine.parents_of(&child).expect("child must have parents");
+        // Canonical: smaller bytes first.
+        assert!(a.as_bytes() <= b.as_bytes());
+        assert_eq!(a.as_bytes(), engine.d0().as_bytes());
+        assert_eq!(b.as_bytes(), engine.d1().as_bytes());
+    }
+
+    #[test]
+    fn parents_of_unregistered_returns_none() {
+        let engine = DistinctionEngine::new();
+        let unreg = Distinction::from_hex(&"f".repeat(32)).unwrap();
+        assert!(engine.parents_of(&unreg).is_none());
+    }
+
+    #[test]
+    fn children_of_d0_lists_synth_children() {
+        let engine = DistinctionEngine::new();
+        let child = engine.synthesize(engine.d0(), engine.d1());
+
+        let kids: Vec<Distinction> = engine.children_of(engine.d0()).collect();
+        assert_eq!(kids.len(), 1);
+        assert_eq!(kids[0].as_bytes(), child.as_bytes());
+    }
+
+    #[test]
+    fn children_of_unregistered_is_empty() {
+        let engine = DistinctionEngine::new();
+        let unreg = Distinction::from_hex(&"f".repeat(32)).unwrap();
+        assert_eq!(engine.children_of(&unreg).count(), 0);
+    }
+
+    #[test]
+    fn children_iterator_is_borrow_safe() {
+        // The iterator owns its data (snapshot under guard); no lifetime
+        // gymnastics required to drive it after the call returns.
+        let engine = DistinctionEngine::new();
+        let _ = engine.synthesize(engine.d0(), engine.d1());
+        assert!(engine.children_of(engine.d0()).count() > 0);
+    }
+
+    #[test]
+    fn invariant_holds_after_traversal_index_population() {
+        // Sanity check: adding the 3 internal indices doesn't perturb the
+        // r = 2d − 3 invariant. (Index population happens AFTER the
+        // distinction + relationships are inserted, so this is somewhat
+        // tautological — but worth a guard.)
+        let engine = DistinctionEngine::new();
+        let d1 = engine.d1().clone();
+        let mut current = engine.synthesize(engine.d0(), &d1);
+        for _ in 0..50 {
+            current = engine.synthesize(&current, &d1);
+            assert!(engine.check_structural_invariant());
+        }
     }
 }
