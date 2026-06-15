@@ -123,30 +123,24 @@ impl StructuralCompactor {
         }
     }
 
-    /// Calculate Structural Importance Score (S.I.S.) for all distinctions
+    /// Calculate Structural Importance Score (S.I.S.) for all distinctions.
     ///
     /// S.I.S. is currently implemented as degree centrality:
-    /// - Higher degree = more connections = higher structural importance
+    /// - Higher degree = more connections = higher structural importance.
+    ///
+    /// v2.0 (Phase 6 sub-branch #5): rewritten to use `engine.degree(d)`
+    /// directly. The full relationship snapshot clone is eliminated; each
+    /// degree lookup is `O(1)` via the engine's internal AtomicUsize cache.
+    /// Walking the distinctions snapshot is still `O(N)` because callers
+    /// expect the returned map keyed on every known distinction.
     ///
     /// Returns: HashMap<distinction_id, degree>
     pub fn calculate_sis(&self, engine: &Arc<DistinctionEngine>) -> HashMap<String, usize> {
-        let (distinctions, relationships) = engine.get_state_snapshot_unsynchronized();
-
-        // Build degree count for each distinction
-        let mut degree_map: HashMap<String, usize> = HashMap::new();
-
-        // Initialize all distinctions with degree 0
-        for d in &distinctions {
-            degree_map.insert(d.to_hex(), 0);
-        }
-
-        // Count relationships (each relationship connects two nodes)
-        for (id_a, id_b) in &relationships {
-            *degree_map.entry(id_a.clone()).or_insert(0) += 1;
-            *degree_map.entry(id_b.clone()).or_insert(0) += 1;
-        }
-
-        degree_map
+        engine
+            .get_distinctions_snapshot()
+            .iter()
+            .map(|d| (d.to_hex(), engine.degree(d)))
+            .collect()
     }
 
     /// Classify distinctions into thermal states based on S.I.S.

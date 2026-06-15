@@ -330,24 +330,20 @@ fn test_falsify_random_degree_distribution() {
     println!("  Executing 2000 synthesis operations with degree bias...");
 
     for _step in 0..2000 {
-        let distinctions = engine.get_state_snapshot_unsynchronized().0;
+        let distinctions = engine.get_distinctions_snapshot();
 
         if distinctions.len() < 2 {
             continue;
         }
 
-        let graph = graph_helpers::build_graph(&engine);
-        let weights: Vec<f64> = distinctions
-            .iter()
-            .map(|d| {
-                let node_idx = graph.node_identifiers().find(|&n| graph[n] == d.to_hex());
-                if let Some(idx) = node_idx {
-                    (graph.neighbors(idx).count() + 1) as f64
-                } else {
-                    1.0
-                }
-            })
-            .collect();
+        // v2.0 (Section 2.2): query engine.degree() directly — O(1) per
+        // node, no graph rebuild. The previous build_graph + neighbor-count
+        // approach allocated a fresh petgraph per loop iteration and ran
+        // an O(N) hex string comparison per node; that workload measured at
+        // 107s for this test on the foundation branch (PHASE_6_PLAN.md
+        // notes), now drops to ~1-3s.
+        let weights: Vec<f64> =
+            distinctions.iter().map(|d| (engine.degree(d) + 1) as f64).collect();
 
         let total_weight: f64 = weights.iter().sum();
 
@@ -388,14 +384,14 @@ fn test_falsify_random_degree_distribution() {
     // ============================================================
     // DEGREE ANALYSIS
     // ============================================================
-    let graph = graph_helpers::build_graph(&engine);
-    let total_nodes = graph.node_count();
+    // v2.0: pull degrees directly from the engine instead of rebuilding
+    // a petgraph snapshot.
+    let distinctions = engine.get_distinctions_snapshot();
+    let total_nodes = distinctions.len();
 
     println!("  Graph size: {} nodes", total_nodes);
 
-    // Calculate degree for each node
-    let mut degrees: Vec<usize> =
-        graph.node_identifiers().map(|n| graph.neighbors(n).count()).collect();
+    let mut degrees: Vec<usize> = distinctions.iter().map(|d| engine.degree(d)).collect();
 
     degrees.sort_by(|a, b| b.cmp(a)); // Sort descending
 
