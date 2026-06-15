@@ -105,6 +105,14 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
 
 ### Changed (breaking)
 
+- **`BatchCommitment::compute` output changed.** Adding `leader_id` to the
+  hash input (N6 fix) changes all commitment_hash values — wire-format break
+  vs v1.2.0 (CHECKLIST 1.5 / Phase 6 sub-branch #6). Per Decision 5.1:
+  bundled into v2.0; no users on a network today, so no separate v1.2.1
+  patch needed. Cross-version peer gossip is not supported.
+- **`NetworkAction::BatchProposed` action distinction id changed.** The fix
+  for N5 changes how `previous_root` participates in the canonical structure;
+  action distinction ids differ from v1.2.0. Same disposition as N6 above.
 - **`Distinction` is now `pub struct Distinction { bytes: [u8; 16] }`** —
   16-byte truncated SHA256 (first 16 bytes, MSB), `Clone + Eq + Hash +
   Display + Debug`. The byte field is `pub(crate)`; no public constructor
@@ -202,6 +210,40 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
 ### Fixed
 
 ### Security
+
+- **N6 / leader-id-forgery (CVE-class, never deployed).** `BatchCommitment::compute`
+  now hashes `leader_id.as_bytes()` into the commitment hash (CHECKLIST 1.5 /
+  Phase 6 sub-branch #6). Phase 1.5 probe `audit_network_commitment_unbound`
+  demonstrated `compute(batch, 7, 3, "alice")` and `compute(batch, 7, 3, "EVE")`
+  produced byte-identical `commitment_hash` in v1.2.0; post-fix log at
+  `experiments/findings/run_log/audit_network_commitment_unbound_post_n5_n6_v5_fix.log`
+  confirms `hashes equal? false`.
+- **N5 / 8-byte previous_root truncation (CVE-class, never deployed).**
+  `NetworkAction::BatchProposed::to_canonical_structure` no longer applies
+  `.take(8)` to `previous_root.as_bytes()`. Now parses `previous_root` via
+  `Distinction::from_hex` and synthesizes the actual parent root; malformed
+  inputs (wrong length, non-hex) fall through a deterministic sentinel that
+  cannot collide with any well-formed root. Phase 1.5 probe
+  `audit_network_foreign_peers` Section D updated to use VALID 32-char hex
+  inputs (the v1.2.0 demo strings were only 24 chars and now fall through
+  the sentinel); the new well-formed-hex variant demonstrates that two roots
+  sharing an 8-char hex prefix now produce distinct action distinctions.
+  Post-fix log at
+  `experiments/findings/run_log/audit_network_foreign_peers_post_n5_n6_v5_fix.log`.
+- **V5 / atomic-failure engine leakage.** `ConsensusValidator::validate_batch`
+  now pre-validates the entire batch (nonce sequence + previous_root) BEFORE
+  any `engine.synthesize` call. Rejected batches leave engine state unchanged.
+  Phase 1.5 probe `exp_validator_audit` Section C demonstrated 4 distinctions
+  leaking into the engine on a 3-tx out-of-order rejection in v1.2.0; post-fix
+  log at `experiments/findings/run_log/exp_validator_audit_post_n5_n6_v5_fix.log`
+  confirms `engine distinction delta = 0`.
+- **F7 / verify_batch leader-id binding** transitively closed by the N6 fix.
+  `BatchCommitment::verify_batch` re-derives the commitment hash over
+  `self.leader_id`, so a tampered `leader_id` field on a deserialized
+  commitment fails verification. The lightweight `BatchCommitment::verify`
+  (used by FFI `koru_agent_check_commitment` light-node ping check) is
+  unchanged — it cannot hash-verify without the batch data and is documented
+  accordingly. Test: `verify_batch_rejects_tampered_leader_id`.
 
 - **Foreign-ID poisoning closed structurally** (CHECKLIST 1.1 #2 / 1.5 V1 / 1.5 N3
   / 1.5 N4; Phase 6 sub-branch #1). Removing `Distinction::new(String)` and

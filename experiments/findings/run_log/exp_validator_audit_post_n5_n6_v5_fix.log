@@ -1,0 +1,47 @@
+=== Validator Audit Probe ===
+
+-- A: 1 MiB previous_root --
+  rejected in 76.542µs; reason length = 1000070 bytes
+  validator.rs:115-119 format!s the full untrusted string into the
+  error message. 1 MB in -> ~1 MB allocation out.
+
+-- B: 100 000-byte TransactionAction.data --
+  validated in 193.174916ms: new root = 80c0af319c90c05a...
+  engine grew: distinctions +100009, relationships +200018
+  one batch with one large tx -> ~data.len() synth calls.
+
+-- C: out-of-order nonces in a batch --
+  rejected: Invalid nonce at tx 1: expected 1, got 2
+  engine distinction delta = 0; validator.expected_nonce = 0
+
+-- D: empty batch + empty transaction data --
+  empty-batch result: Rejected("Empty batch")
+  empty-data tx result: Valid(Distinction(3309377e376d6ca3c2e3bf9885900260))
+  Empty data folds to engine.d0(). Two txs with empty data + same nonce
+  produce identical tx-distinctions.
+
+-- E: phantom-parent count after validator usage --
+  distinction_count       = 512
+  unique parent IDs in r  = 512
+  phantom IDs (refd, !registered) = 0
+
+-- F: from_root(foreign_distinction, nonce) --
+  v2.0 closure: Distinction has no public constructor. The only
+  Distinction values an external caller can pass to from_root are
+  engine-derived (synthesize/d0/d1) or from_hex-parsed (well-formed
+  bytes). Foreign-bytes-as-string injection is no longer possible.
+
+  The original probe body called Distinction::new("deadbeef".repeat(8)).
+  Against v2.0 it does not compile.
+
+  Causal-provenance ("is this root anchored in MY history?") remains
+  a separate concern — addressed by V6 (joint restore_state) in
+  sub-branch #7.
+  VERDICT: STRUCTURALLY CLOSED.
+
+-- G: set_expected_nonce desync --
+  Accepted a nonce-100 batch against the genesis root.
+  set_expected_nonce + local_root are independent fields. No invariant
+  ties them. No atomic restore-state(root, nonce) API exists.
+
+=== Done ===
