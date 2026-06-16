@@ -7,8 +7,8 @@
 /// memory with explicit free functions. All operations are thread-safe via
 /// Arc/DashMap. All functions are pure or explicitly mutate via pointers.
 use crate::{
-    BatchCommitment, ConsensusValidator, DistinctionEngine, NetworkAgent, PeerIdentity,
-    TransactionBatch,
+    BatchCommitment, ConsensusValidator, Distinction, DistinctionEngine, NetworkAgent,
+    PeerIdentity, TransactionBatch,
 };
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::slice;
@@ -194,18 +194,66 @@ pub unsafe extern "C" fn koru_agent_expected_nonce(agent: *const KoruAgent) -> u
     agent.consensus_validator_expected_nonce()
 }
 
-/// Restore the expected transaction nonce for state import
+/// Restore the agent's internal validator to a previously-persisted
+/// state. Replaces the v1.2.0 `koru_agent_restore_nonce` setter.
+///
+/// V6 (CHECKLIST 1.6 / Phase 6 sub-branch #7). The legacy entry point
+/// allowed `(root, nonce)` to be set independently — operators could
+/// install a nonce that did not match the agent's current root,
+/// admitting forged batches at startup. The new entry point requires
+/// both the previously-persisted root (32-char lowercase hex) and
+/// the matching nonce, and rejects fabricated roots that are not
+/// registered in the supplied engine.
+///
+/// # Parameters
+/// - agent: NetworkAgent pointer
+/// - engine: Engine pointer (root must be registered here)
+/// - root_hex: 32-char lowercase hex distinction id (null-terminated)
+/// - nonce: expected nonce paired with `root_hex`
+///
+/// # Returns
+/// `KORU_SUCCESS` on success, `KORU_ERROR_INVALID_DATA` if the root
+/// is malformed or unregistered, or the appropriate null/utf8 error.
 ///
 /// # Safety
-/// agent must be valid pointer
+/// agent, engine, and root_hex must be valid non-null pointers.
 #[no_mangle]
-pub unsafe extern "C" fn koru_agent_restore_nonce(agent: *mut KoruAgent, nonce: u64) -> i32 {
-    if agent.is_null() {
+pub unsafe extern "C" fn koru_agent_restore_state(
+    agent: *mut KoruAgent,
+    engine: *const KoruEngine,
+    root_hex: *const c_char,
+    nonce: u64,
+) -> i32 {
+    if agent.is_null() || engine.is_null() || root_hex.is_null() {
         return KORU_ERROR_NULL_POINTER;
     }
+
     let agent = &mut *(agent as *mut NetworkAgent);
-    agent.restore_consensus_validator_nonce(nonce);
-    KORU_SUCCESS
+    let engine_arc = Arc::from_raw(engine as *const DistinctionEngine);
+
+    let root_str = match CStr::from_ptr(root_hex).to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            let _ = Arc::into_raw(engine_arc);
+            return KORU_ERROR_UTF8;
+        },
+    };
+
+    let root_id = match Distinction::from_hex(root_str) {
+        Ok(d) => d,
+        Err(_) => {
+            let _ = Arc::into_raw(engine_arc);
+            return KORU_ERROR_INVALID_DATA;
+        },
+    };
+
+    let code = match agent.restore_consensus_validator_state(&engine_arc, root_id, nonce) {
+        Ok(()) => KORU_SUCCESS,
+        Err(_) => KORU_ERROR_INVALID_DATA,
+    };
+
+    let _ = Arc::into_raw(engine_arc);
+    code
 }
 
 // ============================================================================
@@ -238,7 +286,15 @@ pub unsafe extern "C" fn koru_agent_join_peer(
         },
     };
 
-    let peer = PeerIdentity::new(peer_id_str.to_string(), &engine_arc);
+    let peer = match PeerIdentity::new(peer_id_str.to_string(), &engine_arc) {
+        Ok(p) => p,
+        Err(_) => {
+            // N1/N2: empty or oversized peer ids are rejected before
+            // any synth runs into the engine.
+            let _ = Arc::into_raw(engine_arc);
+            return KORU_ERROR_INVALID_DATA;
+        },
+    };
     agent.join_peer(peer, &engine_arc);
 
     // Re-increment ref count (we borrowed it)
@@ -823,71 +879,20 @@ mod tests {
     }
 
     #[test]
-    fn test_ffi_agent_restore_nonce() {
+    fn test_ffi_agent_restore_state_at_genesis() {
+        // V6: replaces test_ffi_agent_restore_nonce. The agent's
+        // genesis root is registered in the engine, so restoring
+        // (genesis_root, 42) is accepted and the nonce updates.
         unsafe {
             let engine = koru_engine_new();
             let agent = koru_agent_new(engine);
 
-            // Initial nonce should be 0
             assert_eq!(koru_agent_expected_nonce(agent), 0);
 
-            // Restore nonce to 42
-            let result = koru_agent_restore_nonce(agent, 42);
-            assert_eq!(result, KORU_SUCCESS);
-
-            // Verify nonce was restored
-            assert_eq!(koru_agent_expected_nonce(agent), 42);
-
-            koru_agent_free(agent);
-            koru_engine_free(engine);
-        }
-    }
-
-    #[test]
-    fn test_ffi_nonce_restoration_with_batch() {
-        unsafe {
-            let engine = koru_engine_new();
-            let agent = koru_agent_new(engine);
-
-            // Restore nonce to 100
-            koru_agent_restore_nonce(agent, 100);
-            assert_eq!(koru_agent_expected_nonce(agent), 100);
-
-            // Get state root for batch
             let root_str = koru_agent_state_root(agent);
-            let root_cstr = CStr::from_ptr(root_str);
-            let root = root_cstr.to_str().unwrap();
-
-            // Create batch with nonce 100
-            let batch = format!(
-                r#"{{"transactions":[{{"nonce":100,"data":[1,2,3]}}],"previous_root":"{}"}}"#,
-                root
-            );
-            let batch_bytes = batch.as_bytes();
-            let mut commitment_hash = [0u8; 32];
-
-            // Propose commitment
-            let result = koru_agent_propose_commitment(
-                agent,
-                engine,
-                batch_bytes.as_ptr(),
-                batch_bytes.len(),
-                commitment_hash.as_mut_ptr(),
-            );
+            let result = koru_agent_restore_state(agent, engine, root_str, 42);
             assert_eq!(result, KORU_SUCCESS);
-
-            // Finalize batch
-            let result = koru_agent_finalize_batch(
-                agent,
-                engine,
-                batch_bytes.as_ptr(),
-                batch_bytes.len(),
-                commitment_hash.as_ptr(),
-            );
-            assert_eq!(result, KORU_SUCCESS);
-
-            // Nonce should now be 101
-            assert_eq!(koru_agent_expected_nonce(agent), 101);
+            assert_eq!(koru_agent_expected_nonce(agent), 42);
 
             koru_free_string(root_str);
             koru_agent_free(agent);
@@ -896,13 +901,37 @@ mod tests {
     }
 
     #[test]
+    fn test_ffi_agent_restore_state_rejects_fabricated_root() {
+        // V6: fabricated bytes (well-formed hex, never synthesized)
+        // must be refused with KORU_ERROR_INVALID_DATA.
+        unsafe {
+            let engine = koru_engine_new();
+            let agent = koru_agent_new(engine);
+
+            let fabricated = CString::new("f".repeat(32)).unwrap();
+            let result = koru_agent_restore_state(agent, engine, fabricated.as_ptr(), 100);
+            assert_eq!(result, KORU_ERROR_INVALID_DATA);
+            // Nonce must remain at 0.
+            assert_eq!(koru_agent_expected_nonce(agent), 0);
+
+            koru_agent_free(agent);
+            koru_engine_free(engine);
+        }
+    }
+
+    #[test]
     fn test_ffi_null_pointer_safety() {
         unsafe {
-            // Test null pointer handling for new FFI functions
             let nonce = koru_agent_expected_nonce(std::ptr::null());
             assert_eq!(nonce, 0);
 
-            let result = koru_agent_restore_nonce(std::ptr::null_mut(), 42);
+            let root = CString::new("0".repeat(32)).unwrap();
+            let result = koru_agent_restore_state(
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                root.as_ptr(),
+                42,
+            );
             assert_eq!(result, KORU_ERROR_NULL_POINTER);
         }
     }

@@ -35,8 +35,9 @@ fn test_commitment_multi_node_consensus() {
         (0..NUM_NODES).map(|_| NetworkAgent::new(&engine)).collect();
 
     // Bootstrap validator set
-    let peers: Vec<PeerIdentity> =
-        (0..NUM_NODES).map(|i| PeerIdentity::new(format!("validator_{}", i), &engine)).collect();
+    let peers: Vec<PeerIdentity> = (0..NUM_NODES)
+        .map(|i| PeerIdentity::new(format!("validator_{}", i), &engine).unwrap())
+        .collect();
 
     for agent in agents.iter_mut() {
         for peer in peers.iter() {
@@ -106,7 +107,7 @@ fn test_falsify_byzantine_leader_invalid_commitment() {
     let mut honest_validator = NetworkAgent::new(&engine);
 
     // Bootstrap
-    let peer = PeerIdentity::new("validator_0".to_string(), &engine);
+    let peer = PeerIdentity::new("validator_0".to_string(), &engine).unwrap();
     byzantine_leader.join_peer(peer.clone(), &engine);
     honest_validator.join_peer(peer, &engine);
 
@@ -205,7 +206,7 @@ fn test_commitment_across_epoch_boundary() {
 
     // Bootstrap with 3 validators
     for i in 0..3 {
-        let peer = PeerIdentity::new(format!("validator_{}", i), &engine);
+        let peer = PeerIdentity::new(format!("validator_{}", i), &engine).unwrap();
         leader_node.join_peer(peer.clone(), &engine);
         follower_node.join_peer(peer, &engine);
     }
@@ -257,8 +258,9 @@ fn test_falsify_concurrent_leader_commitments() {
         (0..NUM_NODES).map(|_| NetworkAgent::new(&engine)).collect();
 
     // Bootstrap
-    let peers: Vec<PeerIdentity> =
-        (0..NUM_NODES).map(|i| PeerIdentity::new(format!("validator_{}", i), &engine)).collect();
+    let peers: Vec<PeerIdentity> = (0..NUM_NODES)
+        .map(|i| PeerIdentity::new(format!("validator_{}", i), &engine).unwrap())
+        .collect();
 
     for agent in agents.iter_mut() {
         for peer in peers.iter() {

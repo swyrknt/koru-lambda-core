@@ -61,7 +61,7 @@ fn test_batch_validation_performance() {
 
     // Bootstrap validators
     for i in 0..5 {
-        let peer = PeerIdentity::new(format!("validator_{}", i), &engine);
+        let peer = PeerIdentity::new(format!("validator_{}", i), &engine).unwrap();
         agent.join_peer(peer, &engine);
     }
 
@@ -123,7 +123,7 @@ fn test_leader_election_performance() {
 
     // Add 50 validators
     for i in 0..50 {
-        let peer = PeerIdentity::new(format!("validator_{}", i), &engine);
+        let peer = PeerIdentity::new(format!("validator_{}", i), &engine).unwrap();
         agent.join_peer(peer, &engine);
     }
 
@@ -213,8 +213,9 @@ fn test_distributed_consensus_throughput() {
     const NUM_NODES: usize = 5;
     let mut nodes: Vec<NetworkAgent> = (0..NUM_NODES).map(|_| NetworkAgent::new(&engine)).collect();
 
-    let validators: Vec<PeerIdentity> =
-        (0..NUM_NODES).map(|i| PeerIdentity::new(format!("node_{}", i), &engine)).collect();
+    let validators: Vec<PeerIdentity> = (0..NUM_NODES)
+        .map(|i| PeerIdentity::new(format!("node_{}", i), &engine).unwrap())
+        .collect();
 
     for node in nodes.iter_mut() {
         for validator in validators.iter() {

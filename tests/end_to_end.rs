@@ -62,7 +62,7 @@ fn test_e2e_multi_node_consensus() {
 
     // Create validator identities
     let validators: Vec<PeerIdentity> = (0..NUM_VALIDATORS)
-        .map(|i| PeerIdentity::new(format!("validator_{}", i), &engine))
+        .map(|i| PeerIdentity::new(format!("validator_{}", i), &engine).unwrap())
         .collect();
 
     // All nodes join all validators (bootstrap)
@@ -233,8 +233,9 @@ fn test_e2e_system_under_load_with_compaction() {
         (0..NUM_VALIDATORS).map(|_| StructuralCompactor::new(&engine)).collect();
 
     // Bootstrap validators
-    let validators: Vec<PeerIdentity> =
-        (0..NUM_VALIDATORS).map(|i| PeerIdentity::new(format!("node_{}", i), &engine)).collect();
+    let validators: Vec<PeerIdentity> = (0..NUM_VALIDATORS)
+        .map(|i| PeerIdentity::new(format!("node_{}", i), &engine).unwrap())
+        .collect();
 
     for node in nodes.iter_mut() {
         for validator in validators.iter() {
@@ -400,7 +401,7 @@ fn test_e2e_byzantine_fault_tolerance() {
 
     // Bootstrap all nodes with same validators
     let validators: Vec<PeerIdentity> = (0..NUM_VALIDATORS)
-        .map(|i| PeerIdentity::new(format!("validator_{}", i), &engine))
+        .map(|i| PeerIdentity::new(format!("validator_{}", i), &engine).unwrap())
         .collect();
 
     for node in honest_nodes.iter_mut().chain(byzantine_nodes.iter_mut()) {
@@ -557,8 +558,9 @@ fn test_e2e_network_partition_recovery() {
     let mut all_nodes: Vec<NetworkAgent> =
         (0..NUM_VALIDATORS).map(|_| NetworkAgent::new(&engine)).collect();
 
-    let validators: Vec<PeerIdentity> =
-        (0..NUM_VALIDATORS).map(|i| PeerIdentity::new(format!("node_{}", i), &engine)).collect();
+    let validators: Vec<PeerIdentity> = (0..NUM_VALIDATORS)
+        .map(|i| PeerIdentity::new(format!("node_{}", i), &engine).unwrap())
+        .collect();
 
     for node in all_nodes.iter_mut() {
         for validator in validators.iter() {
