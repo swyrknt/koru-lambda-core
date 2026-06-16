@@ -105,6 +105,19 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
 
 ### Changed (breaking)
 
+- **`StructuralCompactor::new` signature changed** (CHECKLIST 1.9 /
+  Phase 6 sub-branch #9). Now `new(engine, hot_threshold,
+  warm_threshold)`. The v1.2.0 default `(hot, warm) = (3, 1)` was
+  unprincipled; consumers must now pick thresholds matching the
+  degree distribution of their engine. `set_hot_threshold(N)` removed;
+  replaced by `set_thresholds(hot, warm)` which validates
+  `warm <= hot`. `StructuralCompactor::from_root` removed (unused).
+- **`CompactionAction::archived_ids` field removed** (CHECKLIST 1.9 /
+  Phase 6 sub-branch #9). The field was carried as data but never
+  participated in `to_canonical_structure`, so callers relied on
+  reading it back from the action rather than computing it from the
+  canonical record. Archived IDs are obtained from the compactor
+  itself.
 - **FFI opaque types are now `#[repr(C)] struct` placeholders, not
   `c_void`** (CHECKLIST 1.7 F4 / Phase 6 sub-branch #8). C headers declare
   `struct KoruEngine`, `struct KoruAgent`, `struct KoruValidator` — three
@@ -285,6 +298,27 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   colon-separator collisions, cross-engine ghosts). Any external code that
   constructed Distinction values out-of-tree must obtain them through the
   engine or via `Distinction::from_hex` (which validates length + charset).
+- **Compactor cleanup — explicit thresholds, no self-archive, no
+  double-count, `archived_ids` removed** (CHECKLIST 1.9 / Phase 6
+  sub-branch #9). `StructuralCompactor::new(engine, hot_threshold,
+  warm_threshold)` requires both thresholds explicitly. The v1.2.0
+  magic defaults (`hot_threshold = 3`, `warm = hot / 2`) are gone, and
+  the unverified "26.6× storage efficiency" claim is removed from the
+  compactor crate doc. `set_thresholds(hot, warm)` replaces
+  `set_hot_threshold(N)` so consumers cannot accidentally desync the
+  two bands. `compaction_count` now advances **only** in
+  `synthesize_action`; `compact()` is a pure dry-run that computes
+  classification + archived set without advancing the counter (closes
+  the v1.2.0 double-increment). `synthesize_action` no longer re-runs
+  `calculate_sis` + `classify_thermal_states` after writing the new
+  compaction-event distinction — that path classified its own fresh
+  event (deg=2) as COLD and added it to `archived_set`. The
+  compactor's archived set now reflects what `compact()` was told to
+  archive, not what `synthesize_action` accidentally swept up after.
+  `CompactionAction::archived_ids: Vec<String>` field removed — it was
+  never part of `to_canonical_structure` and so could not influence
+  the canonical distinction; consumers fetch archived IDs from the
+  compactor itself.
 - **FFI hardening — panic-safe ABI (F1/F3), distinct opaque types (F4),
   cbindgen header completeness (F5), `ManuallyDrop<Arc>` engine borrows (F6),
   full F7 FFI surface, internal `Mutex` against TOCTOU (F2/F8), and

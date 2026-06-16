@@ -131,14 +131,16 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 - [ ] WASM tests are `#[test]` not `#[wasm_bindgen_test]` — never hit a WASM runtime. *(audit/wasm W13)*
   - Fix: convert. Verify host tests pass first under `--features wasm`.
 
-### 1.9 Compactor cleanup (Phase 1 audit)
-- [ ] Compactor magic constants: `hot_threshold: 3`, `warm = hot/2`, unverified "26.6×" claim. *(audit/compactor)*
-  - Fix: derive thresholds from observed degree distribution OR drop HOT/WARM/COLD trichotomy for raw SIS. Remove "26.6×" until reproduced.
-- [ ] `compaction_count` double-increment (`compact()` and `synthesize_action`). *(audit/compactor)*
-  - Fix: remove from one site.
-- [ ] Compactor "archives its own work products" — `synthesize_action` re-runs `calculate_sis` after writing compaction-event distinctions; new low-degree nodes classified COLD. *(audit/compactor)*
-  - Fix: skip recompute after own synth, OR exclude compaction events from re-classification.
-- [ ] Replace compactor's `calculate_sis` body with `engine.degree(d)` once 2.2 traversal API lands.
+### 1.9 Compactor cleanup — DONE in Phase 6 sub-branch #9
+- [x] Compactor magic constants: `hot_threshold: 3`, `warm = hot/2`, unverified "26.6×" claim. *(audit/compactor)*
+  - DONE: `StructuralCompactor::new(engine, hot_threshold, warm_threshold)` requires both thresholds explicitly; v1.2.0 default `(3, 1)` is gone. `set_thresholds(hot, warm)` replaces `set_hot_threshold(N)` and validates `warm <= hot`. The "26.6×" claim is removed from the crate doc; the new doc states thresholds are deployment choices, not derived constants.
+- [x] `compaction_count` double-increment (`compact()` and `synthesize_action`). *(audit/compactor)*
+  - DONE: removed from `compact()`. `compact()` is now a pure dry-run that computes classification + archived set without advancing the counter; `synthesize_action` is the call that actually writes the event distinction and increments `compaction_count`. New test: `test_compact_does_not_increment_compaction_count`.
+- [x] Compactor "archives its own work products" — `synthesize_action` re-runs `calculate_sis` after writing compaction-event distinctions; new low-degree nodes classified COLD. *(audit/compactor)*
+  - DONE: removed the post-synth `calculate_sis` + `classify_thermal_states` + archive-update block from `synthesize_action`. The freshly-synthesized event distinction is no longer swept into `archived_set`. New test: `test_synthesize_action_does_not_archive_its_own_event`.
+- [x] **`CompactionAction::archived_ids` field removed** *(audit/compactor — dead-field cleanup per Decision 5.2).*
+  - DONE: field carried data that never participated in `to_canonical_structure`; consumers fetch archived IDs from the compactor itself. New test: `test_compaction_action_canonical_drops_archived_ids`.
+- [x] Replace compactor's `calculate_sis` body with `engine.degree(d)` — DONE in Phase 6 sub-branch #5 (merge `e648117`).
 
 ### 1.10 Architectural cleanup — DONE in Phase 6 sub-branch #2 (merge `b45c434`)
 - [x] **Delete `ParallelBatchProcessor`** (~250 LOC removed). Misnamed Sequential body, dead `worker_count` field, single-variant enum. *(audit/parallel)*
@@ -317,7 +319,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 1.6 — Consensus hardening | 8 | **complete** (Phase 6 sub-branch #7) |
 | Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | **complete** (Phase 6 sub-branch #8) |
 | Section 1.8 — WASM bytes-on-wire + helpers | 9 | not started (Phase 6 sub-branch #10) |
-| Section 1.9 — Compactor cleanup | 4 | not started (Phase 6 sub-branch #9) |
+| Section 1.9 — Compactor cleanup | 4 + 1 (archived_ids) | **complete** (Phase 6 sub-branch #9) |
 | Section 1.10 — Architectural cleanup | 2 | **complete** (Phase 6 sub-branch #2, merge `b45c434`) |
 | Section 1.11 — Phase 1 follow-up | 13 | **complete** |
 | Section 1.12 — Baseline measurement | 4 | **complete** |
@@ -329,7 +331,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 4 — VALIDATE | 4 claims | **complete** |
 | Section 5 — DECIDE | 9 | **complete (all locked)** |
 
-**Current test count:** 157 release (post Phase 6 #8; was 155 before, 103 at baseline). Clippy clean (incl. `--all-targets`). `Cargo.toml` at `1.2.0`.
+**Current test count:** 161 release (post Phase 6 #9; was 157 before, 103 at baseline). Clippy clean (incl. `--all-targets`). `Cargo.toml` at `1.2.0`.
 
 **Phase 6 sub-branch tracker:**
 
@@ -343,7 +345,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | 6 | `fix/tier-0-consensus-correctness` | ✅ merged `b0a641a` (N5, N6, V5 + F7 bonus all closed by re-run probes) |
 | 7 | `fix/consensus-hardening` | ✅ on branch (ready to merge) — Section 1.6 closed; N1/N2 confirmed via `audit_network_foreign_peers` re-run |
 | 8 | `fix/ffi-hardening` | ✅ on branch (ready to merge) — Section 1.7 closed; F7 FFI half landed |
-| 9 | `cleanup/compactor` | ⏸ waits on #5 (uses traversal API) |
+| 9 | `cleanup/compactor` | ✅ on branch (ready to merge) — Section 1.9 closed |
 | 10 | `impl/wasm-bytes-on-wire` | ⬜ unblocked once WASM toolchain confirmed |
 | 11 | `docs/changelog-finalize` | ⏸ last (after all others) |
 

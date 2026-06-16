@@ -179,8 +179,7 @@ fn test_compaction_performance() {
     // Perform compaction
     let start = Instant::now();
 
-    let mut compactor = StructuralCompactor::new(&engine);
-    compactor.set_hot_threshold(8);
+    let mut compactor = StructuralCompactor::new(&engine, 8, 4);
     let _action = compactor.compact(&engine);
 
     let duration = start.elapsed();
