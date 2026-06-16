@@ -105,6 +105,16 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
 
 ### Changed (breaking)
 
+- **`WasmEngine::synthesize` signature changed** (CHECKLIST 1.8 W9 /
+  Phase 6 sub-branch #10). Now
+  `synthesize(id_a: &[u8], id_b: &[u8]) -> Result<Vec<u8>, JsValue>`.
+  v1.2.0 took `(id_a: &str, id_b: &str)` (hex), which forced JS
+  callers to encode/decode hex on every call. New signature is
+  bytes-canonical and symmetric with the output.
+- **`WasmNetworkAgent::checkCommitment` signature changed** (CHECKLIST
+  1.8 W10 / Phase 6 sub-branch #10). Two trailing arguments added:
+  `leader_id: &str, batch_size: u64`. Mirrors the FFI F7 fix. JS
+  callers must update.
 - **`StructuralCompactor::new` signature changed** (CHECKLIST 1.9 /
   Phase 6 sub-branch #9). Now `new(engine, hot_threshold,
   warm_threshold)`. The v1.2.0 default `(hot, warm) = (3, 1)` was
@@ -298,6 +308,39 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   colon-separator collisions, cross-engine ghosts). Any external code that
   constructed Distinction values out-of-tree must obtain them through the
   engine or via `Distinction::from_hex` (which validates length + charset).
+- **WASM bytes-on-wire (W1/W2/W4/W5/W9/W10/W13)** (CHECKLIST 1.8 /
+  Phase 6 sub-branch #10). The WASM FFI is now bytes-canonical end to
+  end: every distinction ID crossing the JS / WASM boundary is a
+  `Uint8Array` of length 16, and the v1.2.0 `id_to_bytes` UTF-8
+  fallback heuristic (which silently routed primordial IDs through a
+  different code path than synthesized ones) is deleted. Primordials
+  Δ₀, Δ₁ ride the same byte path as synthesized IDs — their
+  `[0u8; 16]` and `[1, 0, …, 0]` byte form (introduced in foundation)
+  is what `d0Id()` / `d1Id()` now return. `WasmEngine::synthesize` is
+  `(id_a: &[u8], id_b: &[u8]) -> Result<Vec<u8>, JsValue>`; both
+  inputs must be exactly 16 bytes or the call returns an error. New
+  freestanding `idToHex(arr: &[u8]) -> Result<String, JsValue>` and
+  `idFromHex(s: &str) -> Result<Vec<u8>, JsValue>` JS helpers convert
+  between bytes and 32-char lowercase hex at human-facing boundaries
+  (logs, URL params, JSON debugging) without polluting the substrate.
+  `checkCommitment` extended to require `leader_id: &str,
+  batch_size: u64` — mirrors the FFI F7 fix from sub-branch #8 and
+  closes W10 (the "Frankenstein commitment" with empty leader_id /
+  zero batch_size). Empty `leader_id` is rejected. The
+  `console_error_panic_hook` is now wired up unconditionally under the
+  `wasm` feature via a `#[wasm_bindgen(start)] fn _wasm_start()`
+  (Decision 5.6 / W5): Rust panics surface as readable stack traces
+  in the JS console instead of opaque `RuntimeError: unreachable
+  executed`. All 18 unit tests inside `src/wasm.rs` are now
+  `#[wasm_bindgen_test]` (was `#[test]` — they never hit the WASM
+  runtime); `tests/falsification/wasm_consistency.rs` is now also
+  `#[wasm_bindgen_test]` and `#![cfg(feature = "wasm")]`-gated. Both
+  test files run under `wasm-pack test --node --features wasm`; under
+  host `cargo test --features wasm` they compile but don't execute
+  (the `#[wasm_bindgen_test]` harness is wasm-only). The
+  v1.2.0 host-`#[test]` layout that produced "function not
+  implemented on non-wasm32 targets" aborts on any call returning a
+  `JsValue` is gone.
 - **Compactor cleanup — explicit thresholds, no self-archive, no
   double-count, `archived_ids` removed** (CHECKLIST 1.9 / Phase 6
   sub-branch #9). `StructuralCompactor::new(engine, hot_threshold,
