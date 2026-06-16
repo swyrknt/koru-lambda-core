@@ -11,10 +11,12 @@ Target release: **2.0.0** — first major version bump since the project went pu
 Single-cut release. No intermediate 1.3.x. `Cargo.toml` stays at `1.2.0` throughout the
 work; the final commit before the integration PR bumps to `2.0.0`.
 
-The Unreleased section grows during the work. Categories follow Keep a Changelog
-conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
-
-### Added
+The Unreleased section grew during sub-branches #1 – #11 of Phase 6 work.
+Categories follow Keep a Changelog conventions:
+Added · Changed · Changed (breaking) · Deprecated · Removed · Fixed · Security.
+Some categories appear twice because content was appended chronologically by
+sub-branch; Phase 7 (which renames `## Unreleased` to `## 2.0.0 — YYYY-MM-DD`)
+will consolidate them.
 
 ### Changed
 
@@ -234,8 +236,6 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   v2.0's `Distinction([u8; 16])` migration recovers the lost throughput
   (4–26× speedups across measured axes per Exp 14, 15).
 
-### Deprecated
-
 ### Removed
 
 - **`ParallelBatchProcessor` (~250 LOC removed)** — misnamed Sequential-body
@@ -262,8 +262,6 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   Replaced by `Distinction::as_bytes() -> &[u8; 16]` for raw bytes and
   `Distinction::to_hex() -> String` for display. Routine `.id() -> &str` callers
   in subsystems / tests / examples / benches were rewritten to one of these.
-
-### Fixed
 
 ### Security
 

@@ -35,8 +35,8 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 3. **Phase 4 — Settle Section 5 decisions** — **COMPLETE** (all 9 locked; details in Section 5 below)
 4. **Phase 2 — Quick wins** — **COMPLETE** (commits `727f7f9`, `7265bfd`, `6b247d3`, `36d4cdd` merged in `00fcdb3`)
 5. **Phase 3 — ByteMapping fix** — **COMPLETE** (commit `86747db` merged in `58a7ff5`; Phase 1.5 probe re-run confirms phantoms 253 → 0)
-6. **Phase 6 — Implement v2.0** — **IN PROGRESS** (1 of 11 sub-branches merged: `529ae5e` foundation)
-7. **Phase 7 — `SECURITY.md` + CHANGELOG finalization + Cargo.toml bump 1.2.0 → 2.0.0 + integration PR to `dev`**
+6. **Phase 6 — Implement v2.0** — **COMPLETE** (all 11 sub-branches merged on `research/warroom-experiments`)
+7. **Phase 7 — `SECURITY.md` + CHANGELOG finalization + Cargo.toml bump 1.2.0 → 2.0.0 + integration PR to `dev`** — ready to start
 8. **Phase 8 — Consumer migration** (ALIS, koru-protocol)
 
 ---
@@ -354,7 +354,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | 8 | `fix/ffi-hardening` | ✅ on branch (ready to merge) — Section 1.7 closed; F7 FFI half landed |
 | 9 | `cleanup/compactor` | ✅ on branch (ready to merge) — Section 1.9 closed |
 | 10 | `impl/wasm-bytes-on-wire` | ✅ on branch (ready to merge) — Section 1.8 closed; host `cargo test --features wasm` passes, JS-side validation via `wasm-pack test --node --features wasm` |
-| 11 | `docs/changelog-finalize` | ⏸ last (after all others) |
+| 11 | `docs/changelog-finalize` | ✅ on branch (ready to merge) — Phase 6 docs finalized |
 
 **To call the project "completely theory-aligned, clean, high-quality, bug-free":**
 - All of Section 1.1–1.10 must be closed.
