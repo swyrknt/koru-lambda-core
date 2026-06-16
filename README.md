@@ -5,337 +5,207 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Build Status](https://github.com/swyrknt/koru-lambda-core/actions/workflows/ci.yml/badge.svg)](https://github.com/swyrknt/koru-lambda-core/actions)
 
-A minimal axiomatic system for computation based on distinction calculus. This engine implements a timeless, self-consistent computational substrate where complex distributed system properties arise from simple synthesis operations.
+A minimal axiomatic system for distributed computation built on **distinction
+calculus**: one operator (`synthesize`), four axioms (determinism,
+commutativity, irreflexivity, content addressing), two primordials (Δ₀, Δ₁).
+From these, all structure emerges deterministically and reproducibly.
 
-## 🌟 Key Features
+> **Status:** v2.0 is queued on `research/warroom-experiments`. The Cargo.toml
+> on `main` is still at 1.2.0; v2.0 ships as a single bundled major bump per
+> the project's Decision 5.1. The examples in this README target v2.0.
 
-- **Axiomatic Foundation**: Built on five core axioms (Identity, Nontriviality, Synthesis, Symmetry, Irreflexivity)
-- **Complex Behavior**: Distributed consensus, deterministic state transitions, and mathematical structures arise naturally
-- **Deterministic & Timeless**: Content-addressable structure ensures reproducibility
-- **High Performance**: Optimized Rust implementation with batch operations
-- **Comprehensive Testing**: Extensive test suite with falsification targets
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
 ```toml
 [dependencies]
-koru-lambda-core = "0.1.0"
+koru-lambda-core = "2"
 ```
 
-### Basic Usage (Rust)
+### Rust
 
 ```rust
-use koru_lambda_core::{DistinctionEngine, Distinction};
+use koru_lambda_core::DistinctionEngine;
 
-fn main() {
-    let mut engine = DistinctionEngine::new();
+let engine = DistinctionEngine::new();
 
-    // Synthesize the primordial distinctions
-    let existence = engine.synthesize(engine.d0(), engine.d1());
-    println!("Created distinction: {}", existence.id());
+// Synthesize the primordials → first emergent distinction.
+let existence = engine.synthesize(engine.d0(), engine.d1());
+println!("existence = {}", existence.to_hex());
 
-    // Build complex structures
-    let order = engine.synthesize(&existence, engine.d0());
-    let chaos = engine.synthesize(&existence, engine.d1());
-    let nature = engine.synthesize(&order, &chaos);
+// Build further structure. `synthesize` is &self — no &mut required.
+let order  = engine.synthesize(&existence, engine.d0());
+let chaos  = engine.synthesize(&existence, engine.d1());
+let nature = engine.synthesize(&order, &chaos);
 
-    println!("Nature distinction: {}", nature.id());
-}
+// Traverse: every non-primordial distinction has exactly two canonical parents.
+let (a, b) = engine.parents_of(&nature).expect("non-primordial has parents");
+assert!(a == order && b == chaos || a == chaos && b == order);
+
+// Degree centrality is O(1).
+println!("degree(d0) = {}", engine.degree(engine.d0()));
 ```
 
-### Basic Usage (JavaScript/WASM)
+### JavaScript / WASM (`--features wasm`)
+
+The WASM surface is **bytes-canonical**: every distinction ID crossing the JS
+boundary is a `Uint8Array` of length 16. Hex is a display format, available via
+`idToHex` / `idFromHex` for logs and URLs.
 
 ```javascript
-import { Engine, NetworkAgent } from './koru-wrapper.js';
+import init, {
+  WasmEngine, WasmNetworkAgent, idToHex
+} from './pkg/koru_lambda_core.js';
 
-const engine = new Engine();
+await init();
+const engine = new WasmEngine();
 
-// Synthesize distinctions
-const d2 = engine.synthesize(engine.d0Id(), engine.d1Id());
-console.log(`Created distinction: ${d2}`);
+// d0Id() / d1Id() return raw 16-byte Uint8Arrays.
+const d0 = engine.d0Id();
+const d1 = engine.d1Id();
+const existence = engine.synthesize(d0, d1);  // Uint8Array, 16 bytes
+console.log('existence =', idToHex(existence));
 
-// Network consensus
-const agent = new NetworkAgent(engine);
+// Network consensus.
+const agent = new WasmNetworkAgent(engine);
 agent.joinPeer('validator_0');
 agent.joinPeer('validator_1');
-console.log(`Leader: ${agent.getLeader()}`);
+console.log('leader =', agent.getLeader());
 ```
 
-Build the universal WASM artifact:
+Build the WASM artifact:
 
 ```bash
-./scripts/build_universal.sh
+wasm-pack build --release --features wasm --target web
 ```
 
-This produces a single artifact that runs on browsers, Node.js, Deno, Bun, Go, Kotlin, Swift, Python, and embedded systems.
-
-## 🧠 Core Concepts
+## Core Concepts
 
 ### The Five Axioms
 
-1. **Identity**: A distinction is defined solely by its unique identifier
-2. **Nontriviality**: The system initializes with two primordial distinctions (Δ₀, Δ₁)
-3. **Synthesis**: Two distinctions combine deterministically to create a third
-4. **Symmetry**: Relationships are bidirectional and order-independent  
-5. **Irreflexivity**: A distinction synthesized with itself yields itself
+1. **Identity** — a distinction is defined solely by its 16-byte ID
+2. **Nontriviality** — the system initializes with two primordial distinctions (Δ₀, Δ₁)
+3. **Synthesis** — two distinctions combine deterministically to create a third
+4. **Symmetry** — `synthesize(a, b) = synthesize(b, a)` (canonical ordering)
+5. **Irreflexivity** — `synthesize(a, a) = a` (no new structure)
 
-### System Properties
+### Structural Invariants (proven across 50+ experiments)
 
-The engine exhibits:
+- **r = 2d − 3** — every novel synthesis adds 1 node + 2 relationships.
+- **Average degree → 4.0** — the graph self-balances as it grows.
+- **Binary parentage** — every non-primordial has exactly two distinct parents.
+- **Content addressing is engine-state-independent** — same chain on different
+  engines with different histories → byte-identical IDs.
+- **Saturation** — repeating the same synthesis adds zero nodes, zero
+  relationships.
 
-- **Structural Coherence**: Graph topology correlates with causal evolution patterns
-- **Mathematical Invariants**: Mathematical patterns arise as deterministic structural relationships
-- **Distributed Consensus**: BFT consensus, persistence, and fault tolerance without explicit coordination protocols
-- **High-Coherence Structures**: Tightly integrated subgraphs with measurable clustering coefficients
-
-## 📚 Documentation
-
-- **[Documentation Hub](docs/)** - All documentation
-- [Design Documentation](docs/DESIGN_DOC.md) - Theoretical foundation and SPoC protocol
-- [Testing Standards](docs/development/TESTING_STANDARDS.md) - Test philosophy and approach
-- [API Reference](https://docs.rs/koru-lambda-core) - Auto-generated API docs
-
-## 🏗️ Architecture
+## Architecture
 
 ```
-koru-lambda-core/
-├── src/
-│   ├── engine.rs           # Core synthesis (265 lines)
-│   ├── primitives.rs       # Data canonicalization
-│   ├── wasm.rs             # WASM bindings with binary marshalling
-│   ├── lib.rs              # Public API
-│   └── subsystems/
-│       ├── validator.rs    # Consensus validation (SPoC)
-│       ├── compactor.rs    # Structural compaction (R ∝ U)
-│       ├── network.rs      # Forkless P2P consensus
-│       ├── runtime.rs      # Async P2P networking (libp2p)
-│       └── parallel.rs     # Multi-core processing
-├── scripts/
-│   └── build_universal.sh  # Universal WASM artifact builder
-├── tests/                  # Comprehensive test suite
-│   ├── end_to_end.rs       # Distributed system tests
-│   ├── runtime_integration.rs # Async runtime validation
-│   ├── integration_tests.rs # Falsification suite
-│   ├── parallel_integration.rs # Concurrency tests
-│   └── throughput_verification.rs # Performance benchmarks
-└── benches/
-    └── performance.rs      # Criterion benchmarks
+src/
+  engine.rs           Core. DashMap<[u8;16], _, IdentityBuildHasher>. &self everywhere.
+                      Traversal indices, append-only synthesis log, structural invariant API.
+  primitives.rs       Canonicalizable trait + ByteMapping (folds through caller's engine).
+  distinction_hex.rs  to_hex / from_hex / Display / Debug / serde adapter.
+                      The only hex-aware module in the crate.
+  lib.rs              Public re-exports.
+  subsystems/
+    local_agent.rs    LocalCausalAgent trait + synthesize_causal_action helper.
+    compactor.rs      StructuralCompactor (explicit thresholds, append-only via synthesize).
+    validator.rs      ConsensusValidator (pre-validation, V3 data cap, atomic restore_state).
+    network.rs        NetworkAgent (peer-id cap, LRU pending_commitments, leader election).
+    commitment.rs     CommitmentAgent (BatchCommitment::compute hashes leader_id; LRU cache).
+    parallel.rs       BatchSynthesizer (rayon-backed; Vec<Option<Distinction>>).
+  ffi.rs              C ABI. Box<Mutex<...>> handles, opaque structs, ManuallyDrop<Arc>,
+                      panic = "abort" on release.
+  wasm.rs             JS / WASM bindings (feature-gated). Bytes-on-wire end to end.
 ```
 
-## 🔬 Research & Testing
-
-The project includes a comprehensive falsification test suite:
-
-```rust
-#[test]
-fn test_structural_coherence() {
-    // Tests whether graph topology correlates with causal evolution
-    // Falsifies if: Spatially adjacent nodes exhibit large causal age differences
-}
-
-#[test]
-fn test_mathematical_invariants() {
-    // Tests whether mathematical structures arise as deterministic patterns
-    // Falsifies if: Mathematical truths depend on construction method
-}
-
-#[test]
-fn test_structural_feedback() {
-    // Tests for high-coherence structural feedback
-    // Falsifies if: No high-coherence structures arise
-}
-```
-
-Run the test suite:
+## Testing
 
 ```bash
-cargo test
-cargo test --release  # For optimized builds
+cargo test --release                                  # 161 tests, all green
+cargo clippy --all-targets --release                  # clean
+cargo clippy --all-targets --features wasm --release  # clean
+cargo build --release                                 # rlib + cdylib + staticlib
 ```
 
-## 📊 Performance
-
-Benchmark the engine:
+WASM-side tests use `#[wasm_bindgen_test]`:
 
 ```bash
-cargo bench
+wasm-pack test --node --features wasm
 ```
 
-### Performance Targets
+Tests cover: axiom verification, synthesis determinism, traversal API,
+synthesis log replay (ordered + shuffled), structural invariant, compactor
+classification, consensus validation with atomic-failure rollback, network
+agent epochs / leader election / dedupe, parallel batch synthesis, byte
+canonicalization, FFI safety (panic=abort + internal Mutex + opaque types +
+length validation), commitment two-stage gossip integrity, and WASM
+determinism across the boundary.
 
-*Measured on Apple M3 Pro (11 cores), macOS*
+## Performance
 
-**Core Operations:**
-- **~1.5M ops/s** - Core synthesis throughput (single-threaded)
-- **~3M ops/s** - Parallel synthesis with Rayon (10,000 element batches)
-- **3-7.5M tx/s** - Batch validation throughput (depends on batch size)
+Measured on Apple M3 Pro (post-v2.0 foundation):
 
-**Concurrency:**
-- **Multi-core scaling** - Auto-detects CPU cores for parallelism
-- **Thread-safe** - DashMap enables lock-free concurrent operations
-- **Deterministic** - Same inputs → identical outputs across all threads
-- **Zero data races** - Validated with 100 concurrent threads
+| Surface | Throughput |
+|---|---|
+| Engine synth, single-thread | ~500K ops/sec |
+| Engine synth, 8 threads | **15.3M ops/sec** (was 2.6M v1.2.0 — 5.9× via IdentityHasher + 16-byte keys) |
+| Log replay, ordered / shuffled | 450K / 367K ops/sec (perfect fidelity) |
+| Memory per distinction | ~80 B (down 8× from v1.2.0's ~629 B; `[u8;16]` instead of String) |
+| Ceiling on 16 GB laptop | ~80M distinctions (was ~10M) |
 
-**Distributed Consensus:**
-- **~150K tx/s** - Across 5 nodes (100 tx per iteration)
-- **~1-7μs leader election** - Deterministic leader selection (1-50 validators)
-- **Instant finality** - No probabilistic confirmation needed
+The dominant performance gain in v2.0 comes from cache density, not clone
+elimination (clone is ~1.6% of synth cost).
 
-**Storage Efficiency:**
-- **3.85x compression** - Via structural compaction
-- **O(log n) growth** - Logarithmic storage with compaction
-- **~6ms compaction** - For 10,000 node graphs
+## Documentation
 
-**WASM (Universal Artifact):**
-- **~1.5M ops/s** - Core synthesis throughput (measured in browser/Node.js)
-- **~880K ops/s** - Leader election (7 validators)
-- **~47K tx/s** - Batch validation throughput
-- **Binary marshalling** - Zero-copy Uint8Array returns eliminate FFI overhead
-- **Structural batching** - Bulk operations run entirely inside WASM
+- **[CHANGELOG.md](CHANGELOG.md)** — version-by-version changes; v2.0 ships
+  the entire Phase 6 work as a single bundled release.
+- **[CHECKLIST.md](CHECKLIST.md)** — per-section v2.0 completion status with
+  evidence links.
+- **[Documentation Hub](docs/)** — design docs, testing standards.
+- **[API Reference](https://docs.rs/koru-lambda-core)** — auto-generated.
 
-## 🎯 Use Cases
+## Use Cases
 
-### Research & Academia
-- Study complex systems and computational foundations
-- Explore axiomatic approaches to distributed consensus
-- Test formal theories of deterministic computation
+The engine is currently used by two consumers:
 
-### Distributed Systems
-- Build fault-tolerant distributed databases
-- Implement novel consensus mechanisms
-- Create self-organizing network protocols
+- **ALIS** — cognitive architecture, language, self-reference.
+- **koru-protocol** — economic consensus, currency, trust (BFT-style
+  Structural Proof-of-Causality).
 
-### AI & Machine Learning
-- Develop structurally-aware neural networks
-- Explore topological learning algorithms
-- Build explainable AI systems
+The substrate itself is domain-agnostic. Anything representable as an
+append-only graph of content-addressed events — distributed databases,
+event-sourced systems, replicated state machines, structurally-aware ML —
+fits the shape.
 
-## 🔧 Advanced Usage
+## Contributing
 
-### Parallel Batch Processing
+See [CONTRIBUTING.md](CONTRIBUTING.md). The engine core (`src/engine.rs`) is
+**sacrosanct**: changes must be additive, axiomatically correct, and
+empirically validated. Subsystems are application-layer and accept more
+churn.
 
-```rust
-use koru_lambda_core::{
-    DistinctionEngine, ParallelBatchProcessor, ParallelAction,
-    ProcessingStrategy, TransactionBatch, TransactionAction, LocalCausalAgent,
-};
-use std::sync::Arc;
+## License
 
-let engine = Arc::new(DistinctionEngine::new());
-let mut processor = ParallelBatchProcessor::new(&engine);
+Dual-licensed under either of:
 
-// Create transaction batches
-let batch = TransactionBatch {
-    transactions: vec![
-        TransactionAction { nonce: 0, data: vec![1, 2, 3] },
-        TransactionAction { nonce: 1, data: vec![4, 5, 6] },
-    ],
-    previous_root: processor.get_current_root().id().to_string(),
-};
-
-// Process via LocalCausalAgent trait
-let action = ParallelAction {
-    batches: vec![batch],
-    strategy: ProcessingStrategy::Sequential,
-};
-
-let new_root = processor.synthesize_action(action, &engine);
-println!("Processed {} batches", processor.batches_processed());
-```
-
-### Parallel Synthesis Operations
-
-```rust
-use koru_lambda_core::{DistinctionEngine, ParallelSynthesizer};
-use std::sync::Arc;
-
-let engine = Arc::new(DistinctionEngine::new());
-let synthesizer = ParallelSynthesizer::new(engine.clone());
-
-// Parallelize byte canonicalization using Rayon
-let data: Vec<u8> = (0..100_000).map(|i| (i % 256) as u8).collect();
-let results = synthesizer.canonicalize_bytes_parallel(data);
-
-println!("Canonicalized {} bytes in parallel", results.len());
-```
-
-### Multi-Threaded Usage
-
-```rust
-use koru_lambda_core::{DistinctionEngine, Canonicalizable};
-use std::sync::Arc;
-use std::thread;
-
-let engine = Arc::new(DistinctionEngine::new());
-let mut handles = vec![];
-
-// Spawn multiple threads for concurrent synthesis
-for thread_id in 0..10 {
-    let engine_clone = Arc::clone(&engine);
-
-    let handle = thread::spawn(move || {
-        let byte = (thread_id % 256) as u8;
-        byte.to_canonical_structure(&engine_clone)
-    });
-
-    handles.push(handle);
-}
-
-// Collect results - all synthesis is thread-safe via DashMap
-for handle in handles {
-    let result = handle.join().unwrap();
-    println!("Result: {}", result.id());
-}
-```
-
-### Custom Data Mapping
-
-```rust
-use koru_lambda_core::{DistinctionEngine, ByteMapping};
-
-let mut engine = DistinctionEngine::new();
-let data = "Hello, World!".as_bytes();
-
-// Map arbitrary data to distinction structures
-for &byte in data {
-    let distinction = ByteMapping::map_byte_to_distinction(byte, &mut engine);
-    // Use distinction for storage or computation
-}
-```
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📜 License
-
-This project is licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
 
-## 🙏 Acknowledgments
-
-- Based on distinction calculus and computational foundations research
-- Inspired by work in mathematical foundations and distributed systems theory
-- Built with the Rust programming language ecosystem
-
-## 🔗 Links
+## Links
 
 - [Issue Tracker](https://github.com/swyrknt/koru-lambda-core/issues)
-- [Discussion Forum](https://github.com/swyrknt/koru-lambda-core/discussions)
+- [Discussions](https://github.com/swyrknt/koru-lambda-core/discussions)
 - [Changelog](CHANGELOG.md)
 
 ---
 
-**Note**: This is research software implementing novel distributed consensus mechanisms. While production-ready from an engineering perspective, the axiomatic approach is experimental.
+**Note**: This is research software implementing distinction theory as a
+substrate for distributed computation. The axiomatic foundation is novel; the
+engineering of the surrounding subsystems is production-shaped.
