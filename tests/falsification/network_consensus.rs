@@ -52,9 +52,9 @@ fn test_falsify_non_deterministic_convergence() {
 
     // Both agents discover same peers in same order
     let peers = [
-        PeerIdentity::new("validator_alpha".to_string(), &engine),
-        PeerIdentity::new("validator_beta".to_string(), &engine),
-        PeerIdentity::new("validator_gamma".to_string(), &engine),
+        PeerIdentity::new("validator_alpha".to_string(), &engine).unwrap(),
+        PeerIdentity::new("validator_beta".to_string(), &engine).unwrap(),
+        PeerIdentity::new("validator_gamma".to_string(), &engine).unwrap(),
     ];
 
     for peer in peers.iter() {
@@ -172,13 +172,13 @@ fn test_falsify_leader_election_ambiguity() {
     println!("  Configuring identical validator sets...");
 
     let validators = [
-        PeerIdentity::new("node_1".to_string(), &engine),
-        PeerIdentity::new("node_2".to_string(), &engine),
-        PeerIdentity::new("node_3".to_string(), &engine),
-        PeerIdentity::new("node_4".to_string(), &engine),
-        PeerIdentity::new("node_5".to_string(), &engine),
-        PeerIdentity::new("node_6".to_string(), &engine),
-        PeerIdentity::new("node_7".to_string(), &engine),
+        PeerIdentity::new("node_1".to_string(), &engine).unwrap(),
+        PeerIdentity::new("node_2".to_string(), &engine).unwrap(),
+        PeerIdentity::new("node_3".to_string(), &engine).unwrap(),
+        PeerIdentity::new("node_4".to_string(), &engine).unwrap(),
+        PeerIdentity::new("node_5".to_string(), &engine).unwrap(),
+        PeerIdentity::new("node_6".to_string(), &engine).unwrap(),
+        PeerIdentity::new("node_7".to_string(), &engine).unwrap(),
     ];
 
     // All agents join same validators
@@ -283,9 +283,9 @@ fn test_falsify_fork_possibility() {
     println!("  Building canonical chain...");
 
     let peers = [
-        PeerIdentity::new("peer_A".to_string(), &engine),
-        PeerIdentity::new("peer_B".to_string(), &engine),
-        PeerIdentity::new("peer_C".to_string(), &engine),
+        PeerIdentity::new("peer_A".to_string(), &engine).unwrap(),
+        PeerIdentity::new("peer_B".to_string(), &engine).unwrap(),
+        PeerIdentity::new("peer_C".to_string(), &engine).unwrap(),
     ];
 
     // Canonical agent processes events
@@ -396,13 +396,13 @@ fn test_falsify_event_causality_loss() {
     let mut roots = vec![genesis_root.clone()];
 
     // Event 1: Peer join
-    let peer1 = PeerIdentity::new("peer_1".to_string(), &engine);
+    let peer1 = PeerIdentity::new("peer_1".to_string(), &engine).unwrap();
     agent.join_peer(peer1, &engine);
     let root1 = agent.get_current_root().to_hex();
     roots.push(root1.clone());
 
     // Event 2: Another peer join
-    let peer2 = PeerIdentity::new("peer_2".to_string(), &engine);
+    let peer2 = PeerIdentity::new("peer_2".to_string(), &engine).unwrap();
     agent.join_peer(peer2, &engine);
     let root2 = agent.get_current_root().to_hex();
     roots.push(root2.clone());
@@ -476,8 +476,8 @@ fn test_falsify_peer_identity_non_determinism() {
 
     let peer_id = "validator_node_42";
 
-    let peer1 = PeerIdentity::new(peer_id.to_string(), &engine1);
-    let peer2 = PeerIdentity::new(peer_id.to_string(), &engine2);
+    let peer1 = PeerIdentity::new(peer_id.to_string(), &engine1).unwrap();
+    let peer2 = PeerIdentity::new(peer_id.to_string(), &engine2).unwrap();
 
     assert_eq!(
         peer1.distinction_id(),
@@ -496,8 +496,8 @@ fn test_falsify_peer_identity_non_determinism() {
     let agent1 = NetworkAgent::new(&engine1);
     let agent2 = NetworkAgent::new(&engine1);
 
-    let peer1_agent1 = PeerIdentity::new("node_alpha".to_string(), &engine1);
-    let peer1_agent2 = PeerIdentity::new("node_alpha".to_string(), &engine1);
+    let peer1_agent1 = PeerIdentity::new("node_alpha".to_string(), &engine1).unwrap();
+    let peer1_agent2 = PeerIdentity::new("node_alpha".to_string(), &engine1).unwrap();
 
     assert_eq!(
         peer1_agent1.distinction_id(),

@@ -9,15 +9,47 @@ use crate::subsystems::local_agent::LocalCausalAgent;
 use crate::{Distinction, DistinctionEngine};
 use std::sync::Arc;
 
+/// Maximum byte length accepted for `TransactionAction.data`.
+///
+/// V3 cap (CHECKLIST 1.6 / Phase 6 sub-branch #7). Phase 1.5 probe
+/// `exp_validator_audit` Section B demonstrated that a 100 KB `data`
+/// field synthesized 100,002 permanent distinctions in ~149 ms per tx.
+/// Sized to comfortably hold typical signed-payload txs (ed25519 sig
+/// plus small payload ≈ 100–500 B); larger payloads must be referenced
+/// by content hash rather than embedded.
+pub const MAX_TX_DATA_BYTES: usize = 4096;
+
+/// Maximum prefix length of `previous_root` echoed in rejection
+/// messages.
+///
+/// V4 cap (CHECKLIST 1.6 / Phase 6 sub-branch #7). v1.2.0 echoed the
+/// full untrusted `previous_root` into the rejection reason string,
+/// amplifying a 1 MB attacker-supplied root into a 1 MB error payload.
+/// 64 chars is two full distinction hex IDs — enough for diagnostics
+/// without enabling amplification.
+const PREVIOUS_ROOT_DISPLAY_PREFIX: usize = 64;
+
 /// Represents a transaction action in the system
 ///
 /// Transactions are canonicalized into distinctions for structural validation.
-/// The nonce ensures causal ordering, Prevents replay attacks.
+/// The nonce ensures causal ordering, prevents replay attacks.
+///
+/// # Content addressing of empty-data txs (V8, by-design)
+///
+/// Two `TransactionAction { nonce: n, data: vec![] }` values with the
+/// same `nonce` produce the same `to_canonical_structure` output by
+/// content addressing — `data.iter().fold(d0, ...)` returns `d0` for
+/// an empty iterator, and equal `(nonce, data)` inputs MUST produce
+/// equal distinctions (this is the irreflexivity / determinism axiom
+/// of the substrate, not a bug). Consumers must therefore not rely on
+/// tx-distinction uniqueness for txs that share `(nonce, data)`;
+/// distinguish such txs via signature or sender id in `data` itself.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TransactionAction {
     /// Sequential number ensuring causal ordering
     pub nonce: u64,
-    /// Arbitrary transaction data (will be canonicalized)
+    /// Arbitrary transaction data (will be canonicalized).
+    /// Capped at `MAX_TX_DATA_BYTES`; oversized txs are rejected.
     pub data: Vec<u8>,
 }
 
@@ -86,9 +118,45 @@ impl ConsensusValidator {
         Self { local_root: genesis, expected_nonce: 0 }
     }
 
-    /// Create validator from existing state root
-    pub fn from_root(root: Distinction, expected_nonce: u64) -> Self {
-        Self { local_root: root, expected_nonce }
+    /// Restore a validator anchored at a previously-synthesized state.
+    ///
+    /// V6 (CHECKLIST 1.6 / Phase 6 sub-branch #7). Replaces the v1.2.0
+    /// pair `from_root(root) + set_expected_nonce(nonce)` that allowed
+    /// the partial-update window: a caller could set
+    /// `expected_nonce = 100` on a genesis-rooted validator and submit
+    /// a nonce-100 batch that the validator would accept (Phase 1.5
+    /// probe `exp_validator_audit` Section G).
+    ///
+    /// This constructor:
+    ///
+    /// 1. Sets `local_root` and `expected_nonce` in a single call —
+    ///    there is no longer a public API where they can be set
+    ///    independently.
+    /// 2. Verifies `root_id` is a real distinction registered in the
+    ///    supplied engine. Fabricated roots (well-formed bytes that
+    ///    were never synthesized) are rejected. This closes the
+    ///    "set arbitrary root" half of the foreign-ID attack class at
+    ///    the validator boundary, complementing the `pub(crate)`
+    ///    constructor that closes it at the type level.
+    ///
+    /// Note on (root, nonce) consistency: this constructor does NOT
+    /// reconstruct the chain to verify that `expected_nonce` is the
+    /// nonce that follows `root_id` in some canonical history (the
+    /// substrate stores no nonce-to-root mapping). Consumers must
+    /// supply consistent values; this API merely refuses fabricated
+    /// roots and prevents the partial-update window.
+    pub fn restore_state(
+        engine: &Arc<DistinctionEngine>,
+        root_id: Distinction,
+        expected_nonce: u64,
+    ) -> Result<Self, String> {
+        if engine.degree(&root_id) == 0 {
+            return Err(format!(
+                "restore_state: root_id {} is not registered in the supplied engine",
+                root_id.to_hex()
+            ));
+        }
+        Ok(Self { local_root: root_id, expected_nonce })
     }
 
     /// Validate a batch of transactions atomically.
@@ -128,11 +196,18 @@ impl ConsensusValidator {
         // ===== Pre-validation pass (read-only; no engine mutation) =====
 
         // 1. Verify causal chain: batch must reference current root.
+        //    V4: clip echoed previous_root to bounded prefix so a 1 MB
+        //    attacker-supplied root does not amplify the error payload.
         if batch.previous_root != self.local_root.to_hex() {
+            let supplied = if batch.previous_root.len() > PREVIOUS_ROOT_DISPLAY_PREFIX {
+                format!("{}…(truncated)", &batch.previous_root[..PREVIOUS_ROOT_DISPLAY_PREFIX])
+            } else {
+                batch.previous_root.clone()
+            };
             return BatchValidationResult::Rejected(format!(
                 "Invalid previous root: expected {}, got {}",
                 self.local_root.to_hex(),
-                batch.previous_root
+                supplied
             ));
         }
 
@@ -141,15 +216,24 @@ impl ConsensusValidator {
             return BatchValidationResult::Rejected("Empty batch".to_string());
         }
 
-        // 3. Pre-validate the full nonce sequence (V5 fix). Walking once
-        // here means a malformed nonce in tx N+1 is detected BEFORE any
-        // of txs 0..=N synthesize into the engine.
+        // 3. Pre-validate the full nonce sequence (V5 fix) AND the
+        //    per-tx data length cap (V3 fix). Walking once here means a
+        //    malformed nonce or oversized payload in tx N+1 is detected
+        //    BEFORE any of txs 0..=N synthesize into the engine.
         let mut expected = self.expected_nonce;
         for (idx, tx) in batch.transactions.iter().enumerate() {
             if tx.nonce != expected {
                 return BatchValidationResult::Rejected(format!(
                     "Invalid nonce at tx {}: expected {}, got {}",
                     idx, expected, tx.nonce
+                ));
+            }
+            if tx.data.len() > MAX_TX_DATA_BYTES {
+                return BatchValidationResult::Rejected(format!(
+                    "tx {} data length {} exceeds MAX_TX_DATA_BYTES ({})",
+                    idx,
+                    tx.data.len(),
+                    MAX_TX_DATA_BYTES
                 ));
             }
             expected += 1;
@@ -177,12 +261,6 @@ impl ConsensusValidator {
     /// Get current expected nonce
     pub fn expected_nonce(&self) -> u64 {
         self.expected_nonce
-    }
-
-    /// Set current expected nonce (used for state restoration/import).
-    /// WARNING: Use only during initialization/import.
-    pub fn set_expected_nonce(&mut self, nonce: u64) {
-        self.expected_nonce = nonce;
     }
 
     /// Get current state root ID as a 32-character hex string.
@@ -349,26 +427,53 @@ mod tests {
     }
 
     #[test]
-    fn test_set_expected_nonce() {
+    fn restore_state_round_trips_root_and_nonce() {
+        // V6: replaces the v1.2.0 test_set_expected_nonce. The atomic
+        // restore_state API is the only public way to put a validator
+        // into a non-genesis configuration; the partial-update window
+        // (set_expected_nonce against a stale root) no longer exists.
         let engine = Arc::new(DistinctionEngine::new());
-        let mut validator = ConsensusValidator::new(&engine);
+        let mut original = ConsensusValidator::new(&engine);
 
-        // Initial nonce should be 0
-        assert_eq!(validator.expected_nonce(), 0);
-
-        // Set nonce to 42 (simulating state restoration)
-        validator.set_expected_nonce(42);
-        assert_eq!(validator.expected_nonce(), 42);
-
-        // Now a batch with nonce 42 should be valid
-        let batch = TransactionBatch {
-            transactions: vec![TransactionAction { nonce: 42, data: vec![1, 2, 3] }],
-            previous_root: validator.state_root_id().to_string(),
+        // Advance original to nonce 1 by validating a real batch so
+        // its local_root becomes a synthesized (registered) distinction.
+        let batch0 = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 0, data: vec![1, 2, 3] }],
+            previous_root: original.state_root_id(),
         };
+        let result0 = original.validate_batch(batch0, &engine);
+        let advanced_root = match result0 {
+            BatchValidationResult::Valid(d) => d,
+            BatchValidationResult::Rejected(r) => panic!("setup batch must validate: {}", r),
+        };
+        assert_eq!(original.expected_nonce(), 1);
 
-        let result = validator.validate_batch(batch, &engine);
-        assert!(matches!(result, BatchValidationResult::Valid(_)));
-        assert_eq!(validator.expected_nonce(), 43);
+        // restore_state on the advanced root + nonce reconstructs the
+        // validator atomically.
+        let restored = ConsensusValidator::restore_state(&engine, advanced_root.clone(), 1)
+            .expect("registered root must be accepted");
+        assert_eq!(restored.expected_nonce(), 1);
+        assert_eq!(restored.state_root_id(), advanced_root.to_hex());
+    }
+
+    #[test]
+    fn restore_state_rejects_fabricated_root() {
+        // V6: a well-formed-bytes root that was never synthesized in
+        // the engine must be refused. Closes the partial-update
+        // window's "set arbitrary root" half.
+        let engine = Arc::new(DistinctionEngine::new());
+
+        // Parse a hex string the engine has never synthesized.
+        let fabricated = Distinction::from_hex(&"f".repeat(32))
+            .expect("32 hex chars parse to a Distinction");
+        assert_eq!(
+            engine.degree(&fabricated),
+            0,
+            "fabricated root must not be registered (test precondition)"
+        );
+
+        let result = ConsensusValidator::restore_state(&engine, fabricated, 0);
+        assert!(result.is_err(), "fabricated root must be rejected");
     }
 
     // === V5 regression tests (Phase 6 sub-branch #6) ===
@@ -449,5 +554,90 @@ mod tests {
         let result = validator.validate_batch(batch, &engine);
         assert!(matches!(result, BatchValidationResult::Rejected(_)));
         assert_eq!(engine.distinction_count(), dist_before);
+    }
+
+    // === V3 / V4 regression tests (Phase 6 sub-branch #7) ===
+
+    #[test]
+    fn validate_batch_rejects_oversized_data_without_leaking() {
+        // V3: a tx whose data exceeds MAX_TX_DATA_BYTES must be rejected
+        // during pre-validation and must not synthesize anything into
+        // the engine. Phase 1.5 probe `exp_validator_audit` Section B
+        // demonstrated 100,002 distinctions per 100 KB tx in v1.2.0.
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut validator = ConsensusValidator::new(&engine);
+
+        let dist_before = engine.distinction_count();
+
+        let oversized = vec![0u8; MAX_TX_DATA_BYTES + 1];
+        let batch = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 0, data: oversized }],
+            previous_root: validator.state_root_id(),
+        };
+
+        let result = validator.validate_batch(batch, &engine);
+        match result {
+            BatchValidationResult::Rejected(reason) => {
+                assert!(
+                    reason.contains("exceeds MAX_TX_DATA_BYTES"),
+                    "unexpected rejection reason: {}",
+                    reason
+                );
+            },
+            other => panic!("expected Rejected, got {:?}", other),
+        }
+        assert_eq!(
+            engine.distinction_count(),
+            dist_before,
+            "oversized data rejection must not synthesize (V5 invariant holds)"
+        );
+        assert_eq!(validator.expected_nonce(), 0);
+    }
+
+    #[test]
+    fn validate_batch_accepts_data_at_cap_boundary() {
+        // V3 boundary: data length exactly MAX_TX_DATA_BYTES must be
+        // accepted. The cap is `len() > MAX`, not `>=`.
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut validator = ConsensusValidator::new(&engine);
+
+        let at_cap = vec![0u8; MAX_TX_DATA_BYTES];
+        let batch = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 0, data: at_cap }],
+            previous_root: validator.state_root_id(),
+        };
+
+        let result = validator.validate_batch(batch, &engine);
+        assert!(matches!(result, BatchValidationResult::Valid(_)));
+        assert_eq!(validator.expected_nonce(), 1);
+    }
+
+    #[test]
+    fn validate_batch_clips_oversized_previous_root_in_error() {
+        // V4: a 1 MB attacker-supplied previous_root must not be
+        // copied verbatim into the rejection reason. The error message
+        // length is bounded by the display prefix + fixed template.
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut validator = ConsensusValidator::new(&engine);
+
+        let huge_root = "a".repeat(1_000_000);
+        let batch = TransactionBatch {
+            transactions: vec![TransactionAction { nonce: 0, data: vec![1] }],
+            previous_root: huge_root,
+        };
+
+        let result = validator.validate_batch(batch, &engine);
+        match result {
+            BatchValidationResult::Rejected(reason) => {
+                // Generous upper bound; the actual message is well under 256 bytes.
+                assert!(
+                    reason.len() < 1024,
+                    "rejection reason should be bounded; was {} bytes",
+                    reason.len()
+                );
+                assert!(reason.contains("truncated"));
+            },
+            other => panic!("expected Rejected, got {:?}", other),
+        }
     }
 }

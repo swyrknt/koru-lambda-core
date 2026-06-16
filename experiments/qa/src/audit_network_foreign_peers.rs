@@ -12,39 +12,41 @@ use std::time::Instant;
 fn main() {
     println!("=== Audit: NetworkAgent foreign-input surface ===\n");
 
-    // A: 1MB peer id
+    // A: 1MB peer id — STRUCTURALLY CLOSED in v2.0
     {
-        println!("-- A: PeerIdentity::new with 1MB peer id --");
+        println!("-- A: PeerIdentity::new with 1MB peer id (N1) --");
         let engine = Arc::new(DistinctionEngine::new());
         let huge_id = "z".repeat(1_000_000);
+        let dist_before = engine.distinction_count();
         let t = Instant::now();
-        let peer = PeerIdentity::new(huge_id, &engine);
+        let result = PeerIdentity::new(huge_id, &engine);
         let elapsed = t.elapsed();
-        println!("  Constructed in {:?}", elapsed);
-        println!("  peer.id.len() = {}", peer.id.len());
+        let dist_after = engine.distinction_count();
+        println!("  PeerIdentity::new returned in {:?}", elapsed);
+        println!("  is_err = {}", result.is_err());
         println!(
-            "  engine.distinction_count() after = {}",
-            engine.distinction_count()
+            "  engine.distinction_count() before/after = {}/{}",
+            dist_before, dist_after
         );
-        println!("  VERDICT: 1MB peer id permitted, ~1M synth calls. SEVERITY: HIGH.");
+        if result.is_err() && dist_before == dist_after {
+            println!("  VERDICT: N1 CLOSED — oversized peer id rejected before any synth.");
+        } else {
+            println!("  VERDICT: N1 REGRESSED — oversized peer id was accepted or synthesized.");
+        }
     }
 
-    // B: empty peer id collapses to d0
+    // B: empty peer id — STRUCTURALLY CLOSED in v2.0
     {
-        println!("\n-- B: empty peer id collapses to d0 --");
+        println!("\n-- B: empty peer id rejected (N2) --");
         let engine = Arc::new(DistinctionEngine::new());
-        let mut agent = NetworkAgent::new(&engine);
-        let p1 = PeerIdentity::new(String::new(), &engine);
-        let p2 = PeerIdentity::new(String::new(), &engine);
-        println!("  peer(\"\")  -> distinction = {}", p1.distinction_id());
-        println!("  d0.to_hex()         = {}", engine.d0().to_hex());
-        let p1_is_d0 = p1.distinction_id() == engine.d0().to_hex();
-        println!("  peer(\"\") distinction == d0 ? {}", p1_is_d0);
-        agent.join_peer(p1, &engine);
-        agent.join_peer(p2, &engine);
-        println!("  validator_count = {}", agent.validator_count());
-        if p1_is_d0 {
-            println!("  VERDICT: CONFIRMED. Empty peer id impersonates primordial.");
+        let result_a = PeerIdentity::new(String::new(), &engine);
+        let result_b = PeerIdentity::new(String::new(), &engine);
+        println!("  PeerIdentity::new(\"\") result_a.is_err = {}", result_a.is_err());
+        println!("  PeerIdentity::new(\"\") result_b.is_err = {}", result_b.is_err());
+        if result_a.is_err() && result_b.is_err() {
+            println!("  VERDICT: N2 CLOSED — empty peer id can no longer impersonate d0.");
+        } else {
+            println!("  VERDICT: N2 REGRESSED — empty peer id was accepted.");
         }
     }
 
@@ -135,12 +137,14 @@ fn main() {
         println!("  v2.0 closure: same as C. The Distinction passed to");
         println!("  update_local_root is necessarily well-formed bytes. The legitimate");
         println!("  semantic question (\"is this root part of MY causal history?\")");
-        println!("  is unrelated to byte well-formedness; it's the trait-level");
-        println!("  question that Section 1.6 V6 closes with restore_state(engine,");
-        println!("  root_id, nonce) (sub-branch #7's scope).");
+        println!("  is the trait-level question CHECKLIST 1.6 V6 closes via");
+        println!("  ConsensusValidator::restore_state(engine, root_id, nonce) and");
+        println!("  NetworkAgent::restore_consensus_validator_state(engine, root_id,");
+        println!("  nonce); both reject Distinction values not registered in the");
+        println!("  supplied engine (Phase 6 sub-branch #7).");
         println!();
         println!("  VERDICT: foreign-byte-injection STRUCTURALLY CLOSED;");
-        println!("  causal-provenance check is V6's separate concern.");
+        println!("  fabricated-root injection at the restore boundary CLOSED (V6).");
     }
 
     println!("\n=== Done ===");

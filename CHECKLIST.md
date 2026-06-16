@@ -84,23 +84,23 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 - [ ] **Validator atomic-failure semantics are misstated** — engine retains all syntheses from the rejected batch's valid prefix; only validator state rolls back. *(audit/validator V5; severity reverted MEDIUM→HIGH→HIGH-but-not-Tier-0 after correction — engine leakage is deterministic across nodes so consensus is preserved; still a DoS amplifier)* — EVIDENCE: `run_log/exp_validator_audit.log` C (3-tx out-of-order batch rejected; 4 distinctions leaked into engine)
   - Fix (DECISION 5.3): pre-validate batches. Walk `batch.transactions` once to verify nonce sequence + `previous_root` BEFORE any `engine.synthesize` call. ~30 LOC. Eliminates leakage; makes the "atomic" docstring true.
 
-### 1.6 Consensus hardening (Phase 1 audit)
-- [ ] Empty peer-id ("") collapses to `engine.d0()` — primordial impersonation. *(audit/network N2)* — EVIDENCE: `run_log/audit_network_foreign_peers.log` B (`peer("").distinction_id() == "0" == d0.id()`)
-  - Fix: reject `id.is_empty()` in `PeerIdentity::new` (network.rs:30-39).
-- [ ] Unbounded peer-id length — 1MB peer-id = ~1.85s CPU + 1M permanent distinctions per join. *(audit/network N1)* — EVIDENCE: `run_log/audit_network_foreign_peers.log` A (1MB peer-id → 1,000,002 distinctions in 1.85s)
-  - Fix: cap peer-id length (suggest 64 bytes) in `PeerIdentity::new`.
-- [ ] Unbounded `TransactionAction.data` — 100K bytes = 149 ms + 100K permanent distinctions per tx. *(audit/validator V3)* — EVIDENCE: `run_log/exp_validator_audit.log` B (100K bytes → 100,002 distinctions in 148.9ms)
-  - Fix: length cap on `data` field before fold.
-- [ ] Rejection message amplifies attacker input — full untrusted `previous_root` copied into `format!`. *(audit/validator V4)* — EVIDENCE: `run_log/exp_validator_audit.log` A (1MB previous_root → 1,000,102-byte rejection reason)
-  - Fix: clip to first 64 chars in error message (validator.rs:115-119).
-- [ ] Validator-set dedupe mismatch — `join_peer` dedupes on `peer.id` (String), leader election hashes `peer.distinction_id()`. *(audit/network N7)* — EVIDENCE: source-only (not exercised by Phase 1.5 probes; requires multi-peer election scenario)
-  - Fix: dedupe on joint `(id, distinction_id)` key (network.rs:175).
-- [ ] `pending_commitments` unbounded growth on never-finalized proposals. *(audit/network N11)* — EVIDENCE: source-only (requires multi-round commit flow)
-  - Fix: size cap + TTL eviction.
-- [ ] **`ConsensusValidator` has no joint invariant between `local_root` and `expected_nonce`** — `set_expected_nonce(100)` then submitting a nonce-100 batch against the genesis root is ACCEPTED. *(audit/validator V6)* — EVIDENCE: `run_log/exp_validator_audit.log` G
-  - Fix: replace `from_root + set_expected_nonce` with a single `restore_state(engine, root_id, nonce)` that validates both jointly. Remove the partial-update setters from the public API.
-- [ ] **Empty `TransactionAction.data` produces a fixed, degenerate tx-distinction** — every empty-data tx with the same nonce collides on id `6bab8d5b...`. *(audit/validator V8)* — EVIDENCE: `run_log/exp_validator_audit.log` D
-  - Disposition: arguably by-design (content addressing means equal inputs produce equal outputs). Decide: (a) document the collapse as expected, (b) reject empty `data` outright, or (c) add domain separation between "the empty-distinction" and "primordial d0." Recommendation: (a) — it's correct theory; consumers should not rely on tx-id uniqueness for txs with identical (nonce, data).
+### 1.6 Consensus hardening — DONE in Phase 6 sub-branch #7
+- [x] Empty peer-id ("") collapses to `engine.d0()` — primordial impersonation. *(audit/network N2)* — EVIDENCE: `run_log/audit_network_foreign_peers.log` B → re-run post-fix shows N2 CLOSED (both empty-id calls return `Err`).
+  - DONE: `PeerIdentity::new` now returns `Result<Self, String>` and rejects `id.is_empty()`.
+- [x] Unbounded peer-id length — 1MB peer-id = ~1.85s CPU + 1M permanent distinctions per join. *(audit/network N1)* — EVIDENCE: re-run shows N1 CLOSED — 1 MB id rejected in 5.9 µs with engine distinction count unchanged.
+  - DONE: `MAX_PEER_ID_LEN = 64`; ids beyond cap return `Err` before any synth.
+- [x] Unbounded `TransactionAction.data` — 100K bytes = 149 ms + 100K permanent distinctions per tx. *(audit/validator V3)*
+  - DONE: `MAX_TX_DATA_BYTES = 4096` checked in pre-validation pass alongside nonce sequence; oversized txs reject without any engine mutation. New test: `validate_batch_rejects_oversized_data_without_leaking` (+ boundary `validate_batch_accepts_data_at_cap_boundary`).
+- [x] Rejection message amplifies attacker input — full untrusted `previous_root` copied into `format!`. *(audit/validator V4)*
+  - DONE: `previous_root` clipped to `PREVIOUS_ROOT_DISPLAY_PREFIX = 64` chars + `…(truncated)` suffix. New test: `validate_batch_clips_oversized_previous_root_in_error` (rejection reason < 1 KiB on a 1 MB attacker input).
+- [x] Validator-set dedupe mismatch — `join_peer` dedupes on `peer.id` (String), leader election hashes `peer.distinction_id()`. *(audit/network N7)*
+  - DONE: `join_peer` now dedupes on the joint `(id, distinction)` key — same basis as the leader hash. New test: `join_peer_dedupes_on_joint_id_and_distinction`.
+- [x] `pending_commitments` unbounded growth on never-finalized proposals. *(audit/network N11)*
+  - DONE: `pending_commitments` is a bounded `LruCache<[u8; 32], BatchCommitment>` (`MAX_PENDING_COMMITMENTS = 256`). `advance_epoch` clears the set (commitments bind `epoch` in their hash). New tests: `pending_commitments_bounded_by_lru_cap`, `advance_epoch_clears_pending_commitments`.
+- [x] **`ConsensusValidator` has no joint invariant between `local_root` and `expected_nonce`** — `set_expected_nonce(100)` then submitting a nonce-100 batch against the genesis root is ACCEPTED. *(audit/validator V6)*
+  - DONE: removed `from_root` + `set_expected_nonce` from the public API. Added atomic `ConsensusValidator::restore_state(engine, root_id, expected_nonce) -> Result<Self, String>` that refuses fabricated roots (`engine.degree(&root_id) == 0`). Network wrapper renamed to `restore_consensus_validator_state(engine, root_id, nonce) -> Result<(), String>`; FFI surface renamed to `koru_agent_restore_state(agent, engine, root_hex, nonce)`. New tests: `restore_state_round_trips_root_and_nonce`, `restore_state_rejects_fabricated_root`, `restore_consensus_validator_state_rejects_fabricated_root`, `test_ffi_agent_restore_state_at_genesis`, `test_ffi_agent_restore_state_rejects_fabricated_root`.
+- [x] **Empty `TransactionAction.data` produces a fixed, degenerate tx-distinction** — every empty-data tx with the same nonce collides on id `6bab8d5b...`. *(audit/validator V8)*
+  - DONE: documented as by-design on `TransactionAction` (Recommendation (a) — it's correct content-addressing; consumers should not rely on tx-id uniqueness for txs with identical `(nonce, data)`).
 
 ### 1.7 FFI hardening (Phase 1 audit)
 - [ ] **Panic safety** — no `catch_unwind`, no `panic = "abort"`, unwinding across `extern "C"` is UB or hard abort. *(audit/ffi F1, F3)* — EVIDENCE: NOT-PROBEABLE this round (requires synthetic panic injection); structural fix is single-line
@@ -113,8 +113,10 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
   - Fix: remove the `include` list in `cbindgen.toml:14` (cbindgen exports every `pub extern "C"` it finds).
 - [ ] FFI Arc-bookkeeping comment is wrong; pattern works only by coincidence. *(audit/ffi F6)*
   - Fix: use `ManuallyDrop<Arc<DistinctionEngine>>` instead of `Arc::from_raw + Arc::into_raw` dance.
-- [ ] FFI `check_commitment` hash parameter is decorative (never inspected). *(audit/ffi F7)*
-  - Fix: add hash parameter to `BatchCommitment::verify`; FFI passes it through. Related to commitment.rs `leader_id` fix in 1.5.
+- [~] FFI `check_commitment` hash parameter is decorative (never inspected). *(audit/ffi F7)*
+  - Engine-side partial (Phase 6 #6, merge `b0a641a`): `BatchCommitment::compute` now hashes `leader_id`, so `verify_batch` transitively rejects tampered leader_id via recomputation. Test `verify_batch_rejects_tampered_leader_id` covers this.
+  - **FFI-side still pending (#8 scope):** `koru_agent_check_commitment` builds a Frankenstein `BatchCommitment { leader_id: "", batch_size: 0 }` and calls `check_commitment` → `BatchCommitment::verify(nonce, epoch)`, which never inspects the hash. The `commitment_hash` parameter is still decorative at the FFI boundary.
+  - Fix (#8): give `BatchCommitment::verify` (or a new `verify_hash`) a hash argument and have it recompute; extend the FFI signature to take `leader_id` + `batch_size` so the FFI can construct a real commitment, not a Frankenstein one.
 - [ ] `batch_len: usize` unbounded — UB if > `isize::MAX`. *(audit/ffi F9)*
   - Fix: reject `batch_len > isize::MAX as usize` at FFI entrypoints.
 
@@ -314,7 +316,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 1.1–1.3 — Engine FIX | 14 | **3 of 14 done** (snapshot rename, ByteMapping fix, foreign-ID via pub(crate)) |
 | Section 1.4 — CLAUDE.md doc drift | 8 | **complete** (Phase 2) |
 | Section 1.5 — Consensus-correctness bugs (MUST NOT SHIP) | 3 | **complete** (Phase 6 sub-branch #6, merge `b0a641a`) |
-| Section 1.6 — Consensus hardening | 8 | not started (Phase 6 sub-branch #7) |
+| Section 1.6 — Consensus hardening | 8 | **complete** (Phase 6 sub-branch #7) |
 | Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | not started (Phase 6 sub-branch #8) |
 | Section 1.8 — WASM bytes-on-wire + helpers | 9 | not started (Phase 6 sub-branch #10) |
 | Section 1.9 — Compactor cleanup | 4 | not started (Phase 6 sub-branch #9) |
@@ -329,7 +331,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 4 — VALIDATE | 4 claims | **complete** |
 | Section 5 — DECIDE | 9 | **complete (all locked)** |
 
-**Current test count:** 117 (post Phase 6 #1; was 103 at baseline). Clippy clean. `Cargo.toml` at `1.2.0`.
+**Current test count:** 155 release (post Phase 6 #7; was 145 before sub-branch #7, 103 at baseline). Clippy clean (incl. `--all-targets`). `Cargo.toml` at `1.2.0`.
 
 **Phase 6 sub-branch tracker:**
 
@@ -341,8 +343,8 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | 4 | `impl/synthesis-log` | ✅ merged `91ee3b2` |
 | 5 | `impl/traversal-api` | ✅ merged `e648117` (also closed #1's 107s test regression → 0.02s) |
 | 6 | `fix/tier-0-consensus-correctness` | ✅ merged `b0a641a` (N5, N6, V5 + F7 bonus all closed by re-run probes) |
-| 7 | `fix/consensus-hardening` | ⏸ waits on #6 |
-| 8 | `fix/ffi-hardening` | ⏸ waits on #6 (commitment.rs interaction) |
+| 7 | `fix/consensus-hardening` | ✅ on branch (ready to merge) — Section 1.6 closed; N1/N2 confirmed via `audit_network_foreign_peers` re-run |
+| 8 | `fix/ffi-hardening` | ⏸ waits on #6 (commitment.rs interaction); inherits FFI half of F7 (engine half shipped in #6) |
 | 9 | `cleanup/compactor` | ⏸ waits on #5 (uses traversal API) |
 | 10 | `impl/wasm-bytes-on-wire` | ⬜ unblocked once WASM toolchain confirmed |
 | 11 | `docs/changelog-finalize` | ⏸ last (after all others) |

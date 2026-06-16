@@ -140,7 +140,8 @@ impl WasmNetworkAgent {
     /// Returns new root as raw bytes
     #[wasm_bindgen(js_name = joinPeer)]
     pub fn join_peer(&mut self, peer_id: &str) -> Result<Vec<u8>, JsValue> {
-        let peer = PeerIdentity::new(peer_id.to_string(), &self.engine);
+        let peer = PeerIdentity::new(peer_id.to_string(), &self.engine)
+            .map_err(|e| JsValue::from_str(&e))?;
         let new_root = self.inner.join_peer(peer, &self.engine);
         Ok(id_to_bytes(new_root.to_hex()))
     }
@@ -151,7 +152,8 @@ impl WasmNetworkAgent {
     pub fn join_peers(&mut self, peer_ids: Vec<String>) -> Result<Vec<u8>, JsValue> {
         let mut new_root = self.inner.get_current_root().clone();
         for peer_id in peer_ids {
-            let peer = PeerIdentity::new(peer_id, &self.engine);
+            let peer = PeerIdentity::new(peer_id, &self.engine)
+                .map_err(|e| JsValue::from_str(&e))?;
             new_root = self.inner.join_peer(peer, &self.engine);
         }
         Ok(id_to_bytes(new_root.to_hex()))

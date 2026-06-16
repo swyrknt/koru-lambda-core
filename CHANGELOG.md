@@ -105,6 +105,26 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
 
 ### Changed (breaking)
 
+- **`PeerIdentity::new` now returns `Result<Self, String>`** (CHECKLIST 1.6 N1 /
+  N2; Phase 6 sub-branch #7). Empty ids and ids longer than `MAX_PEER_ID_LEN`
+  (64 bytes) are rejected before any synth runs into the engine. Callers must
+  handle the `Err`. Behaviour for well-formed ids is unchanged. The WASM
+  binding (`joinPeer` / `joinPeers`) now returns a JS rejection rather than
+  silently constructing a primordial-collapsing peer; the FFI binding
+  (`koru_agent_join_peer`) returns `KORU_ERROR_INVALID_DATA`.
+- **`ConsensusValidator::from_root` and `set_expected_nonce` removed**;
+  replaced by a single atomic
+  `restore_state(engine, root_id, expected_nonce) -> Result<Self, String>`
+  (CHECKLIST 1.6 V6; Phase 6 sub-branch #7). The new constructor verifies
+  the supplied root is a Distinction registered in the engine and refuses
+  fabricated bytes. Consumers that previously composed the two setters
+  must call `restore_state` instead.
+- **`NetworkAgent::restore_consensus_validator_nonce` removed**; replaced
+  by `restore_consensus_validator_state(engine, root_id, nonce) ->
+  Result<(), String>` (CHECKLIST 1.6 V6; Phase 6 sub-branch #7). FFI:
+  `koru_agent_restore_nonce(agent, nonce)` is removed; replaced by
+  `koru_agent_restore_state(agent, engine, root_hex, nonce) -> i32`
+  taking the 32-char lowercase hex root plus the matching nonce.
 - **`BatchCommitment::compute` output changed.** Adding `leader_id` to the
   hash input (N6 fix) changes all commitment_hash values — wire-format break
   vs v1.2.0 (CHECKLIST 1.5 / Phase 6 sub-branch #6). Per Decision 5.1:
@@ -252,6 +272,31 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   colon-separator collisions, cross-engine ghosts). Any external code that
   constructed Distinction values out-of-tree must obtain them through the
   engine or via `Distinction::from_hex` (which validates length + charset).
+- **Consensus hardening — bounded peer ids (N1 / N2), bounded tx data (V3),
+  bounded rejection messages (V4), atomic restore_state (V6), joint validator
+  dedupe (N7), bounded pending_commitments (N11)** (CHECKLIST 1.6 / Phase 6
+  sub-branch #7). The audit-demonstrated DoS amplifiers and partial-update
+  windows at the consensus boundaries are closed at construction time.
+  `PeerIdentity::new` now returns `Result<Self, String>` and refuses empty or
+  oversized (`> 64 byte`) ids before any byte fold runs; the foreign-peers
+  probe confirms the 1 MB-id workload returns in 6 µs with zero engine
+  growth (was 1.85 s + 1 M leaked distinctions). `TransactionAction.data`
+  greater than 4 KiB is rejected at pre-validation; tx-data DoS goes from
+  ~149 ms + 100 K distinctions per oversized tx to immediate reject + zero
+  growth. `validate_batch` rejection reasons clip oversized `previous_root`
+  to a 64-char prefix (was a full echo of the untrusted input —
+  amplification ratio 1 : 1). `ConsensusValidator::restore_state(engine,
+  root_id, nonce)` replaces the partial-update pair `from_root` +
+  `set_expected_nonce`, refusing fabricated roots not registered in the
+  supplied engine; the network-agent wrapper
+  `restore_consensus_validator_state` and the FFI entry
+  `koru_agent_restore_state` follow the same contract. `NetworkAgent::join_peer`
+  deduplicates on the joint `(id, distinction)` key — the same basis the
+  deterministic leader hash uses, so the v1.2.0 mismatch between dedupe and
+  election is closed. `NetworkAgent::pending_commitments` is now a bounded
+  `LruCache<[u8; 32], BatchCommitment>` (capacity `MAX_PENDING_COMMITMENTS =
+  256`); `advance_epoch` clears the entire set because commitments bind
+  `epoch` in their hash and are unfinalizable across the boundary.
 
 ---
 

@@ -9,12 +9,32 @@ use crate::subsystems::commitment::{BatchCommitment, CommitmentAgent};
 use crate::subsystems::local_agent::LocalCausalAgent;
 use crate::subsystems::validator::{BatchValidationResult, ConsensusValidator, TransactionBatch};
 use crate::{Distinction, DistinctionEngine};
+use lru::LruCache;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 /// Peer identity in the network
 ///
+/// Maximum byte length accepted for a peer id.
+///
+/// N1 cap (CHECKLIST 1.6 / Phase 6 sub-branch #7). Phase 1.5 probe
+/// `audit_network_foreign_peers` Section A demonstrated that a 1 MB
+/// peer id synthesized 1,000,002 permanent distinctions in ~1.85 s.
+/// 64 bytes comfortably holds a hex-encoded SHA-256 (64) or a base64
+/// public-key fingerprint and forces operators using longer ids to
+/// hash them first.
+pub const MAX_PEER_ID_LEN: usize = 64;
+
+/// Maximum number of pending commitments retained in-memory.
+///
+/// N11 cap (CHECKLIST 1.6 / Phase 6 sub-branch #7). Commitments older
+/// than the LRU window are evicted; the entire pending set is also
+/// cleared on epoch advance (commitments cannot be finalized across
+/// epoch boundaries). Sized to match the existing two-stage gossip
+/// LRU in `commitment.rs`.
+pub const MAX_PENDING_COMMITMENTS: usize = 256;
+
 /// Each peer is represented as a distinction, Peer relationships are
 /// structural.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,8 +46,32 @@ pub struct PeerIdentity {
 }
 
 impl PeerIdentity {
-    /// Create a new peer identity from an ID string
-    pub fn new(id: String, engine: &Arc<DistinctionEngine>) -> Self {
+    /// Create a new peer identity from an ID string.
+    ///
+    /// Returns `Err` if the id is empty or longer than
+    /// `MAX_PEER_ID_LEN` bytes:
+    ///
+    /// * **Empty (N2):** an empty id folds the byte-loop zero times,
+    ///   returning `d0` as the peer's distinction. Two peers with
+    ///   empty ids would collapse onto each other AND onto the
+    ///   primordial — primordial impersonation. *(audit
+    ///   `audit_network_foreign_peers` Section B)*
+    /// * **Oversized (N1):** the byte-by-byte fold runs once per
+    ///   byte, so an unbounded id is an unbounded permanent-state
+    ///   amplifier on every `join_peer` call. *(audit
+    ///   `audit_network_foreign_peers` Section A)*
+    pub fn new(id: String, engine: &Arc<DistinctionEngine>) -> Result<Self, String> {
+        if id.is_empty() {
+            return Err("peer id must not be empty".to_string());
+        }
+        if id.len() > MAX_PEER_ID_LEN {
+            return Err(format!(
+                "peer id length {} exceeds MAX_PEER_ID_LEN ({})",
+                id.len(),
+                MAX_PEER_ID_LEN
+            ));
+        }
+
         // Canonicalize peer ID into a distinction
         let id_bytes = id.as_bytes();
         let distinction = id_bytes.iter().fold(engine.d0().clone(), |acc, &byte| {
@@ -35,7 +79,7 @@ impl PeerIdentity {
             engine.synthesize(&acc, &byte_d)
         });
 
-        Self { id, distinction }
+        Ok(Self { id, distinction })
     }
 
     /// Get peer's distinction ID as a 32-character hex string.
@@ -134,8 +178,13 @@ pub struct NetworkAgent {
     ftw_duration_ms: u64,
     /// Number of network events processed
     events_processed: u64,
-    /// Pending commitments awaiting finalization
-    pending_commitments: HashMap<[u8; 32], BatchCommitment>,
+    /// Pending commitments awaiting finalization (N11).
+    ///
+    /// Bounded LRU keyed on commitment_hash. Capacity
+    /// `MAX_PENDING_COMMITMENTS`; the entire set is also cleared on
+    /// epoch advance (commitments cannot be finalized across epoch
+    /// boundaries). Replaces the v1.2.0 unbounded `HashMap`.
+    pending_commitments: LruCache<[u8; 32], BatchCommitment>,
 }
 
 impl NetworkAgent {
@@ -156,7 +205,9 @@ impl NetworkAgent {
             current_epoch: 0,
             ftw_duration_ms: 2000, // 2 seconds per design doc
             events_processed: 0,
-            pending_commitments: HashMap::new(),
+            pending_commitments: LruCache::new(
+                NonZeroUsize::new(MAX_PENDING_COMMITMENTS).expect("cap > 0"),
+            ),
         }
     }
 
@@ -176,7 +227,9 @@ impl NetworkAgent {
             current_epoch: epoch,
             ftw_duration_ms: 2000,
             events_processed: 0,
-            pending_commitments: HashMap::new(),
+            pending_commitments: LruCache::new(
+                NonZeroUsize::new(MAX_PENDING_COMMITMENTS).expect("cap > 0"),
+            ),
         }
     }
 
@@ -188,8 +241,17 @@ impl NetworkAgent {
         peer: PeerIdentity,
         engine: &Arc<DistinctionEngine>,
     ) -> Distinction {
-        // Check if peer already exists
-        if self.validator_set.iter().any(|p| p.id == peer.id) {
+        // N7: dedupe on the joint (id, distinction) key — the same key
+        // basis the deterministic leader hash uses. v1.2.0 deduped on
+        // `id` alone, so two peers sharing an id but with different
+        // (corrupted/swapped) distinctions could BOTH be kept out of
+        // the set, AND inversely one peer's distinction could be
+        // shadow-paired with a different peer's id without rejection.
+        if self
+            .validator_set
+            .iter()
+            .any(|p| p.id == peer.id && p.distinction == peer.distinction)
+        {
             return self.local_root.clone();
         }
 
@@ -228,7 +290,9 @@ impl NetworkAgent {
 
         // Cache batch data for Stage 2 fetches
         self.commitment_agent.cache_batch(batch.clone(), commitment.clone());
-        self.pending_commitments.insert(commitment.commitment_hash, commitment.clone());
+        // N11: bounded LRU push; evicts the least-recently-touched
+        // commitment if capacity is exceeded.
+        self.pending_commitments.put(commitment.commitment_hash, commitment.clone());
 
         Ok(commitment)
     }
@@ -265,10 +329,12 @@ impl NetworkAgent {
         commitment_hash: [u8; 32],
         engine: &Arc<DistinctionEngine>,
     ) -> Result<Distinction, String> {
-        // Verify we have pending commitment
+        // Verify we have pending commitment. Clone out so the LRU
+        // borrow is released before we call other &mut self methods.
         let commitment = self
             .pending_commitments
             .get(&commitment_hash)
+            .cloned()
             .ok_or_else(|| "No pending commitment for hash".to_string())?;
 
         // Verify batch data matches commitment
@@ -286,7 +352,7 @@ impl NetworkAgent {
                 let new_network_root = self.synthesize_action(action, engine);
 
                 // Remove from pending
-                self.pending_commitments.remove(&commitment_hash);
+                self.pending_commitments.pop(&commitment_hash);
 
                 Ok(new_network_root)
             },
@@ -299,6 +365,13 @@ impl NetworkAgent {
     /// This happens after FTW expires or batch is accepted.
     pub fn advance_epoch(&mut self, engine: &Arc<DistinctionEngine>) -> Distinction {
         self.current_epoch += 1;
+
+        // N11: commitments do not survive an epoch boundary. The
+        // commitment hash binds `epoch`, so any pending commitments
+        // are now un-finalizable; dropping them releases their slots
+        // and keeps the LRU's working set bounded by traffic in the
+        // current epoch.
+        self.pending_commitments.clear();
 
         let action = NetworkAction::EpochAdvanced { new_epoch: self.current_epoch };
 
@@ -378,10 +451,24 @@ impl NetworkAgent {
         self.validator.expected_nonce()
     }
 
-    /// Restore the expected transaction nonce for state import.
-    /// Used during persistence load to set the correct Causal Frontier.
-    pub fn restore_consensus_validator_nonce(&mut self, nonce: u64) {
-        self.validator.set_expected_nonce(nonce);
+    /// Restore the internal validator to a previously-persisted state
+    /// atomically.
+    ///
+    /// V6 (CHECKLIST 1.6 / Phase 6 sub-branch #7). Replaces the v1.2.0
+    /// `restore_consensus_validator_nonce(nonce)` setter, which left
+    /// `local_root` unchanged and so allowed `(root, nonce)`
+    /// inconsistency. The new entry point constructs a fresh validator
+    /// via `ConsensusValidator::restore_state`, which verifies the
+    /// supplied root is registered in `engine`. Fabricated roots are
+    /// rejected.
+    pub fn restore_consensus_validator_state(
+        &mut self,
+        engine: &Arc<DistinctionEngine>,
+        root_id: Distinction,
+        nonce: u64,
+    ) -> Result<(), String> {
+        self.validator = ConsensusValidator::restore_state(engine, root_id, nonce)?;
+        Ok(())
     }
 }
 
@@ -442,15 +529,47 @@ mod tests {
     fn test_peer_identity_creation() {
         let engine = Arc::new(DistinctionEngine::new());
 
-        let peer1 = PeerIdentity::new("peer_1".to_string(), &engine);
-        let peer2 = PeerIdentity::new("peer_1".to_string(), &engine);
-        let peer3 = PeerIdentity::new("peer_2".to_string(), &engine);
+        let peer1 = PeerIdentity::new("peer_1".to_string(), &engine).unwrap();
+        let peer2 = PeerIdentity::new("peer_1".to_string(), &engine).unwrap();
+        let peer3 = PeerIdentity::new("peer_2".to_string(), &engine).unwrap();
 
         // Same ID → same distinction (determinism)
         assert_eq!(peer1.distinction_id(), peer2.distinction_id());
 
         // Different ID → different distinction
         assert_ne!(peer1.distinction_id(), peer3.distinction_id());
+    }
+
+    #[test]
+    fn peer_identity_rejects_empty_id() {
+        // N2: empty peer id MUST be rejected. The legacy fold returned
+        // d0 (primordial impersonation).
+        let engine = Arc::new(DistinctionEngine::new());
+        let result = PeerIdentity::new(String::new(), &engine);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn peer_identity_rejects_oversized_id() {
+        // N1: oversized peer id MUST be rejected. The legacy fold ran
+        // unbounded synths into the engine on every join.
+        let engine = Arc::new(DistinctionEngine::new());
+        let oversized = "a".repeat(MAX_PEER_ID_LEN + 1);
+
+        let dist_before = engine.distinction_count();
+        let result = PeerIdentity::new(oversized, &engine);
+        assert!(result.is_err());
+        // Crucially: the fold never ran, so the engine is unchanged.
+        assert_eq!(engine.distinction_count(), dist_before);
+    }
+
+    #[test]
+    fn peer_identity_accepts_id_at_cap_boundary() {
+        // N1 boundary: id length exactly MAX_PEER_ID_LEN is accepted.
+        let engine = Arc::new(DistinctionEngine::new());
+        let at_cap = "a".repeat(MAX_PEER_ID_LEN);
+        let result = PeerIdentity::new(at_cap, &engine);
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -461,7 +580,7 @@ mod tests {
         let initial_root = agent.get_current_root().to_hex();
 
         // Join first peer
-        let peer1 = PeerIdentity::new("validator_1".to_string(), &engine);
+        let peer1 = PeerIdentity::new("validator_1".to_string(), &engine).unwrap();
         let new_root = agent.join_peer(peer1.clone(), &engine);
 
         // Network root should change
@@ -469,7 +588,7 @@ mod tests {
         assert_eq!(agent.validator_count(), 1);
 
         // Join second peer
-        let peer2 = PeerIdentity::new("validator_2".to_string(), &engine);
+        let peer2 = PeerIdentity::new("validator_2".to_string(), &engine).unwrap();
         agent.join_peer(peer2, &engine);
 
         assert_eq!(agent.validator_count(), 2);
@@ -482,7 +601,7 @@ mod tests {
 
         // Add validators
         for i in 0..5 {
-            let peer = PeerIdentity::new(format!("validator_{}", i), &engine);
+            let peer = PeerIdentity::new(format!("validator_{}", i), &engine).unwrap();
             agent.join_peer(peer, &engine);
         }
 
@@ -497,7 +616,7 @@ mod tests {
         // Create identical agent with same state
         let mut agent2 = NetworkAgent::new(&engine);
         for i in 0..5 {
-            let peer = PeerIdentity::new(format!("validator_{}", i), &engine);
+            let peer = PeerIdentity::new(format!("validator_{}", i), &engine).unwrap();
             agent2.join_peer(peer, &engine);
         }
 
@@ -538,7 +657,7 @@ mod tests {
     fn test_network_action_canonical() {
         let engine = Arc::new(DistinctionEngine::new());
 
-        let peer = PeerIdentity::new("peer_1".to_string(), &engine);
+        let peer = PeerIdentity::new("peer_1".to_string(), &engine).unwrap();
 
         let action1 = NetworkAction::PeerJoined { peer: peer.clone() };
         let action2 = NetworkAction::PeerJoined { peer: peer.clone() };
@@ -558,7 +677,7 @@ mod tests {
         let initial_root = agent.get_current_root().to_hex();
 
         // Synthesize an action
-        let peer = PeerIdentity::new("peer_1".to_string(), &engine);
+        let peer = PeerIdentity::new("peer_1".to_string(), &engine).unwrap();
         let action = NetworkAction::PeerJoined { peer };
 
         let new_root = agent.synthesize_action(action, &engine);
@@ -574,48 +693,40 @@ mod tests {
 
     #[test]
     fn test_consensus_validator_nonce_access() {
+        // V6: restore_consensus_validator_state is the atomic
+        // replacement for the v1.2.0 nonce-only setter. Use the
+        // agent's existing genesis root so the registered-root
+        // precondition holds.
         let engine = Arc::new(DistinctionEngine::new());
         let mut agent = NetworkAgent::new(&engine);
 
-        // Initial nonce should be 0
         assert_eq!(agent.consensus_validator_expected_nonce(), 0);
 
-        // Restore nonce to 100 (simulating state import)
-        agent.restore_consensus_validator_nonce(100);
+        let current_root = agent.get_current_root().clone();
+        agent
+            .restore_consensus_validator_state(&engine, current_root, 100)
+            .expect("registered root must be accepted");
         assert_eq!(agent.consensus_validator_expected_nonce(), 100);
 
-        // Verify stats also reflect the nonce
         let stats = agent.get_stats();
         assert_eq!(stats.consensus_nonce, 100);
     }
 
     #[test]
-    fn test_nonce_restoration_with_batch() {
+    fn restore_consensus_validator_state_rejects_fabricated_root() {
+        // V6: fabricated bytes (well-formed hex, never synthesized)
+        // must be refused. Closes the partial-update window at the
+        // network agent surface.
         let engine = Arc::new(DistinctionEngine::new());
         let mut agent = NetworkAgent::new(&engine);
 
-        // Restore nonce to 50
-        agent.restore_consensus_validator_nonce(50);
+        let fabricated = Distinction::from_hex(&"f".repeat(32))
+            .expect("32 hex chars parse to a Distinction");
 
-        // Propose a commitment with nonce 50
-        let batch = TransactionBatch {
-            transactions: vec![crate::subsystems::validator::TransactionAction {
-                nonce: 50,
-                data: vec![1, 2, 3],
-            }],
-            previous_root: agent.consensus_state_root().to_string(),
-        };
-
-        let commitment = agent.propose_commitment(batch.clone(), &engine);
-        assert!(commitment.is_ok());
-
-        // Finalize the batch
-        let commitment = commitment.unwrap();
-        let result = agent.finalize_batch(batch, commitment.commitment_hash, &engine);
-        assert!(result.is_ok());
-
-        // Nonce should now be 51
-        assert_eq!(agent.consensus_validator_expected_nonce(), 51);
+        let result = agent.restore_consensus_validator_state(&engine, fabricated, 100);
+        assert!(result.is_err());
+        // Validator state must remain at genesis.
+        assert_eq!(agent.consensus_validator_expected_nonce(), 0);
     }
 
     // === N5 regression tests (Phase 6 sub-branch #6) ===
@@ -713,6 +824,85 @@ mod tests {
             act_empty.as_bytes(),
             act_valid.as_bytes(),
             "valid previous_root must not collide with sentinel bucket"
+        );
+    }
+
+    // === N7 / N11 regression tests (Phase 6 sub-branch #7) ===
+
+    #[test]
+    fn join_peer_dedupes_on_joint_id_and_distinction() {
+        // N7: legitimate re-join with identical (id, distinction)
+        // is idempotent; the second call must not mutate the
+        // validator_set.
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut agent = NetworkAgent::new(&engine);
+
+        let peer = PeerIdentity::new("validator_1".to_string(), &engine).unwrap();
+        agent.join_peer(peer.clone(), &engine);
+        let after_first = agent.validator_count();
+
+        agent.join_peer(peer, &engine);
+        assert_eq!(agent.validator_count(), after_first, "duplicate join must be idempotent");
+    }
+
+    #[test]
+    fn pending_commitments_bounded_by_lru_cap() {
+        // N11: proposing more than MAX_PENDING_COMMITMENTS commitments
+        // must not grow the in-memory set without bound. v1.2.0 used an
+        // unbounded HashMap.
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut agent = NetworkAgent::new(&engine);
+
+        // Need at least one validator so propose_commitment can name a leader.
+        let peer = PeerIdentity::new("validator_1".to_string(), &engine).unwrap();
+        agent.join_peer(peer, &engine);
+
+        // Push twice the cap; each batch is distinct via a unique
+        // transaction payload so commitment_hash differs.
+        for i in 0..(MAX_PENDING_COMMITMENTS * 2) {
+            let batch = TransactionBatch {
+                transactions: vec![crate::subsystems::validator::TransactionAction {
+                    nonce: 0,
+                    data: (i as u32).to_le_bytes().to_vec(),
+                }],
+                previous_root: agent.consensus_state_root(),
+            };
+            let _ = agent.propose_commitment(batch, &engine).expect("propose ok");
+        }
+
+        assert_eq!(
+            agent.pending_commitments.len(),
+            MAX_PENDING_COMMITMENTS,
+            "LRU must cap at MAX_PENDING_COMMITMENTS"
+        );
+    }
+
+    #[test]
+    fn advance_epoch_clears_pending_commitments() {
+        // N11: commitments are epoch-bound (their hash includes epoch),
+        // so any pending commitment is unfinalizable after an epoch
+        // boundary. advance_epoch must drop them.
+        let engine = Arc::new(DistinctionEngine::new());
+        let mut agent = NetworkAgent::new(&engine);
+
+        let peer = PeerIdentity::new("validator_1".to_string(), &engine).unwrap();
+        agent.join_peer(peer, &engine);
+
+        let batch = TransactionBatch {
+            transactions: vec![crate::subsystems::validator::TransactionAction {
+                nonce: 0,
+                data: vec![1, 2, 3],
+            }],
+            previous_root: agent.consensus_state_root(),
+        };
+        let _ = agent.propose_commitment(batch, &engine).expect("propose ok");
+        assert_eq!(agent.pending_commitments.len(), 1);
+
+        agent.advance_epoch(&engine);
+        assert_eq!(
+            agent.pending_commitments.len(),
+            0,
+            "epoch advance must clear pending commitments (N11)"
         );
     }
 }

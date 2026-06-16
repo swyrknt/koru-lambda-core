@@ -64,7 +64,7 @@ fn bench_transaction_validation(c: &mut Criterion) {
 
                 // Bootstrap with validators
                 for i in 0..5 {
-                    let peer = PeerIdentity::new(format!("validator_{}", i), &engine);
+                    let peer = PeerIdentity::new(format!("validator_{}", i), &engine).unwrap();
                     agent.join_peer(peer, &engine);
                 }
 
@@ -105,7 +105,7 @@ fn bench_leader_election(c: &mut Criterion) {
 
                 // Add validators
                 for i in 0..num_validators {
-                    let peer = PeerIdentity::new(format!("validator_{}", i), &engine);
+                    let peer = PeerIdentity::new(format!("validator_{}", i), &engine).unwrap();
                     agent.join_peer(peer, &engine);
                 }
 
@@ -180,7 +180,7 @@ fn bench_distributed_consensus(c: &mut Criterion) {
 
                 // Bootstrap validators
                 let validators: Vec<PeerIdentity> = (0..num_nodes)
-                    .map(|i| PeerIdentity::new(format!("node_{}", i), &engine))
+                    .map(|i| PeerIdentity::new(format!("node_{}", i), &engine).unwrap())
                     .collect();
 
                 for node in nodes.iter_mut() {
@@ -265,7 +265,7 @@ fn bench_network_events(c: &mut Criterion) {
         let mut agent = NetworkAgent::new(&engine);
 
         b.iter(|| {
-            let peer = PeerIdentity::new("test_peer".to_string(), &engine);
+            let peer = PeerIdentity::new("test_peer".to_string(), &engine).unwrap();
             agent.join_peer(peer, &engine);
             black_box(&agent);
         });
@@ -277,7 +277,7 @@ fn bench_network_events(c: &mut Criterion) {
 
         // Add some validators
         for i in 0..5 {
-            let peer = PeerIdentity::new(format!("validator_{}", i), &engine);
+            let peer = PeerIdentity::new(format!("validator_{}", i), &engine).unwrap();
             agent.join_peer(peer, &engine);
         }
 

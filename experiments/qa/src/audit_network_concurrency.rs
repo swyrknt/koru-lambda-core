@@ -21,7 +21,7 @@ fn main() {
         let agent = Arc::clone(&agent);
         handles.push(thread::spawn(move || {
             for i in 0..50 {
-                let peer = PeerIdentity::new(format!("t{}_p{}", tid, i), &engine);
+                let peer = PeerIdentity::new(format!("t{}_p{}", tid, i), &engine).unwrap();
                 let mut g = agent.lock().expect("agent mutex poisoned");
                 g.join_peer(peer, &engine);
             }
