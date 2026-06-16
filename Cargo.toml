@@ -46,3 +46,22 @@ rand = "0.8"
 [[bench]]
 name = "performance"
 harness = false
+
+# Release-profile panic strategy.
+#
+# F1 / F3 closure (CHECKLIST 1.7 / Phase 6 sub-branch #8). The crate's
+# C ABI (`#[no_mangle] pub unsafe extern "C" fn ...`) is compiled into
+# both `cdylib` and `staticlib` artifacts loaded by Go / Kotlin / Swift
+# runtimes. Unwinding across an `extern "C"` frame is UB under the
+# default `panic = "unwind"` strategy. Switching the release profile to
+# `panic = "abort"` makes every panic that reaches an FFI boundary
+# terminate the process deterministically rather than corrupt foreign
+# stacks.
+#
+# `cargo test` (whether `--release` or not) and `cargo bench` continue
+# to unwind: Cargo intentionally ignores the `panic` setting for the
+# `test` and `bench` profiles because their harnesses depend on
+# `std::panic::catch_unwind`. Tests can therefore still use
+# `#[should_panic]` and Criterion bench harnesses link normally.
+[profile.release]
+panic = "abort"

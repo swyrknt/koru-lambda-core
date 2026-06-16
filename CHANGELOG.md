@@ -105,6 +105,19 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
 
 ### Changed (breaking)
 
+- **FFI opaque types are now `#[repr(C)] struct` placeholders, not
+  `c_void`** (CHECKLIST 1.7 F4 / Phase 6 sub-branch #8). C headers declare
+  `struct KoruEngine`, `struct KoruAgent`, `struct KoruValidator` — three
+  distinct types. C consumers must update header includes; pointer-type
+  mismatches that v1.2.0 silently allowed (`koru_agent_free(engine)` etc.)
+  now fail at C compile time.
+- **`koru_agent_check_commitment` signature extended** (CHECKLIST 1.7 F7 /
+  Phase 6 sub-branch #8). Added two trailing arguments:
+  `leader_id: *const c_char, batch_size: u64`. C consumers must update
+  call sites to supply the real leader id and batch size; an empty
+  `leader_id` returns `KORU_ERROR_INVALID_DATA`. The v1.2.0 path that
+  constructed a `BatchCommitment` with empty `leader_id` and
+  `batch_size = 0` is no longer reachable from the FFI.
 - **`PeerIdentity::new` now returns `Result<Self, String>`** (CHECKLIST 1.6 N1 /
   N2; Phase 6 sub-branch #7). Empty ids and ids longer than `MAX_PEER_ID_LEN`
   (64 bytes) are rejected before any synth runs into the engine. Callers must
@@ -272,6 +285,35 @@ conventions: Added · Changed · Deprecated · Removed · Fixed · Security.
   colon-separator collisions, cross-engine ghosts). Any external code that
   constructed Distinction values out-of-tree must obtain them through the
   engine or via `Distinction::from_hex` (which validates length + charset).
+- **FFI hardening — panic-safe ABI (F1/F3), distinct opaque types (F4),
+  cbindgen header completeness (F5), `ManuallyDrop<Arc>` engine borrows (F6),
+  full F7 FFI surface, internal `Mutex` against TOCTOU (F2/F8), and
+  `batch_len > isize::MAX` rejection (F9)** (CHECKLIST 1.7 / Phase 6 sub-branch
+  #8). `[profile.release] panic = "abort"` so panics in Rust code reachable
+  from `extern "C"` terminate deterministically rather than unwind across
+  the foreign-function boundary (UB). Test and bench profiles continue to
+  unwind (Cargo ignores `panic` for those). `KoruEngine` / `KoruAgent` /
+  `KoruValidator` are now `#[repr(C)] struct { _private: [u8; 0] }` instead
+  of `c_void` aliases — cbindgen emits distinct typedefs so C compilers
+  reject pointer-type mismatches at compile time. The cbindgen `include`
+  allowlist that hid 18 of 22 `pub extern "C"` entry points was removed;
+  the generated `target/koru.h` now declares every FFI symbol. Every engine
+  borrow in the FFI body uses `ManuallyDrop::new(Arc::from_raw(...))`,
+  removing the v1.2.0 "`Arc::into_raw` re-leak" dance that depended on no
+  panic running between `from_raw` and the matching `into_raw`. The
+  `koru_agent_check_commitment` signature now requires `leader_id` and
+  `batch_size` so the constructed `BatchCommitment` matches the
+  protocol-derived hash shape (F7 FFI half — closes the v1.2.0 "Frankenstein
+  commitment with empty leader_id / `batch_size = 0`" path). `NetworkAgent`
+  and `ConsensusValidator` handles are now `Box<Mutex<...>>` inside the FFI
+  boundary; concurrent C-thread calls targeting the same handle serialize
+  through the internal mutex (closes the TOCTOU / `&mut` aliasing class
+  documented in F2 / F8). `koru_agent_propose_commitment` and
+  `koru_agent_finalize_batch` reject `batch_len > isize::MAX as usize`
+  before any `slice::from_raw_parts` (closes F9). The new
+  `test_ffi_agent_concurrent_calls_serialize` spawns 8 threads ×
+  500 joins through a single agent handle and asserts every join
+  registered exactly once.
 - **Consensus hardening — bounded peer ids (N1 / N2), bounded tx data (V3),
   bounded rejection messages (V4), atomic restore_state (V6), joint validator
   dedupe (N7), bounded pending_commitments (N11)** (CHECKLIST 1.6 / Phase 6

@@ -1,31 +1,135 @@
-/// FFI Layer - Universal C API for Go/Kotlin/Swift Bindings
+/// FFI Layer — Universal C API for Go / Kotlin / Swift bindings.
 ///
 /// This module exposes the Rust core as a pure C-compatible API, enabling
 /// cross-language interoperability without runtime dependencies.
 ///
-/// Uses direct pointer operations with zero overhead. Caller owns all allocated
-/// memory with explicit free functions. All operations are thread-safe via
-/// Arc/DashMap. All functions are pure or explicitly mutate via pointers.
+/// # Memory ownership
+///
+/// Caller owns all allocated memory. Every `*_new` constructor pairs with
+/// a `*_free` destructor. Pointers must not be used after the matching
+/// `*_free` call.
+///
+/// # Concurrency contract (CHECKLIST 1.7 F2 / F8, Decision 5.4)
+///
+/// * The `DistinctionEngine` behind a `KoruEngine` handle is internally
+///   thread-safe (`&self` everywhere via `DashMap`). Multiple C threads
+///   may share a single engine handle.
+/// * The `NetworkAgent` and `ConsensusValidator` behind `KoruAgent` /
+///   `KoruValidator` handles are NOT inherently thread-safe — they
+///   were `&mut self` types. v1.2.0 documented this as "caller must
+///   serialize" but the C ABI gave no way to enforce it; concurrent
+///   calls from C threads would create `&mut` aliases and trigger UB.
+/// * v2.0 wraps both in `Box<Mutex<...>>` inside the FFI boundary.
+///   Concurrent C-thread calls targeting the same handle now serialize
+///   through the internal mutex. The mutex acquisition is single-digit
+///   nanoseconds on the hot path; if you need lock-free reads, hold
+///   the handle on one thread.
+///
+/// # Panic safety (CHECKLIST 1.7 F1 / F3)
+///
+/// The release profile sets `panic = "abort"`. Any panic in Rust code
+/// reachable from an FFI entry point terminates the process rather
+/// than unwinding across the foreign-function boundary (which is UB).
+/// FFI entry points still validate null/UTF-8/length inputs explicitly
+/// and return negative error codes for the recoverable failures.
 use crate::{
     BatchCommitment, ConsensusValidator, Distinction, DistinctionEngine, NetworkAgent,
     PeerIdentity, TransactionBatch,
 };
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{c_char, CStr, CString};
+use std::mem::ManuallyDrop;
 use std::slice;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 // ============================================================================
 // OPAQUE TYPES - Hide Rust internals from C ABI
 // ============================================================================
+//
+// F4 closure (CHECKLIST 1.7 / Phase 6 sub-branch #8). v1.2.0 typed each
+// handle as `type KoruEngine = c_void`, which collapses all three types
+// to the same C `void *` on the wire. A C caller could pass an engine
+// pointer where the header asks for an agent and the compiler would
+// not catch it. The zero-sized `_private: [u8; 0]` pattern produces
+// distinct opaque structs in the generated header so cbindgen emits
+// `typedef struct KoruEngine KoruEngine;` etc., and C compilers reject
+// mismatched pointer types at compile time.
+//
+// The Rust-side allocations behind these handles are intentionally
+// different from the public opaque shape — the runtime pointers point
+// at internal owned structures (Arc<DistinctionEngine>,
+// Box<Mutex<NetworkAgent>>, Box<Mutex<ConsensusValidator>>). The
+// FFI entry points cast to those internal types before dereferencing.
 
-/// Opaque pointer to DistinctionEngine
-pub type KoruEngine = c_void;
+/// Opaque handle to a `DistinctionEngine`. The Rust allocation behind
+/// this pointer is `Arc<DistinctionEngine>` (engine has interior
+/// `&self` thread-safe state via DashMap; no FFI-side lock needed).
+#[repr(C)]
+pub struct KoruEngine {
+    _private: [u8; 0],
+}
 
-/// Opaque pointer to NetworkAgent
-pub type KoruAgent = c_void;
+/// Opaque handle to a `NetworkAgent`. The Rust allocation behind this
+/// pointer is `Box<Mutex<NetworkAgent>>` — concurrent C-thread calls
+/// targeting the same handle serialize through the internal mutex
+/// (F2 / F8 closure).
+#[repr(C)]
+pub struct KoruAgent {
+    _private: [u8; 0],
+}
 
-/// Opaque pointer to ConsensusValidator
-pub type KoruValidator = c_void;
+/// Opaque handle to a `ConsensusValidator`. The Rust allocation behind
+/// this pointer is `Box<Mutex<ConsensusValidator>>` — same FFI
+/// concurrency contract as `KoruAgent`.
+#[repr(C)]
+pub struct KoruValidator {
+    _private: [u8; 0],
+}
+
+/// Internal alias for the owned FFI representation of an agent handle.
+type FfiAgent = Mutex<NetworkAgent>;
+
+/// Internal alias for the owned FFI representation of a validator handle.
+type FfiValidator = Mutex<ConsensusValidator>;
+
+/// Maximum byte length accepted for any `usize`-sized buffer parameter
+/// crossing the FFI boundary.
+///
+/// F9 closure (CHECKLIST 1.7 / Phase 6 sub-branch #8). `slice::from_raw_parts`
+/// requires `len <= isize::MAX`; longer buffers are UB. The audit
+/// flagged the unguarded `batch_len: usize` parameters on
+/// `koru_agent_propose_commitment` / `koru_agent_finalize_batch` /
+/// `koru_agent_propose_batch`. Every length-taking entry point clips
+/// at this bound and returns `KORU_ERROR_INVALID_DATA` before any
+/// pointer dereference. Note: `isize::MAX` is platform-dependent
+/// (2³¹−1 on 32-bit; 2⁶³−1 on 64-bit).
+const FFI_MAX_BUFFER_LEN: usize = isize::MAX as usize;
+
+/// Borrow the engine handle as `ManuallyDrop<Arc<DistinctionEngine>>`
+/// for the duration of the call.
+///
+/// F6 closure (CHECKLIST 1.7 / Phase 6 sub-branch #8). v1.2.0 used the
+/// `Arc::from_raw(...) + Arc::into_raw(...)` dance to "borrow" an Arc
+/// without affecting the strong count; the comment claimed the
+/// re-`into_raw` re-incremented, but it actually relied on no Drop
+/// running between the two calls. A panic between `from_raw` and
+/// `into_raw` would silently leak — or worse, decrement to zero and
+/// free the engine while the caller's pointer still held it.
+///
+/// `ManuallyDrop` is the explicit form: it takes ownership in the type
+/// system but suppresses the destructor, so the +1 strong count that
+/// the caller's raw pointer represents stays intact regardless of how
+/// the FFI body exits (panic, early return, etc.). With `panic = "abort"`
+/// on release the panic case is moot; this is still the correct
+/// pattern under unwind, and matches the documented `Arc::from_raw`
+/// contract.
+///
+/// # Safety
+/// `engine` must be a non-null pointer originally returned by
+/// `koru_engine_new` (or compatibly constructed).
+#[inline]
+unsafe fn borrow_engine(engine: *const KoruEngine) -> ManuallyDrop<Arc<DistinctionEngine>> {
+    ManuallyDrop::new(Arc::from_raw(engine as *const DistinctionEngine))
+}
 
 // ============================================================================
 // ERROR CODES
@@ -94,62 +198,64 @@ pub unsafe extern "C" fn koru_engine_relationship_count(engine: *const KoruEngin
 // NETWORK AGENT MANAGEMENT
 // ============================================================================
 
-/// Create a new NetworkAgent
+/// Create a new NetworkAgent.
 ///
-/// Returns: Opaque pointer to agent (must be freed with koru_agent_free)
+/// The underlying allocation is `Box<Mutex<NetworkAgent>>` (F2 / F8
+/// closure). Concurrent calls from C threads targeting the same
+/// handle serialize through the internal mutex; the FFI never produces
+/// `&mut NetworkAgent` aliases.
+///
+/// Returns: Opaque pointer to agent (must be freed with koru_agent_free).
 ///
 /// # Safety
-/// engine must be valid pointer from koru_engine_new. Caller must free returned pointer.
+/// engine must be a valid pointer from `koru_engine_new`. Caller must
+/// free the returned pointer with `koru_agent_free` exactly once.
 #[no_mangle]
 pub unsafe extern "C" fn koru_agent_new(engine: *const KoruEngine) -> *mut KoruAgent {
     if engine.is_null() {
         return std::ptr::null_mut();
     }
 
-    let engine_arc = Arc::from_raw(engine as *const DistinctionEngine);
-    let agent = Box::new(NetworkAgent::new(&engine_arc));
-
-    // Re-increment ref count (we borrowed it)
-    let _ = Arc::into_raw(engine_arc);
-
+    let engine_md = borrow_engine(engine);
+    let agent = Box::new(Mutex::new(NetworkAgent::new(&engine_md)));
     Box::into_raw(agent) as *mut KoruAgent
 }
 
 /// Free a NetworkAgent
 ///
 /// # Safety
-/// Pointer must be valid and not used after this call
+/// Pointer must be valid (or null) and not used after this call.
 #[no_mangle]
 pub unsafe extern "C" fn koru_agent_free(agent: *mut KoruAgent) {
     if !agent.is_null() {
-        let _ = Box::from_raw(agent as *mut NetworkAgent);
+        let _ = Box::from_raw(agent as *mut FfiAgent);
     }
 }
 
 /// Get current epoch from agent
 ///
 /// # Safety
-/// agent must be valid pointer
+/// agent must be a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn koru_agent_current_epoch(agent: *const KoruAgent) -> u64 {
     if agent.is_null() {
         return 0;
     }
-    let agent = &*(agent as *const NetworkAgent);
-    agent.current_epoch()
+    let guard = (*(agent as *const FfiAgent)).lock().expect("agent mutex poisoned");
+    guard.current_epoch()
 }
 
 /// Get validator count from agent
 ///
 /// # Safety
-/// agent must be valid pointer
+/// agent must be a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn koru_agent_validator_count(agent: *const KoruAgent) -> usize {
     if agent.is_null() {
         return 0;
     }
-    let agent = &*(agent as *const NetworkAgent);
-    agent.validator_count()
+    let guard = (*(agent as *const FfiAgent)).lock().expect("agent mutex poisoned");
+    guard.validator_count()
 }
 
 /// Get current consensus state root as a 32-character lowercase hex C string.
@@ -169,10 +275,10 @@ pub unsafe extern "C" fn koru_agent_state_root(agent: *const KoruAgent) -> *mut 
         return std::ptr::null_mut();
     }
 
-    let agent = &*(agent as *const NetworkAgent);
+    let guard = (*(agent as *const FfiAgent)).lock().expect("agent mutex poisoned");
     // Bytes-on-wire architecture (DECISION 5.5): the engine produces a
     // canonical [u8; 16]; the FFI human surface emits it as 32-char hex.
-    let hex_root = agent.consensus_state_root();
+    let hex_root = guard.consensus_state_root();
     debug_assert_eq!(hex_root.len(), 32, "hex root must be 32 chars");
 
     match CString::new(hex_root) {
@@ -184,14 +290,14 @@ pub unsafe extern "C" fn koru_agent_state_root(agent: *const KoruAgent) -> *mut 
 /// Get expected transaction nonce from agent's validator
 ///
 /// # Safety
-/// agent must be valid pointer
+/// agent must be a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn koru_agent_expected_nonce(agent: *const KoruAgent) -> u64 {
     if agent.is_null() {
         return 0;
     }
-    let agent = &*(agent as *const NetworkAgent);
-    agent.consensus_validator_expected_nonce()
+    let guard = (*(agent as *const FfiAgent)).lock().expect("agent mutex poisoned");
+    guard.consensus_validator_expected_nonce()
 }
 
 /// Restore the agent's internal validator to a previously-persisted
@@ -228,32 +334,23 @@ pub unsafe extern "C" fn koru_agent_restore_state(
         return KORU_ERROR_NULL_POINTER;
     }
 
-    let agent = &mut *(agent as *mut NetworkAgent);
-    let engine_arc = Arc::from_raw(engine as *const DistinctionEngine);
+    let engine_md = borrow_engine(engine);
 
     let root_str = match CStr::from_ptr(root_hex).to_str() {
         Ok(s) => s,
-        Err(_) => {
-            let _ = Arc::into_raw(engine_arc);
-            return KORU_ERROR_UTF8;
-        },
+        Err(_) => return KORU_ERROR_UTF8,
     };
 
     let root_id = match Distinction::from_hex(root_str) {
         Ok(d) => d,
-        Err(_) => {
-            let _ = Arc::into_raw(engine_arc);
-            return KORU_ERROR_INVALID_DATA;
-        },
+        Err(_) => return KORU_ERROR_INVALID_DATA,
     };
 
-    let code = match agent.restore_consensus_validator_state(&engine_arc, root_id, nonce) {
+    let mut guard = (*(agent as *mut FfiAgent)).lock().expect("agent mutex poisoned");
+    match guard.restore_consensus_validator_state(&engine_md, root_id, nonce) {
         Ok(()) => KORU_SUCCESS,
         Err(_) => KORU_ERROR_INVALID_DATA,
-    };
-
-    let _ = Arc::into_raw(engine_arc);
-    code
+    }
 }
 
 // ============================================================================
@@ -274,32 +371,22 @@ pub unsafe extern "C" fn koru_agent_join_peer(
         return KORU_ERROR_NULL_POINTER;
     }
 
-    let agent = &mut *(agent as *mut NetworkAgent);
-    let engine_arc = Arc::from_raw(engine as *const DistinctionEngine);
+    let engine_md = borrow_engine(engine);
 
     let peer_id_str = match CStr::from_ptr(peer_id).to_str() {
         Ok(s) => s,
-        Err(_) => {
-            // Re-increment ref count before returning
-            let _ = Arc::into_raw(engine_arc);
-            return KORU_ERROR_UTF8;
-        },
+        Err(_) => return KORU_ERROR_UTF8,
     };
 
-    let peer = match PeerIdentity::new(peer_id_str.to_string(), &engine_arc) {
+    let peer = match PeerIdentity::new(peer_id_str.to_string(), &engine_md) {
         Ok(p) => p,
-        Err(_) => {
-            // N1/N2: empty or oversized peer ids are rejected before
-            // any synth runs into the engine.
-            let _ = Arc::into_raw(engine_arc);
-            return KORU_ERROR_INVALID_DATA;
-        },
+        // N1/N2: empty or oversized peer ids are rejected before any
+        // synth runs into the engine.
+        Err(_) => return KORU_ERROR_INVALID_DATA,
     };
-    agent.join_peer(peer, &engine_arc);
 
-    // Re-increment ref count (we borrowed it)
-    let _ = Arc::into_raw(engine_arc);
-
+    let mut guard = (*(agent as *mut FfiAgent)).lock().expect("agent mutex poisoned");
+    guard.join_peer(peer, &engine_md);
     KORU_SUCCESS
 }
 
@@ -335,84 +422,113 @@ pub unsafe extern "C" fn koru_agent_propose_commitment(
     if agent.is_null() || engine.is_null() || batch_data.is_null() || out_commitment.is_null() {
         return KORU_ERROR_NULL_POINTER;
     }
+    // F9: reject buffers larger than `isize::MAX` before any pointer
+    // dereference. `slice::from_raw_parts` is UB at `len > isize::MAX`.
+    if batch_len > FFI_MAX_BUFFER_LEN {
+        return KORU_ERROR_INVALID_DATA;
+    }
 
-    let agent = &mut *(agent as *mut NetworkAgent);
-    let engine_arc = Arc::from_raw(engine as *const DistinctionEngine);
+    let engine_md = borrow_engine(engine);
 
     // Deserialize batch from bytes
     let batch_bytes = slice::from_raw_parts(batch_data, batch_len);
     let batch: TransactionBatch = match serde_json::from_slice(batch_bytes) {
         Ok(b) => b,
-        Err(_) => {
-            let _ = Arc::into_raw(engine_arc);
-            return KORU_ERROR_INVALID_DATA;
-        },
+        Err(_) => return KORU_ERROR_INVALID_DATA,
     };
 
-    // Propose commitment (Stage 1)
-    let commitment = match agent.propose_commitment(batch, &engine_arc) {
+    let mut guard = (*(agent as *mut FfiAgent)).lock().expect("agent mutex poisoned");
+    let commitment = match guard.propose_commitment(batch, &engine_md) {
         Ok(c) => c,
-        Err(_) => {
-            let _ = Arc::into_raw(engine_arc);
-            return KORU_ERROR_BATCH_REJECTED;
-        },
+        Err(_) => return KORU_ERROR_BATCH_REJECTED,
     };
 
-    // Copy commitment hash to output buffer
     std::ptr::copy_nonoverlapping(commitment.commitment_hash.as_ptr(), out_commitment, 32);
-
-    // Re-increment ref count
-    let _ = Arc::into_raw(engine_arc);
     KORU_SUCCESS
 }
 
 /// STAGE 1: Check Commitment (Light Node "Ping" Check)
 ///
-/// Verifies commitment matches expected nonce/epoch WITHOUT downloading batch.
-/// This is how light clients participate in consensus efficiently.
+/// Verifies a gossiped commitment matches expected nonce/epoch and is
+/// well-formed against the supplied `leader_id` / `batch_size`. This is
+/// how light clients participate in consensus without downloading the
+/// batch.
+///
+/// # F7 FFI closure (CHECKLIST 1.7 / Phase 6 sub-branch #8)
+///
+/// v1.2.0 built a "Frankenstein" `BatchCommitment` with empty
+/// `leader_id` and `batch_size = 0`. Since `BatchCommitment::compute`
+/// (after the N6 fix) now hashes `leader_id`, any downstream call
+/// that recomputes the hash against the Frankenstein object would
+/// disagree with the gossiped hash. This FFI now requires the
+/// caller to supply the real `leader_id` and `batch_size` so the
+/// constructed `BatchCommitment` matches the protocol shape.
+///
+/// The light-node check itself remains metadata-only by design
+/// (`BatchCommitment::verify(nonce, epoch)`): full hash integrity
+/// requires the batch payload (or a locally-cached expected hash),
+/// neither of which a light node has on hand. Higher-level
+/// protocols that DO have an expected hash can compare the
+/// `commitment_hash` bytes against their local copy after this
+/// metadata check passes.
 ///
 /// # Parameters
 /// - agent: NetworkAgent pointer
-/// - commitment_hash: 32-byte commitment hash
-/// - expected_nonce: Expected nonce for next transaction
-/// - expected_epoch: Expected current epoch
+/// - commitment_hash: pointer to 32-byte commitment hash
+/// - expected_nonce: expected nonce for next transaction
+/// - expected_epoch: expected current epoch
+/// - leader_id: UTF-8 C string naming the proposing leader
+///   (required; empty strings rejected per N2)
+/// - batch_size: number of transactions in the batch the gossiped
+///   commitment binds (required; must match the underlying batch)
 ///
 /// # Returns
-/// 1 if valid, 0 if invalid, negative on error
+/// 1 if the commitment passes the metadata check, 0 if it fails the
+/// metadata check, negative on input error.
 ///
 /// # Safety
-/// agent must be valid. commitment_hash must point to 32-byte buffer.
+/// agent must be a valid pointer; commitment_hash must point to a
+/// 32-byte buffer; leader_id must be a valid null-terminated UTF-8 C
+/// string.
 #[no_mangle]
 pub unsafe extern "C" fn koru_agent_check_commitment(
     agent: *const KoruAgent,
     commitment_hash: *const u8,
     expected_nonce: u64,
     expected_epoch: u64,
+    leader_id: *const c_char,
+    batch_size: u64,
 ) -> i32 {
-    if agent.is_null() || commitment_hash.is_null() {
+    if agent.is_null() || commitment_hash.is_null() || leader_id.is_null() {
         return KORU_ERROR_NULL_POINTER;
     }
 
-    let agent = &*(agent as *const NetworkAgent);
+    let leader_id_str = match CStr::from_ptr(leader_id).to_str() {
+        Ok(s) => s,
+        Err(_) => return KORU_ERROR_UTF8,
+    };
+    if leader_id_str.is_empty() {
+        // Mirrors PeerIdentity::new's N2 rejection — an empty leader_id
+        // is not a valid commitment field.
+        return KORU_ERROR_INVALID_DATA;
+    }
 
-    // Reconstruct commitment for verification
     let mut hash = [0u8; 32];
     std::ptr::copy_nonoverlapping(commitment_hash, hash.as_mut_ptr(), 32);
 
-    // Create minimal commitment for verification
     let commitment = BatchCommitment {
         commitment_hash: hash,
         nonce: expected_nonce,
         epoch: expected_epoch,
-        leader_id: String::new(), // Not needed for verification
-        batch_size: 0,            // Not needed for verification
+        leader_id: leader_id_str.to_string(),
+        batch_size: batch_size as usize,
     };
 
-    // Check commitment
-    if agent.check_commitment(&commitment) {
-        1 // Valid
+    let guard = (*(agent as *const FfiAgent)).lock().expect("agent mutex poisoned");
+    if guard.check_commitment(&commitment) {
+        1
     } else {
-        0 // Invalid
+        0
     }
 }
 
@@ -444,33 +560,26 @@ pub unsafe extern "C" fn koru_agent_finalize_batch(
     if agent.is_null() || engine.is_null() || batch_data.is_null() || commitment_hash.is_null() {
         return KORU_ERROR_NULL_POINTER;
     }
+    if batch_len > FFI_MAX_BUFFER_LEN {
+        return KORU_ERROR_INVALID_DATA;
+    }
 
-    let agent = &mut *(agent as *mut NetworkAgent);
-    let engine_arc = Arc::from_raw(engine as *const DistinctionEngine);
+    let engine_md = borrow_engine(engine);
 
-    // Deserialize batch from bytes
     let batch_bytes = slice::from_raw_parts(batch_data, batch_len);
     let batch: TransactionBatch = match serde_json::from_slice(batch_bytes) {
         Ok(b) => b,
-        Err(_) => {
-            let _ = Arc::into_raw(engine_arc);
-            return KORU_ERROR_INVALID_DATA;
-        },
+        Err(_) => return KORU_ERROR_INVALID_DATA,
     };
 
-    // Copy commitment hash
     let mut hash = [0u8; 32];
     std::ptr::copy_nonoverlapping(commitment_hash, hash.as_mut_ptr(), 32);
 
-    // Finalize batch (Stage 2)
-    let result = match agent.finalize_batch(batch, hash, &engine_arc) {
+    let mut guard = (*(agent as *mut FfiAgent)).lock().expect("agent mutex poisoned");
+    match guard.finalize_batch(batch, hash, &engine_md) {
         Ok(_) => KORU_SUCCESS,
         Err(_) => KORU_ERROR_BATCH_REJECTED,
-    };
-
-    // Re-increment ref count
-    let _ = Arc::into_raw(engine_arc);
-    result
+    }
 }
 
 // ============================================================================
@@ -495,39 +604,26 @@ pub unsafe extern "C" fn koru_agent_propose_batch(
         return KORU_ERROR_NULL_POINTER;
     }
 
-    let agent = &mut *(agent as *mut NetworkAgent);
-    let engine_arc = Arc::from_raw(engine as *const DistinctionEngine);
+    let engine_md = borrow_engine(engine);
 
     let batch_str = match CStr::from_ptr(batch_json).to_str() {
         Ok(s) => s,
-        Err(_) => {
-            let _ = Arc::into_raw(engine_arc);
-            return KORU_ERROR_UTF8;
-        },
+        Err(_) => return KORU_ERROR_UTF8,
     };
 
     let batch: TransactionBatch = match serde_json::from_str(batch_str) {
         Ok(b) => b,
-        Err(_) => {
-            let _ = Arc::into_raw(engine_arc);
-            return KORU_ERROR_INVALID_DATA;
-        },
+        Err(_) => return KORU_ERROR_INVALID_DATA,
     };
 
-    // Two-stage commit: propose_commitment() + finalize_batch()
-    let result = match agent.propose_commitment(batch.clone(), &engine_arc) {
-        Ok(commitment) => {
-            match agent.finalize_batch(batch, commitment.commitment_hash, &engine_arc) {
-                Ok(_) => KORU_SUCCESS,
-                Err(_) => KORU_ERROR_BATCH_REJECTED,
-            }
+    let mut guard = (*(agent as *mut FfiAgent)).lock().expect("agent mutex poisoned");
+    match guard.propose_commitment(batch.clone(), &engine_md) {
+        Ok(commitment) => match guard.finalize_batch(batch, commitment.commitment_hash, &engine_md) {
+            Ok(_) => KORU_SUCCESS,
+            Err(_) => KORU_ERROR_BATCH_REJECTED,
         },
         Err(_) => KORU_ERROR_BATCH_REJECTED,
-    };
-
-    // Re-increment ref count
-    let _ = Arc::into_raw(engine_arc);
-    result
+    }
 }
 
 /// Advance epoch (triggers leader rotation)
@@ -543,13 +639,9 @@ pub unsafe extern "C" fn koru_agent_advance_epoch(
         return KORU_ERROR_NULL_POINTER;
     }
 
-    let agent = &mut *(agent as *mut NetworkAgent);
-    let engine_arc = Arc::from_raw(engine as *const DistinctionEngine);
-
-    agent.advance_epoch(&engine_arc);
-
-    // Re-increment ref count
-    let _ = Arc::into_raw(engine_arc);
+    let engine_md = borrow_engine(engine);
+    let mut guard = (*(agent as *mut FfiAgent)).lock().expect("agent mutex poisoned");
+    guard.advance_epoch(&engine_md);
     KORU_SUCCESS
 }
 
@@ -563,9 +655,9 @@ pub unsafe extern "C" fn koru_agent_get_leader(agent: *const KoruAgent) -> *mut 
         return std::ptr::null_mut();
     }
 
-    let agent = &*(agent as *const NetworkAgent);
+    let guard = (*(agent as *const FfiAgent)).lock().expect("agent mutex poisoned");
 
-    match agent.get_current_leader() {
+    match guard.get_current_leader() {
         Some(leader) => match CString::new(leader.id.clone()) {
             Ok(s) => s.into_raw(),
             Err(_) => std::ptr::null_mut(),
@@ -593,47 +685,48 @@ pub unsafe extern "C" fn koru_free_string(s: *mut c_char) {
 // CONSENSUS VALIDATOR FFI
 // ============================================================================
 
-/// Create a new ConsensusValidator
+/// Create a new ConsensusValidator.
+///
+/// The underlying allocation is `Box<Mutex<ConsensusValidator>>` (F2 /
+/// F8 closure). Concurrent calls from C threads targeting the same
+/// handle serialize through the internal mutex.
 ///
 /// # Safety
-/// engine must be valid pointer. Caller must free returned pointer.
+/// engine must be a valid pointer. Caller must free the returned
+/// pointer with `koru_validator_free` exactly once.
 #[no_mangle]
 pub unsafe extern "C" fn koru_validator_new(engine: *const KoruEngine) -> *mut KoruValidator {
     if engine.is_null() {
         return std::ptr::null_mut();
     }
 
-    let engine_arc = Arc::from_raw(engine as *const DistinctionEngine);
-    let validator = Box::new(ConsensusValidator::new(&engine_arc));
-
-    // Re-increment ref count
-    let _ = Arc::into_raw(engine_arc);
-
+    let engine_md = borrow_engine(engine);
+    let validator = Box::new(Mutex::new(ConsensusValidator::new(&engine_md)));
     Box::into_raw(validator) as *mut KoruValidator
 }
 
 /// Free a ConsensusValidator
 ///
 /// # Safety
-/// Pointer must be valid and not used after this call
+/// Pointer must be valid (or null) and not used after this call.
 #[no_mangle]
 pub unsafe extern "C" fn koru_validator_free(validator: *mut KoruValidator) {
     if !validator.is_null() {
-        let _ = Box::from_raw(validator as *mut ConsensusValidator);
+        let _ = Box::from_raw(validator as *mut FfiValidator);
     }
 }
 
 /// Get expected nonce from validator
 ///
 /// # Safety
-/// validator must be valid pointer
+/// validator must be a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn koru_validator_expected_nonce(validator: *const KoruValidator) -> u64 {
     if validator.is_null() {
         return 0;
     }
-    let validator = &*(validator as *const ConsensusValidator);
-    validator.expected_nonce()
+    let guard = (*(validator as *const FfiValidator)).lock().expect("validator mutex poisoned");
+    guard.expected_nonce()
 }
 
 #[cfg(test)]
@@ -738,12 +831,20 @@ mod tests {
                 commitment_hash.as_mut_ptr(),
             );
 
+            // F7: must supply real leader_id + batch_size now. The
+            // propose_commitment path uses "unknown" when no leader is
+            // joined; pass the same string here so the constructed
+            // commitment shape matches.
+            let leader = CString::new("unknown").unwrap();
+
             // Check with correct nonce and epoch (should succeed)
             let result = koru_agent_check_commitment(
                 agent,
                 commitment_hash.as_ptr(),
                 0, // expected_nonce
                 0, // expected_epoch
+                leader.as_ptr(),
+                2, // batch_size
             );
             assert_eq!(result, 1); // Valid
 
@@ -753,8 +854,22 @@ mod tests {
                 commitment_hash.as_ptr(),
                 999, // wrong nonce
                 0,
+                leader.as_ptr(),
+                2,
             );
             assert_eq!(result_bad, 0); // Invalid
+
+            // F7: empty leader_id is rejected as invalid input.
+            let empty_leader = CString::new("").unwrap();
+            let result_empty_leader = koru_agent_check_commitment(
+                agent,
+                commitment_hash.as_ptr(),
+                0,
+                0,
+                empty_leader.as_ptr(),
+                2,
+            );
+            assert_eq!(result_empty_leader, KORU_ERROR_INVALID_DATA);
 
             koru_agent_free(agent);
             koru_engine_free(engine);
@@ -838,12 +953,16 @@ mod tests {
             );
             assert_eq!(result, KORU_SUCCESS);
 
-            // Light node: Verify commitment without downloading batch
+            // Light node: Verify commitment without downloading batch.
+            // F7: must supply real leader_id + batch_size.
+            let leader_id = CString::new("unknown").unwrap();
             let is_valid = koru_agent_check_commitment(
                 leader,
                 commitment_hash.as_ptr(),
                 0, // expected_nonce
                 0, // expected_epoch
+                leader_id.as_ptr(),
+                3, // batch_size
             );
             assert_eq!(is_valid, 1);
 
@@ -933,6 +1052,86 @@ mod tests {
                 42,
             );
             assert_eq!(result, KORU_ERROR_NULL_POINTER);
+        }
+    }
+
+    #[test]
+    fn test_ffi_agent_concurrent_calls_serialize() {
+        // F2 / F8 regression: 8 threads each issue 500 join_peer calls
+        // through the same agent handle. Under v1.2.0 the FFI exposed
+        // `&mut NetworkAgent` from a `*mut KoruAgent` per call —
+        // concurrent calls would be UB. Under v2.0 the internal
+        // `Mutex<NetworkAgent>` serializes them; this test must
+        // complete without data races (sanitizer-clean) and end with
+        // the expected validator count.
+        use std::sync::atomic::{AtomicPtr, Ordering};
+        use std::thread;
+
+        unsafe {
+            let engine = koru_engine_new();
+            let agent = koru_agent_new(engine);
+
+            // AtomicPtr wraps the raw pointers so we can Send them to
+            // worker threads — the FFI handles are opaque to Rust's
+            // borrow checker, and the underlying Mutex provides the
+            // actual synchronization.
+            let engine_ptr = AtomicPtr::new(engine);
+            let agent_ptr = AtomicPtr::new(agent);
+
+            const THREADS: usize = 8;
+            const JOINS_PER_THREAD: usize = 500;
+
+            thread::scope(|s| {
+                for tid in 0..THREADS {
+                    let engine_ref = &engine_ptr;
+                    let agent_ref = &agent_ptr;
+                    s.spawn(move || {
+                        let engine = engine_ref.load(Ordering::Acquire);
+                        let agent = agent_ref.load(Ordering::Acquire);
+                        for i in 0..JOINS_PER_THREAD {
+                            let id = CString::new(format!("t{}_p{}", tid, i)).unwrap();
+                            let rc = koru_agent_join_peer(agent, engine, id.as_ptr());
+                            assert_eq!(rc, KORU_SUCCESS);
+                        }
+                    });
+                }
+            });
+
+            // Each unique (tid, i) produces a distinct peer id, so all
+            // THREADS * JOINS_PER_THREAD joins must have been accepted
+            // (no dedupe drops). N7 dedupe is on (id, distinction);
+            // unique ids guarantee unique distinctions.
+            assert_eq!(
+                koru_agent_validator_count(agent),
+                THREADS * JOINS_PER_THREAD,
+                "all concurrent joins must register exactly once"
+            );
+
+            koru_agent_free(agent);
+            koru_engine_free(engine);
+        }
+    }
+
+    #[test]
+    fn test_ffi_propose_commitment_rejects_oversized_batch_len() {
+        // F9: batch_len > isize::MAX must be rejected before any
+        // pointer dereference. We pass a tiny real buffer so dereffing
+        // a smaller length would succeed; the F9 cap must fire first.
+        unsafe {
+            let engine = koru_engine_new();
+            let agent = koru_agent_new(engine);
+            let buf = [0u8; 8];
+            let mut out_hash = [0u8; 32];
+            let rc = koru_agent_propose_commitment(
+                agent,
+                engine,
+                buf.as_ptr(),
+                usize::MAX,
+                out_hash.as_mut_ptr(),
+            );
+            assert_eq!(rc, KORU_ERROR_INVALID_DATA);
+            koru_agent_free(agent);
+            koru_engine_free(engine);
         }
     }
 }
