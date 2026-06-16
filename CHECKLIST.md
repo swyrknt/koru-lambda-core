@@ -102,23 +102,21 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 - [x] **Empty `TransactionAction.data` produces a fixed, degenerate tx-distinction** — every empty-data tx with the same nonce collides on id `6bab8d5b...`. *(audit/validator V8)*
   - DONE: documented as by-design on `TransactionAction` (Recommendation (a) — it's correct content-addressing; consumers should not rely on tx-id uniqueness for txs with identical `(nonce, data)`).
 
-### 1.7 FFI hardening (Phase 1 audit)
-- [ ] **Panic safety** — no `catch_unwind`, no `panic = "abort"`, unwinding across `extern "C"` is UB or hard abort. *(audit/ffi F1, F3)* — EVIDENCE: NOT-PROBEABLE this round (requires synthetic panic injection); structural fix is single-line
-  - Fix: add `panic = "abort"` to release and dev profiles in `Cargo.toml`. One line, eliminates F1+F3.
-- [ ] **TOCTOU on `*mut KoruAgent`** — concurrent calls = `&mut` aliasing = UB. Header doc lies about thread safety. *(audit/ffi F2, F8)* — EVIDENCE: NOT-PROBEABLE this round (requires C-thread harness); related N8 pattern demonstrated via `run_log/audit_network_concurrency.log` — DECISION 5.4: internal Mutex
-  - Fix: wrap agents/validators in `Mutex<NetworkAgent>` / `Mutex<ConsensusValidator>` inside the FFI boundary. ~30 LOC. Update crate header doc to reflect the new contract (engine shared-thread-safe; FFI-wrapped agents internally synchronized).
-- [ ] **Opaque types collapse to `c_void`** — type confusion silently accepted. *(audit/ffi F4)*
-  - Fix: `#[repr(C)] pub struct KoruEngine { _private: [u8; 0] }` (same for agent, validator). cbindgen emits distinct typedefs; C mismatches become C compile errors.
-- [ ] cbindgen `include` list omits 18/22 functions from generated header. *(audit/ffi F5)*
-  - Fix: remove the `include` list in `cbindgen.toml:14` (cbindgen exports every `pub extern "C"` it finds).
-- [ ] FFI Arc-bookkeeping comment is wrong; pattern works only by coincidence. *(audit/ffi F6)*
-  - Fix: use `ManuallyDrop<Arc<DistinctionEngine>>` instead of `Arc::from_raw + Arc::into_raw` dance.
-- [~] FFI `check_commitment` hash parameter is decorative (never inspected). *(audit/ffi F7)*
-  - Engine-side partial (Phase 6 #6, merge `b0a641a`): `BatchCommitment::compute` now hashes `leader_id`, so `verify_batch` transitively rejects tampered leader_id via recomputation. Test `verify_batch_rejects_tampered_leader_id` covers this.
-  - **FFI-side still pending (#8 scope):** `koru_agent_check_commitment` builds a Frankenstein `BatchCommitment { leader_id: "", batch_size: 0 }` and calls `check_commitment` → `BatchCommitment::verify(nonce, epoch)`, which never inspects the hash. The `commitment_hash` parameter is still decorative at the FFI boundary.
-  - Fix (#8): give `BatchCommitment::verify` (or a new `verify_hash`) a hash argument and have it recompute; extend the FFI signature to take `leader_id` + `batch_size` so the FFI can construct a real commitment, not a Frankenstein one.
-- [ ] `batch_len: usize` unbounded — UB if > `isize::MAX`. *(audit/ffi F9)*
-  - Fix: reject `batch_len > isize::MAX as usize` at FFI entrypoints.
+### 1.7 FFI hardening — DONE in Phase 6 sub-branch #8
+- [x] **Panic safety** — no `catch_unwind`, no `panic = "abort"`, unwinding across `extern "C"` is UB or hard abort. *(audit/ffi F1, F3)*
+  - DONE: `[profile.release] panic = "abort"` added to `Cargo.toml`. Test + bench profiles continue to unwind (Cargo ignores `panic` for those profiles by design). Crate-level FFI doc now documents the abort-on-panic contract.
+- [x] **TOCTOU on `*mut KoruAgent`** — concurrent calls = `&mut` aliasing = UB. Header doc lies about thread safety. *(audit/ffi F2, F8)*
+  - DONE: `koru_agent_new` allocates `Box<Mutex<NetworkAgent>>`; `koru_validator_new` allocates `Box<Mutex<ConsensusValidator>>`. Every FFI entry point that needs the inner state takes the mutex via `(*(ptr as *mut FfiAgent)).lock().expect(...)`. Crate-level header doc rewritten to state the new contract honestly. New test `test_ffi_agent_concurrent_calls_serialize` (8 threads × 500 joins through one handle) demonstrates closure.
+- [x] **Opaque types collapse to `c_void`** — type confusion silently accepted. *(audit/ffi F4)*
+  - DONE: `KoruEngine` / `KoruAgent` / `KoruValidator` are now `#[repr(C)] pub struct { _private: [u8; 0] }`. Generated `target/koru.h` declares each as a distinct typedef. C compilers now reject pointer-type mismatches across the FFI surface.
+- [x] cbindgen `include` list omits 18/22 functions from generated header. *(audit/ffi F5)*
+  - DONE: `include` list removed from `cbindgen.toml`. The redundant `prefix = "koru_"` was also dropped — types now emit as `KoruEngine`/`KoruAgent`/`KoruValidator` instead of the doubled `koru_KoruEngine`. All 22 entry points now appear in the generated header.
+- [x] FFI Arc-bookkeeping comment is wrong; pattern works only by coincidence. *(audit/ffi F6)*
+  - DONE: introduced `borrow_engine(*const KoruEngine) -> ManuallyDrop<Arc<DistinctionEngine>>` helper. Every engine-borrowing entry point uses this; the `Arc::from_raw + Arc::into_raw` dance is gone. Panic safety: with `panic = "abort"` the strong count cannot leak on panic; under the test profile (unwind), `ManuallyDrop` still cannot double-drop or accidentally decrement.
+- [x] FFI `check_commitment` hash parameter is decorative (never inspected). *(audit/ffi F7)*
+  - DONE (FFI half): `koru_agent_check_commitment` now takes `leader_id: *const c_char` + `batch_size: u64` and constructs a real `BatchCommitment` (no more Frankenstein). Empty `leader_id` is rejected with `KORU_ERROR_INVALID_DATA`. The light-node `verify(nonce, epoch)` remains metadata-only by design (full hash verification requires the batch payload); the docstring is updated to state that contract honestly.
+- [x] `batch_len: usize` unbounded — UB if > `isize::MAX`. *(audit/ffi F9)*
+  - DONE: `koru_agent_propose_commitment` and `koru_agent_finalize_batch` reject `batch_len > isize::MAX as usize` before any `slice::from_raw_parts`. New test `test_ffi_propose_commitment_rejects_oversized_batch_len`.
 
 ### 1.8 WASM wire-format — DECISION 5.5: bytes-on-wire canonical
 - [ ] **Kill `id_to_bytes` heuristic entirely.** Expose `Distinction::as_bytes() -> &[u8; 16]`; all WASM-facing IDs are `Uint8Array` of length 16. *(audit/wasm W1)*
@@ -317,7 +315,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 1.4 — CLAUDE.md doc drift | 8 | **complete** (Phase 2) |
 | Section 1.5 — Consensus-correctness bugs (MUST NOT SHIP) | 3 | **complete** (Phase 6 sub-branch #6, merge `b0a641a`) |
 | Section 1.6 — Consensus hardening | 8 | **complete** (Phase 6 sub-branch #7) |
-| Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | not started (Phase 6 sub-branch #8) |
+| Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | **complete** (Phase 6 sub-branch #8) |
 | Section 1.8 — WASM bytes-on-wire + helpers | 9 | not started (Phase 6 sub-branch #10) |
 | Section 1.9 — Compactor cleanup | 4 | not started (Phase 6 sub-branch #9) |
 | Section 1.10 — Architectural cleanup | 2 | **complete** (Phase 6 sub-branch #2, merge `b45c434`) |
@@ -331,7 +329,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 4 — VALIDATE | 4 claims | **complete** |
 | Section 5 — DECIDE | 9 | **complete (all locked)** |
 
-**Current test count:** 155 release (post Phase 6 #7; was 145 before sub-branch #7, 103 at baseline). Clippy clean (incl. `--all-targets`). `Cargo.toml` at `1.2.0`.
+**Current test count:** 157 release (post Phase 6 #8; was 155 before, 103 at baseline). Clippy clean (incl. `--all-targets`). `Cargo.toml` at `1.2.0`.
 
 **Phase 6 sub-branch tracker:**
 
@@ -344,7 +342,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | 5 | `impl/traversal-api` | ✅ merged `e648117` (also closed #1's 107s test regression → 0.02s) |
 | 6 | `fix/tier-0-consensus-correctness` | ✅ merged `b0a641a` (N5, N6, V5 + F7 bonus all closed by re-run probes) |
 | 7 | `fix/consensus-hardening` | ✅ on branch (ready to merge) — Section 1.6 closed; N1/N2 confirmed via `audit_network_foreign_peers` re-run |
-| 8 | `fix/ffi-hardening` | ⏸ waits on #6 (commitment.rs interaction); inherits FFI half of F7 (engine half shipped in #6) |
+| 8 | `fix/ffi-hardening` | ✅ on branch (ready to merge) — Section 1.7 closed; F7 FFI half landed |
 | 9 | `cleanup/compactor` | ⏸ waits on #5 (uses traversal API) |
 | 10 | `impl/wasm-bytes-on-wire` | ⬜ unblocked once WASM toolchain confirmed |
 | 11 | `docs/changelog-finalize` | ⏸ last (after all others) |

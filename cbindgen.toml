@@ -9,9 +9,17 @@ tab_width = 4
 documentation = true
 documentation_style = "c"
 
+# F5 closure (CHECKLIST 1.7 / Phase 6 sub-branch #8). v1.2.0 set an
+# explicit `include = [...]` allowlist with only 4 symbols, dropping
+# 18 of the 22 `pub extern "C"` entry points from the generated header.
+# Removing the include list lets cbindgen export every entry point it
+# discovers; functions keep their `#[no_mangle]` names verbatim.
+#
+# The `prefix` setting from v1.2.0 was also dropped: it doubled up
+# with the manual `koru_` prefix on every entry point and produced
+# C type names like `koru_KoruEngine`. Without it, the F4 opaque
+# structs emit cleanly as `KoruEngine` / `KoruAgent` / `KoruValidator`.
 [export]
-prefix = "koru_"
-include = ["koru_engine_new", "koru_engine_free", "koru_agent_new", "koru_agent_free"]
 
 [export.rename]
 "KoruEngine" = "KoruEngine"
