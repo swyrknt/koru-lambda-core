@@ -147,8 +147,7 @@ fn bench_compaction(c: &mut Criterion) {
                 }
 
                 b.iter(|| {
-                    let mut compactor = StructuralCompactor::new(&engine);
-                    compactor.set_hot_threshold(8);
+                    let mut compactor = StructuralCompactor::new(&engine, 8, 4);
                     let action = compactor.compact(&engine);
                     black_box(action)
                 });

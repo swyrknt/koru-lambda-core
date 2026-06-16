@@ -230,7 +230,7 @@ fn test_e2e_system_under_load_with_compaction() {
 
     // Create compactor for each node
     let mut compactors: Vec<StructuralCompactor> =
-        (0..NUM_VALIDATORS).map(|_| StructuralCompactor::new(&engine)).collect();
+        (0..NUM_VALIDATORS).map(|_| StructuralCompactor::new(&engine, 3, 1)).collect();
 
     // Bootstrap validators
     let validators: Vec<PeerIdentity> = (0..NUM_VALIDATORS)

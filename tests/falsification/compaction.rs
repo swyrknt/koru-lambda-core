@@ -41,7 +41,9 @@ fn test_falsify_random_compaction() {
     println!("  Testing S.I.S.-based structural compression...");
 
     let engine = Arc::new(DistinctionEngine::new());
-    let mut compactor = StructuralCompactor::new(&engine);
+    // Power-law tail capture (compaction-falsification semantics):
+    // hot=8 keeps hubs; warm=4 keeps middle band; the [2,4) tail is COLD.
+    let mut compactor = StructuralCompactor::new(&engine, 8, 4);
 
     // ============================================================
     // EVOLUTION: Build scale-free graph
@@ -74,10 +76,10 @@ fn test_falsify_random_compaction() {
     let initial_count = engine.distinction_count();
     println!("    Initial graph size: {} distinctions", initial_count);
 
-    // Set threshold high enough to capture power-law tail
-    // In synthesis graphs, minimum degree is 2, so we need threshold > 4
-    // to classify low-degree nodes as COLD
-    compactor.set_hot_threshold(8);
+    // Thresholds (hot=8, warm=2) capture the power-law tail: minimum
+    // degree in a synthesis graph is 2, so deg<2 is impossible —
+    // setting warm=2 puts every degree in [2, 8) into WARM and the
+    // hubs (deg>=8) into HOT.
 
     // ============================================================
     // COMPACTION: Apply S.I.S.-based archival
@@ -167,7 +169,7 @@ fn test_falsify_compaction_causality_loss() {
     println!("  Testing LocalCausalAgent compliance...");
 
     let engine = Arc::new(DistinctionEngine::new());
-    let mut compactor = StructuralCompactor::new(&engine);
+    let mut compactor = StructuralCompactor::new(&engine, 3, 1);
 
     let initial_root = compactor.get_current_root().to_hex();
 
@@ -213,19 +215,18 @@ fn test_falsify_compaction_causality_loss() {
     // ============================================================
 
     let engine2 = Arc::new(DistinctionEngine::new());
-    let mut compactor2 = StructuralCompactor::new(&engine2);
+    let mut compactor2 = StructuralCompactor::new(&engine2, 3, 1);
 
     // Same initial state
     let _a2 = engine2.synthesize(engine2.d0(), engine2.d1());
 
-    // Same action parameters
-    let action_deterministic =
-        CompactionAction { archived_ids: vec![], sis_threshold: 3, preserved_count: 10 };
+    // Same action parameters (Phase 6 #9: archived_ids field removed).
+    let action_deterministic = CompactionAction { sis_threshold: 3, preserved_count: 10 };
 
     let root_det1 = compactor2.synthesize_action(action_deterministic.clone(), &engine2);
 
     // Reset and try again
-    let mut compactor3 = StructuralCompactor::new(&engine2);
+    let mut compactor3 = StructuralCompactor::new(&engine2, 3, 1);
     let root_det2 = compactor3.synthesize_action(action_deterministic, &engine2);
 
     assert_eq!(
@@ -259,8 +260,7 @@ fn test_falsify_statistics_inaccuracy() {
     println!("\nTest: Compaction Statistics Accuracy");
 
     let engine = Arc::new(DistinctionEngine::new());
-    let mut compactor = StructuralCompactor::new(&engine);
-    compactor.set_hot_threshold(4);
+    let mut compactor = StructuralCompactor::new(&engine, 4, 2);
 
     // Build known graph
     let d0 = engine.d0().clone();
