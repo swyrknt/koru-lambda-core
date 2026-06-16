@@ -37,7 +37,7 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 5. **Phase 3 — ByteMapping fix** — **COMPLETE** (commit `86747db` merged in `58a7ff5`; Phase 1.5 probe re-run confirms phantoms 253 → 0)
 6. **Phase 6 — Implement v2.0** — **COMPLETE** (all 11 sub-branches merged on `research/warroom-experiments`)
 7. **Phase 7 — `SECURITY.md` + CHANGELOG finalization + Cargo.toml bump 1.2.0 → 2.0.0 + integration PR to `dev`** — ready to start
-8. **Phase 8 — Consumer migration** (ALIS, koru-protocol)
+8. **Phase 8 — Consumer handoff (out of scope for this repo).** v2.0 ships as a fully documented breaking release; ALIS and koru-protocol are separate codebases owned by their own teams. Their migration to `koru-lambda-core = "2"` is driven by `CHANGELOG.md` (every breaking change + new API documented under `## 2.0.0`) and `SECURITY.md` (N5 / N6 / V5 with supported-version table). No code lands in this repo from Phase 8; the consumer teams open their own PRs in their own repos.
 
 ---
 
@@ -214,9 +214,11 @@ All items ship together in 2.0.0. The structural type changes and the additive A
 ### 2.4 Invariant tripwire — DONE in Phase 6 sub-branch #3 (merge `550125a`)
 - [x] Plan was `debug_assert!(r == 2*d - 3)` inside `synthesize()` on the novel path. Implementation found it fundamentally racy under concurrent synthesis (8-thread `test_parallel_synthesizer` triggers it on transient mid-synthesize states between `insert distinction` and the two `add_relationship` calls). Refactored as quiescent-mode `pub fn check_structural_invariant(&self) -> bool` — callers from tests / diagnostics can invoke when no writers are active. Three new unit tests assert the invariant on genesis, 100-step chain, saturated repeats. The release-mode correctness of the invariant under concurrent synthesis is verified at scale by Exp 2 (5M synths, zero deviations) and `tests/falsification/structural_coherence.rs`.
 
-### 2.5 Consumer coordination
-- [ ] ALIS (`/Users/sawyerkent/Projects/alis-ai/`) — pins `koru-lambda-core = "1.2"`. Bump to 2.0 after engine release.
-- [ ] koru-protocol (`/Users/sawyerkent/Projects/koru/`) — same pin, same bump. Check JSON wire formats for embedded distinction IDs.
+### 2.5 Consumer coordination (informational — not work for this repo)
+The two known consumers — ALIS and koru-protocol — pin `koru-lambda-core = "1.2"` today. Their bump to `2` is owned by their respective teams; this repo's responsibility ends at publishing a v2.0 release with `CHANGELOG.md` and `SECURITY.md` that fully describe the breaking changes.
+
+- **ALIS** (`/Users/sawyerkent/Projects/alis-ai/`) — pins `koru-lambda-core = "1.2"`. Migration to v2: bump the dep, fix compile errors against the documented breaking changes (notably `Distinction::id()` → `to_hex()` / `as_bytes()`; `PeerIdentity::new` → `Result`). Engine traversal API may also let them delete `tracker.rs` (~600 LOC).
+- **koru-protocol** (`/Users/sawyerkent/Projects/koru/`) — pins `koru-lambda-core = "1.2"`. Migration to v2: same dep bump; additionally update JSON wire formats for embedded distinction IDs (32-char hex strings now, was 64).
 
 ---
 
