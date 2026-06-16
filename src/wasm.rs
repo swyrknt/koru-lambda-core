@@ -1,31 +1,106 @@
+//! WASM Bindings for Koru Lambda Core
+//!
+//! Bytes-on-wire FFI layer exposing the core engine and subsystems to
+//! JavaScript / TypeScript runtimes (browsers, Node, Deno, Bun, Go
+//! `wazero`, Kotlin `WasmEdge`, etc.).
+//!
+//! # Wire format (Decision 5.5)
+//!
+//! Every distinction ID crossing the JS / WASM boundary is a
+//! `Uint8Array` of length 16 (the canonical 16-byte SHA-256 prefix).
+//! There is no hex on the wire. The v1.2.0 `id_to_bytes` heuristic
+//! that fell through to UTF-8 bytes for short / primordial IDs is gone
+//! — primordials Δ₀, Δ₁ are real 16-byte IDs (`[0u8; 16]` and
+//! `[1, 0, ..., 0]`) and ride the same Uint8Array path.
+//!
+//! Hex is a *display* format. The `idToHex` / `idFromHex` JS helpers
+//! convert between bytes and the human-readable 32-char lowercase hex
+//! at JS boundaries (logs, URLs, JSON debugging). Anything that wants
+//! to *use* a distinction passes bytes; anything that wants to *show*
+//! one calls `idToHex`.
+//!
+//! # Panic safety (Decision 5.6, W5)
+//!
+//! `console_error_panic_hook` is wired up unconditionally under the
+//! `wasm` feature via `#[wasm_bindgen(start)] fn _wasm_start()`. Any
+//! panic in Rust code is forwarded to `console.error` with a readable
+//! stack trace instead of the opaque
+//! `RuntimeError: unreachable executed` that wasm-bindgen produces by
+//! default.
+
 use std::sync::Arc;
-/// WASM Bindings for Koru Lambda Core
-///
-/// FFI layer exposing the core engine and subsystems to JavaScript/WASM.
-///
-/// Universal bindings that work in:
-/// - Browsers (JavaScript/TypeScript)
-/// - Node.js/Deno/Bun (Server-side JS)
-/// - Any WASM runtime (Go wazero, Kotlin WasmEdge, etc.)
-///
-/// Philosophy:
-/// - One artifact, infinite platforms
-/// - Thin wrappers around core Rust subsystems
-/// - The subsystems themselves implement LocalCausalAgent (not these bindings)
 use wasm_bindgen::prelude::*;
 
 use crate::subsystems::{
-    BatchCommitment,
-    CommitmentAgent,
-    ConsensusValidator,
-    LocalCausalAgent, // Used to access subsystem methods
-    NetworkAgent,
-    PeerIdentity,
-    TransactionBatch,
+    BatchCommitment, CommitmentAgent, ConsensusValidator,
+    LocalCausalAgent, NetworkAgent, PeerIdentity, TransactionBatch,
 };
-use crate::DistinctionEngine;
+use crate::{Distinction, DistinctionEngine};
 
-/// WASM-friendly Engine wrapper
+// =============================================================================
+// Startup hook (W5 / Decision 5.6)
+// =============================================================================
+
+/// WASM module start. Wires up the panic-to-`console.error` hook so
+/// Rust panics surface as readable stack traces in the JS console.
+///
+/// `set_once` is safe to call multiple times across module loads.
+#[wasm_bindgen(start)]
+pub fn _wasm_start() {
+    console_error_panic_hook::set_once();
+}
+
+// =============================================================================
+// Hex conversion helpers (Decision 5.5)
+// =============================================================================
+//
+// `Distinction::to_hex` / `from_hex` live in `src/distinction_hex.rs`
+// (foundation). The WASM layer re-exports them as `idToHex` /
+// `idFromHex` for JS callers that need to display or parse IDs at the
+// human-facing edge (logging, JSON debug, URL params). The substrate
+// itself never sees hex.
+
+/// Convert a distinction ID (16 raw bytes) to its 32-character
+/// lowercase hex representation.
+///
+/// Returns an error if `bytes` is not exactly 16 bytes.
+#[wasm_bindgen(js_name = idToHex)]
+pub fn id_to_hex(bytes: &[u8]) -> Result<String, JsValue> {
+    let arr: [u8; 16] = bytes
+        .try_into()
+        .map_err(|_| JsValue::from_str("idToHex: expected 16 bytes"))?;
+    Ok(Distinction::from_bytes_internal(arr).to_hex())
+}
+
+/// Convert a 32-character lowercase hex distinction ID into 16 raw
+/// bytes.
+///
+/// Returns an error if `s` is not 32 chars of `[0-9a-f]`.
+#[wasm_bindgen(js_name = idFromHex)]
+pub fn id_from_hex(s: &str) -> Result<Vec<u8>, JsValue> {
+    Distinction::from_hex(s)
+        .map(|d| d.as_bytes().to_vec())
+        .map_err(|e| JsValue::from_str(&format!("idFromHex: {}", e)))
+}
+
+// =============================================================================
+// Internal byte → Distinction helper
+// =============================================================================
+
+/// Construct a `Distinction` from a JS-supplied `Uint8Array`. Rejects
+/// any length other than 16.
+fn distinction_from_bytes(bytes: &[u8]) -> Result<Distinction, JsValue> {
+    let arr: [u8; 16] = bytes
+        .try_into()
+        .map_err(|_| JsValue::from_str("distinction id must be exactly 16 bytes"))?;
+    Ok(Distinction::from_bytes_internal(arr))
+}
+
+// =============================================================================
+// WasmEngine
+// =============================================================================
+
+/// WASM-friendly wrapper around `DistinctionEngine`.
 #[wasm_bindgen]
 pub struct WasmEngine {
     inner: Arc<DistinctionEngine>,
@@ -33,121 +108,115 @@ pub struct WasmEngine {
 
 #[wasm_bindgen]
 impl WasmEngine {
-    /// Create a new engine with primordial distinctions (Δ₀, Δ₁)
+    /// Create a new engine seeded with primordial distinctions Δ₀, Δ₁.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self { inner: Arc::new(DistinctionEngine::new()) }
     }
 
-    /// Get current distinction count
+    /// Current distinction count (including Δ₀, Δ₁).
     #[wasm_bindgen(js_name = distinctionCount)]
     pub fn distinction_count(&self) -> usize {
         self.inner.distinction_count()
     }
 
-    /// Get current relationship count
+    /// Current relationship count.
     #[wasm_bindgen(js_name = relationshipCount)]
     pub fn relationship_count(&self) -> usize {
         self.inner.relationship_count()
     }
 
-    /// Get primordial distinction Δ₀ ID as raw bytes
-    /// Note: Primordial IDs ("0", "1") return as UTF-8 bytes, synthesized IDs return as binary
+    /// Primordial Δ₀ as a 16-byte `Uint8Array`.
     #[wasm_bindgen(js_name = d0Id)]
     pub fn d0_id(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.d0().to_hex())
+        self.inner.d0().as_bytes().to_vec()
     }
 
-    /// Get primordial distinction Δ₁ ID as raw bytes
-    /// Note: Primordial IDs ("0", "1") return as UTF-8 bytes, synthesized IDs return as binary
+    /// Primordial Δ₁ as a 16-byte `Uint8Array`.
     #[wasm_bindgen(js_name = d1Id)]
     pub fn d1_id(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.d1().to_hex())
+        self.inner.d1().as_bytes().to_vec()
     }
 
-    /// Synthesize two distinctions by their IDs (as strings)
-    /// Returns the ID of the resulting distinction as raw bytes
+    /// Synthesize two distinctions by their canonical 16-byte IDs.
+    ///
+    /// Both arguments and the return value are `Uint8Array` of length
+    /// 16. Returns a JS error if either input is the wrong length.
     #[wasm_bindgen]
-    pub fn synthesize(&self, id_a: &str, id_b: &str) -> Result<Vec<u8>, JsValue> {
-        // O(1) lookup using the engine's internal map, replacing the slow O(N) snapshot/linear search.
-        let a = self
-            .inner
-            .get_distinction_by_id(id_a)
-            .ok_or_else(|| JsValue::from_str(&format!("Distinction not found: {}", id_a)))?;
-
-        let b = self
-            .inner
-            .get_distinction_by_id(id_b)
-            .ok_or_else(|| JsValue::from_str(&format!("Distinction not found: {}", id_b)))?;
-
+    pub fn synthesize(&self, id_a: &[u8], id_b: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let a = distinction_from_bytes(id_a)?;
+        let b = distinction_from_bytes(id_b)?;
         let result = self.inner.synthesize(&a, &b);
-        Ok(id_to_bytes(result.to_hex()))
+        Ok(result.as_bytes().to_vec())
     }
 
-    /// Batch synthesis benchmark - runs n iterations inside WASM
-    /// Eliminates FFI overhead by keeping the loop in Rust
-    /// Returns number of completed operations
+    /// Batch synthesis benchmark — runs `iterations` Δ₀⊕Δ₁ folds
+    /// inside WASM (no FFI overhead per call). Returns the iteration
+    /// count for parity with the JS-side timer.
     #[wasm_bindgen(js_name = benchmarkSynthesis)]
     pub fn benchmark_synthesis(&self, iterations: u32) -> u32 {
         let d0 = self.inner.d0();
         let d1 = self.inner.d1();
-
         for _ in 0..iterations {
             let _ = self.inner.synthesize(d0, d1);
         }
-
         iterations
     }
 }
 
-/// WASM binding for NetworkAgent subsystem
-///
-/// Thin wrapper exposing NetworkAgent to JavaScript.
-/// The NetworkAgent itself implements LocalCausalAgent:
-/// - Locality: Anchored to local network root
-/// - Causality: ΔNew = ΔNetwork_Root ⊕ ΔNetwork_Action
-/// - Determinism: All network actions are canonicalizable
+impl Default for WasmEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// =============================================================================
+// WasmNetworkAgent
+// =============================================================================
+
+/// WASM wrapper around `NetworkAgent`.
 #[wasm_bindgen]
 pub struct WasmNetworkAgent {
-    inner: NetworkAgent, // The actual subsystem (implements LocalCausalAgent)
+    inner: NetworkAgent,
     engine: Arc<DistinctionEngine>,
 }
 
 #[wasm_bindgen]
 impl WasmNetworkAgent {
-    /// Create new network agent subsystem
     #[wasm_bindgen(constructor)]
     pub fn new(engine: &WasmEngine) -> Self {
-        Self {
-            inner: NetworkAgent::new(&engine.inner), // Subsystem creation
-            engine: engine.inner.clone(),
-        }
+        Self { inner: NetworkAgent::new(&engine.inner), engine: engine.inner.clone() }
     }
 
-    /// Get network agent's current root as raw bytes (from LocalCausalAgent trait)
+    /// Current network root as a 16-byte `Uint8Array`.
     #[wasm_bindgen(js_name = currentRoot)]
     pub fn current_root(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.get_current_root().to_hex())
+        self.inner.get_current_root().as_bytes().to_vec()
     }
 
-    /// Get consensus state root as raw bytes (managed by validator inside agent)
+    /// Consensus state root (validator-held) as a 16-byte `Uint8Array`.
     #[wasm_bindgen(js_name = consensusRoot)]
     pub fn consensus_root(&self) -> Vec<u8> {
-        id_to_bytes(&self.inner.consensus_state_root())
+        // `consensus_state_root` returns hex; round-trip back through
+        // bytes for the WASM-facing API. The validator's internal
+        // Distinction lives in bytes; this conversion is a thin
+        // adapter at the boundary.
+        Distinction::from_hex(&self.inner.consensus_state_root())
+            .map(|d| d.as_bytes().to_vec())
+            .expect("consensus_state_root is always 32-char hex")
     }
 
-    /// Join peer - agent synthesizes NetworkAction::PeerJoined
-    /// Returns new root as raw bytes
+    /// Join a peer. Returns the new root as a 16-byte `Uint8Array`.
     #[wasm_bindgen(js_name = joinPeer)]
     pub fn join_peer(&mut self, peer_id: &str) -> Result<Vec<u8>, JsValue> {
         let peer = PeerIdentity::new(peer_id.to_string(), &self.engine)
             .map_err(|e| JsValue::from_str(&e))?;
         let new_root = self.inner.join_peer(peer, &self.engine);
-        Ok(id_to_bytes(new_root.to_hex()))
+        Ok(new_root.as_bytes().to_vec())
     }
 
-    /// Bulk join multiple peers - eliminates FFI overhead for batch operations
-    /// Returns final root as raw bytes
+    /// Bulk join — eliminates FFI overhead for batch operations.
+    /// Returns the final root as a 16-byte `Uint8Array`.
     #[wasm_bindgen(js_name = joinPeers)]
     pub fn join_peers(&mut self, peer_ids: Vec<String>) -> Result<Vec<u8>, JsValue> {
         let mut new_root = self.inner.get_current_root().clone();
@@ -156,37 +225,35 @@ impl WasmNetworkAgent {
                 .map_err(|e| JsValue::from_str(&e))?;
             new_root = self.inner.join_peer(peer, &self.engine);
         }
-        Ok(id_to_bytes(new_root.to_hex()))
+        Ok(new_root.as_bytes().to_vec())
     }
 
-    /// Advance epoch - agent synthesizes NetworkAction::EpochAdvanced
-    /// Returns new root as raw bytes
+    /// Advance one epoch. Returns the new root as a 16-byte
+    /// `Uint8Array`.
     #[wasm_bindgen(js_name = advanceEpoch)]
     pub fn advance_epoch(&mut self) -> Result<Vec<u8>, JsValue> {
         let new_root = self.inner.advance_epoch(&self.engine);
-        Ok(id_to_bytes(new_root.to_hex()))
+        Ok(new_root.as_bytes().to_vec())
     }
 
-    /// Get current epoch
     #[wasm_bindgen(js_name = currentEpoch)]
     pub fn current_epoch(&self) -> u64 {
         self.inner.current_epoch()
     }
 
-    /// Get validator count
     #[wasm_bindgen(js_name = validatorCount)]
     pub fn validator_count(&self) -> usize {
         self.inner.validator_count()
     }
 
-    /// Get deterministic leader (pure function of epoch + validator set)
+    /// Deterministic leader id (string). Returns `null` if no
+    /// validators are joined.
     #[wasm_bindgen(js_name = getLeader)]
     pub fn get_leader(&self) -> Option<String> {
         self.inner.get_current_leader().map(|p| p.id.clone())
     }
 
-    /// Batch leader election benchmark - runs n iterations inside WASM
-    /// Eliminates FFI overhead by keeping the loop in Rust
+    /// Batch leader election benchmark.
     #[wasm_bindgen(js_name = benchmarkLeaderElection)]
     pub fn benchmark_leader_election(&self, iterations: u32) -> u32 {
         for _ in 0..iterations {
@@ -195,31 +262,43 @@ impl WasmNetworkAgent {
         iterations
     }
 
-    /// Propose commitment (Stage 1) - returns commitment hash as raw bytes
+    /// Stage 1 propose. Returns the 32-byte commitment hash as a
+    /// `Uint8Array`.
     #[wasm_bindgen(js_name = proposeCommitment)]
     pub fn propose_commitment(&mut self, batch_json: &str) -> Result<Vec<u8>, JsValue> {
         let batch: TransactionBatch = serde_json::from_str(batch_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid batch JSON: {}", e)))?;
-
         let commitment = self
             .inner
             .propose_commitment(batch, &self.engine)
             .map_err(|e| JsValue::from_str(&e))?;
-
         Ok(commitment.commitment_hash.to_vec())
     }
 
-    /// Check commitment (Light node verification)
-    /// Accepts hash as raw bytes (Uint8Array)
+    /// Stage 1 light-node check.
+    ///
+    /// # W10 closure (CHECKLIST 1.8 / Phase 6 sub-branch #10)
+    ///
+    /// Mirrors the FFI F7 fix from sub-branch #8: the constructed
+    /// `BatchCommitment` now carries the real `leader_id` and
+    /// `batch_size` instead of v1.2.0's empty / zero "Frankenstein"
+    /// values. The verify is metadata-only by design (nonce + epoch);
+    /// full hash verification requires the batch payload.
     #[wasm_bindgen(js_name = checkCommitment)]
     pub fn check_commitment(
         &self,
         hash_bytes: &[u8],
         nonce: u64,
         epoch: u64,
+        leader_id: &str,
+        batch_size: u64,
     ) -> Result<bool, JsValue> {
         if hash_bytes.len() != 32 {
-            return Err(JsValue::from_str("Hash must be 32 bytes"));
+            return Err(JsValue::from_str("commitment hash must be 32 bytes"));
+        }
+        if leader_id.is_empty() {
+            // Mirrors PeerIdentity::new's N2 rejection.
+            return Err(JsValue::from_str("leader_id must not be empty"));
         }
 
         let mut hash = [0u8; 32];
@@ -229,15 +308,15 @@ impl WasmNetworkAgent {
             commitment_hash: hash,
             nonce,
             epoch,
-            leader_id: String::new(),
-            batch_size: 0,
+            leader_id: leader_id.to_string(),
+            batch_size: batch_size as usize,
         };
 
         Ok(self.inner.check_commitment(&commitment))
     }
 
-    /// Finalize batch (Stage 2)
-    /// Accepts hash as raw bytes, returns new root as raw bytes
+    /// Stage 2 finalize. `hash_bytes` is a 32-byte `Uint8Array`.
+    /// Returns the new root as a 16-byte `Uint8Array`.
     #[wasm_bindgen(js_name = finalizeBatch)]
     pub fn finalize_batch(
         &mut self,
@@ -246,11 +325,9 @@ impl WasmNetworkAgent {
     ) -> Result<Vec<u8>, JsValue> {
         let batch: TransactionBatch = serde_json::from_str(batch_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid batch JSON: {}", e)))?;
-
         if hash_bytes.len() != 32 {
-            return Err(JsValue::from_str("Hash must be 32 bytes"));
+            return Err(JsValue::from_str("commitment hash must be 32 bytes"));
         }
-
         let mut hash = [0u8; 32];
         hash.copy_from_slice(hash_bytes);
 
@@ -258,57 +335,48 @@ impl WasmNetworkAgent {
             .inner
             .finalize_batch(batch, hash, &self.engine)
             .map_err(|e| JsValue::from_str(&e))?;
-
-        Ok(id_to_bytes(result.to_hex()))
+        Ok(result.as_bytes().to_vec())
     }
 }
 
-/// WASM binding for ConsensusValidator subsystem
-///
-/// Thin wrapper exposing ConsensusValidator to JavaScript.
-/// The ConsensusValidator itself implements LocalCausalAgent:
-/// - Locality: Anchored to consensus state root
-/// - Causality: ΔNew = ΔState_Root ⊕ ΔTransaction
-/// - Determinism: All transactions are canonicalizable
+// =============================================================================
+// WasmValidator
+// =============================================================================
+
+/// WASM wrapper around `ConsensusValidator`.
 #[wasm_bindgen]
 pub struct WasmValidator {
-    inner: ConsensusValidator, // The actual subsystem (implements LocalCausalAgent)
+    inner: ConsensusValidator,
     engine: Arc<DistinctionEngine>,
 }
 
 #[wasm_bindgen]
 impl WasmValidator {
-    /// Create new consensus validator subsystem
     #[wasm_bindgen(constructor)]
     pub fn new(engine: &WasmEngine) -> Self {
         Self {
-            inner: ConsensusValidator::new(&engine.inner), // Subsystem creation
+            inner: ConsensusValidator::new(&engine.inner),
             engine: engine.inner.clone(),
         }
     }
 
-    /// Get validator's current root as raw bytes (from LocalCausalAgent trait)
     #[wasm_bindgen(js_name = currentRoot)]
     pub fn current_root(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.get_current_root().to_hex())
+        self.inner.get_current_root().as_bytes().to_vec()
     }
 
-    /// Get expected nonce for next transaction
     #[wasm_bindgen(js_name = expectedNonce)]
     pub fn expected_nonce(&self) -> u64 {
         self.inner.expected_nonce()
     }
 
-    /// Validate batch - validator performs atomic causal synthesis
-    /// Returns new root as raw bytes
     #[wasm_bindgen(js_name = validateBatch)]
     pub fn validate_batch(&mut self, batch_json: &str) -> Result<Vec<u8>, JsValue> {
         let batch: TransactionBatch = serde_json::from_str(batch_json)
             .map_err(|e| JsValue::from_str(&format!("Invalid batch JSON: {}", e)))?;
-
         match self.inner.validate_batch(batch, &self.engine) {
             crate::subsystems::BatchValidationResult::Valid(new_root) => {
-                Ok(id_to_bytes(new_root.to_hex()))
+                Ok(new_root.as_bytes().to_vec())
             },
             crate::subsystems::BatchValidationResult::Rejected(reason) => {
                 Err(JsValue::from_str(&reason))
@@ -316,8 +384,6 @@ impl WasmValidator {
         }
     }
 
-    /// Batch validation benchmark - validates n single-tx batches inside WASM
-    /// Eliminates FFI overhead by keeping the loop in Rust
     #[wasm_bindgen(js_name = benchmarkValidation)]
     pub fn benchmark_validation(&mut self, iterations: u32) -> u32 {
         for _ in 0..iterations {
@@ -334,415 +400,300 @@ impl WasmValidator {
     }
 }
 
-/// WASM binding for CommitmentAgent subsystem
-///
-/// Thin wrapper exposing CommitmentAgent to JavaScript.
-/// The CommitmentAgent itself implements LocalCausalAgent:
-/// - Locality: Anchored to commitment root
-/// - Causality: ΔNew = ΔCommitment_Root ⊕ ΔBatch_Commitment
-/// - Determinism: All commitments are canonicalizable
+// =============================================================================
+// WasmCommitmentAgent
+// =============================================================================
+
+/// WASM wrapper around `CommitmentAgent`.
 #[wasm_bindgen]
 pub struct WasmCommitmentAgent {
-    inner: CommitmentAgent, // The actual subsystem (implements LocalCausalAgent)
+    inner: CommitmentAgent,
 }
 
 #[wasm_bindgen]
 impl WasmCommitmentAgent {
-    /// Create new commitment agent subsystem
     #[wasm_bindgen(constructor)]
     pub fn new(engine: &WasmEngine) -> Self {
-        Self {
-            inner: CommitmentAgent::new(&engine.inner), // Subsystem creation
-        }
+        Self { inner: CommitmentAgent::new(&engine.inner) }
     }
 
-    /// Get commitment agent's current root as raw bytes (from LocalCausalAgent trait)
     #[wasm_bindgen(js_name = currentRoot)]
     pub fn current_root(&self) -> Vec<u8> {
-        id_to_bytes(self.inner.get_current_root().to_hex())
+        self.inner.get_current_root().as_bytes().to_vec()
     }
 
-    /// Get expected nonce for next commitment
     #[wasm_bindgen(js_name = expectedNonce)]
     pub fn expected_nonce(&self) -> u64 {
         self.inner.expected_nonce()
     }
 
-    /// Get total commitments processed by this subsystem
     #[wasm_bindgen(js_name = commitmentsProcessed)]
     pub fn commitments_processed(&self) -> u64 {
         self.inner.commitments_processed()
     }
 }
 
-/// Convert distinction ID to bytes.
-///
-/// Post step 3 of the foundation sub-branch, every Distinction's `.to_hex()`
-/// is a 32-character (16-byte) lowercase hex string. The legacy 64-char
-/// branch is retained for safety while sub-branch #10 (impl/wasm-bytes-on-wire)
-/// rewrites WASM to bytes-canonical.
-fn id_to_bytes(id: impl AsRef<str>) -> Vec<u8> {
-    let id = id.as_ref();
-    if id.len() == 32 {
-        return hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec());
-    }
-    if id.len() == 64 {
-        return hex::decode(id).unwrap_or_else(|_| id.as_bytes().to_vec());
-    }
-    // Primordial or short IDs - return as UTF-8.
-    id.as_bytes().to_vec()
-}
-
-/// Helper for hex decoding (simple implementation)
-mod hex {
-    pub fn decode(s: &str) -> Result<Vec<u8>, String> {
-        if s.len() % 2 != 0 {
-            return Err("Hex string must have even length".to_string());
-        }
-
-        (0..s.len())
-            .step_by(2)
-            .map(|i| {
-                u8::from_str_radix(&s[i..i + 2], 16).map_err(|e| format!("Invalid hex: {}", e))
-            })
-            .collect()
-    }
-}
+// =============================================================================
+// Tests
+// =============================================================================
+//
+// W13 closure (CHECKLIST 1.8 / Phase 6 sub-branch #10): tests in this
+// module use `#[wasm_bindgen_test]` rather than `#[test]` so they
+// actually exercise the WASM runtime under `wasm-pack test --node`.
+// Under host `cargo test --features wasm`, wasm-bindgen-test still
+// generates compilable test functions; they just don't execute as
+// native tests (the harness is the wasm runtime). The tests here
+// therefore deliberately avoid host-only invariants.
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    /// Helper to convert bytes to hex string for comparison
-    fn to_hex(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    /// Bytes formatter for assertion messages; replaces the
+    /// host-side `&str[..16]` slicing that the v1.2.0 tests used to
+    /// print hex prefixes.
+    fn to_hex_prefix(bytes: &[u8]) -> String {
+        bytes.iter().take(8).map(|b| format!("{:02x}", b)).collect()
     }
 
-    /// Test: WASM engine exposes same primordial distinctions as native
-    /// Falsifies if: WASM creates different Δ₀, Δ₁ than native engine
-    #[test]
-    fn test_wasm_engine_primordial_consistency() {
-        let native_engine = DistinctionEngine::new();
-        let wasm_engine = WasmEngine::new();
+    #[wasm_bindgen_test]
+    fn primordial_consistency() {
+        let native = DistinctionEngine::new();
+        let wasm = WasmEngine::new();
 
-        // WASM must have same primordial IDs as native (compare hex)
-        assert_eq!(to_hex(&wasm_engine.d0_id()), native_engine.d0().to_hex());
-        assert_eq!(to_hex(&wasm_engine.d1_id()), native_engine.d1().to_hex());
-
-        // Initial counts must match
-        assert_eq!(wasm_engine.distinction_count(), native_engine.distinction_count());
-        assert_eq!(wasm_engine.relationship_count(), native_engine.relationship_count());
+        // Bytes equality — both sides emit the same canonical 16-byte ID.
+        assert_eq!(wasm.d0_id(), native.d0().as_bytes().to_vec());
+        assert_eq!(wasm.d1_id(), native.d1().as_bytes().to_vec());
+        assert_eq!(wasm.distinction_count(), native.distinction_count());
+        assert_eq!(wasm.relationship_count(), native.relationship_count());
     }
 
-    /// Test: WASM synthesis produces identical results to native
-    /// Falsifies if: WASM synthesis diverges from native (breaks determinism)
-    #[test]
-    fn test_wasm_synthesis_determinism() {
-        let native_engine = DistinctionEngine::new();
-        let wasm_engine = WasmEngine::new();
+    #[wasm_bindgen_test]
+    fn synthesis_determinism() {
+        let native = DistinctionEngine::new();
+        let wasm = WasmEngine::new();
 
-        // Get IDs as hex strings for synthesis input
-        let d0_id = native_engine.d0().to_hex();
-        let d1_id = native_engine.d1().to_hex();
-
-        // Synthesize via WASM (returns bytes)
-        let wasm_result =
-            wasm_engine.synthesize(d0_id, d1_id).expect("WASM synthesis should succeed");
-
-        // Synthesize via native
-        let native_result = native_engine.synthesize(native_engine.d0(), native_engine.d1());
-
-        // Results MUST be identical (determinism) - compare hex
-        assert_eq!(to_hex(&wasm_result), native_result.to_hex());
+        let wasm_result = wasm.synthesize(&wasm.d0_id(), &wasm.d1_id()).unwrap();
+        let native_result = native.synthesize(native.d0(), native.d1());
+        assert_eq!(wasm_result, native_result.as_bytes().to_vec());
     }
 
-    /// Test: WASM respects Axiom of Symmetry
-    /// Falsifies if: synthesize(a, b) ≠ synthesize(b, a) in WASM
-    #[test]
-    fn test_wasm_axiom_symmetry() {
-        let native_engine = DistinctionEngine::new();
-        let wasm_engine = WasmEngine::new();
-        let d0 = native_engine.d0().to_hex();
-        let d1 = native_engine.d1().to_hex();
-
-        let ab = wasm_engine.synthesize(d0, d1).unwrap();
-        let ba = wasm_engine.synthesize(d1, d0).unwrap();
-
-        // Symmetry - order independence
-        assert_eq!(ab, ba, "WASM synthesis violates symmetry axiom");
+    #[wasm_bindgen_test]
+    fn axiom_symmetry() {
+        let wasm = WasmEngine::new();
+        let d0 = wasm.d0_id();
+        let d1 = wasm.d1_id();
+        let ab = wasm.synthesize(&d0, &d1).unwrap();
+        let ba = wasm.synthesize(&d1, &d0).unwrap();
+        assert_eq!(ab, ba, "symmetry violated");
     }
 
-    /// Test: WASM respects Axiom of Irreflexivity
-    /// Falsifies if: synthesize(a, a) ≠ a in WASM
-    #[test]
-    fn test_wasm_axiom_irreflexivity() {
-        let native_engine = DistinctionEngine::new();
-        let wasm_engine = WasmEngine::new();
-        let d0 = native_engine.d0().to_hex();
-
-        let result = wasm_engine.synthesize(d0, d0).unwrap();
-
-        // Irreflexivity - self-synthesis yields self
-        assert_eq!(to_hex(&result), d0, "WASM synthesis violates irreflexivity axiom");
+    #[wasm_bindgen_test]
+    fn axiom_irreflexivity() {
+        let wasm = WasmEngine::new();
+        let d0 = wasm.d0_id();
+        let result = wasm.synthesize(&d0, &d0).unwrap();
+        assert_eq!(result, d0, "irreflexivity violated");
     }
 
-    /// Test: NetworkAgent subsystem maintains LocalCausalAgent contract through WASM
-    /// Falsifies if: Subsystem root doesn't change after action synthesis
-    #[test]
-    fn test_wasm_network_agent_local_causal_compliance() {
+    #[wasm_bindgen_test]
+    fn synthesize_rejects_wrong_length_inputs() {
+        let wasm = WasmEngine::new();
+        let too_short = vec![0u8; 15];
+        let too_long = vec![0u8; 17];
+        assert!(wasm.synthesize(&too_short, &wasm.d1_id()).is_err());
+        assert!(wasm.synthesize(&wasm.d0_id(), &too_long).is_err());
+    }
+
+    #[wasm_bindgen_test]
+    fn id_to_hex_and_back_roundtrip() {
+        let wasm = WasmEngine::new();
+        let d0 = wasm.d0_id();
+        let hex = id_to_hex(&d0).unwrap();
+        assert_eq!(hex.len(), 32);
+        let bytes = id_from_hex(&hex).unwrap();
+        assert_eq!(bytes, d0);
+    }
+
+    #[wasm_bindgen_test]
+    fn id_to_hex_rejects_wrong_length() {
+        assert!(id_to_hex(&[0u8; 15]).is_err());
+        assert!(id_to_hex(&[0u8; 17]).is_err());
+    }
+
+    #[wasm_bindgen_test]
+    fn id_from_hex_rejects_invalid() {
+        assert!(id_from_hex("not-hex").is_err());
+        assert!(id_from_hex("deadbeef").is_err()); // wrong length
+        assert!(id_from_hex(&"z".repeat(32)).is_err()); // invalid chars
+    }
+
+    #[wasm_bindgen_test]
+    fn network_agent_local_causal_compliance() {
         let engine = WasmEngine::new();
         let mut agent = WasmNetworkAgent::new(&engine);
-
         let initial_root = agent.current_root();
 
-        // Perform causal action: join peer
-        let new_root = agent.join_peer("validator_0").expect("Peer join should succeed");
-
-        // LocalCausalAgent contract: ΔNew ≠ ΔOld (action changes state)
-        assert_ne!(new_root, initial_root, "NetworkAgent didn't update root after action");
-
-        // Verify agent's current_root matches the returned root
-        assert_eq!(
-            agent.current_root(),
-            new_root,
-            "Agent's current_root inconsistent with returned root"
-        );
+        let new_root = agent.join_peer("validator_0").expect("peer join ok");
+        assert_ne!(new_root, initial_root, "NetworkAgent root must change after action");
+        assert_eq!(agent.current_root(), new_root);
     }
 
-    /// Test: ConsensusValidator subsystem maintains LocalCausalAgent contract through WASM
-    /// Falsifies if: Validator doesn't synthesize transactions causally
-    #[test]
-    fn test_wasm_validator_local_causal_compliance() {
+    #[wasm_bindgen_test]
+    fn validator_local_causal_compliance() {
         let engine = WasmEngine::new();
         let mut validator = WasmValidator::new(&engine);
-
         let initial_root = validator.current_root();
         let initial_nonce = validator.expected_nonce();
 
         let batch = serde_json::json!({
             "transactions": [{"nonce": 0, "data": [1, 2, 3]}],
-            "previous_root": to_hex(&initial_root)
+            "previous_root": id_to_hex(&initial_root).unwrap()
         });
 
-        let new_root =
-            validator.validate_batch(&batch.to_string()).expect("Valid batch should succeed");
-
-        // LocalCausalAgent contract: ΔNew ≠ ΔOld
-        assert_ne!(new_root, initial_root, "Validator didn't update root after validation");
-
-        // Nonce should increment
-        assert_eq!(
-            validator.expected_nonce(),
-            initial_nonce + 1,
-            "Validator nonce didn't increment"
-        );
+        let new_root = validator.validate_batch(&batch.to_string()).expect("batch ok");
+        assert_ne!(new_root, initial_root);
+        assert_eq!(validator.expected_nonce(), initial_nonce + 1);
     }
 
-    /// Test: CommitmentAgent subsystem maintains LocalCausalAgent contract through WASM
-    /// Falsifies if: Commitment agent doesn't track commitments causally
-    #[test]
-    fn test_wasm_commitment_agent_local_causal_compliance() {
+    #[wasm_bindgen_test]
+    fn commitment_agent_local_causal_compliance() {
         let engine = WasmEngine::new();
         let agent = WasmCommitmentAgent::new(&engine);
-
-        // Verify initial state
         assert_eq!(agent.expected_nonce(), 0);
         assert_eq!(agent.commitments_processed(), 0);
-
-        let initial_root = agent.current_root();
-        assert!(!initial_root.is_empty(), "Commitment agent should have root");
+        let root = agent.current_root();
+        assert_eq!(root.len(), 16);
     }
 
-    /// Test: WASM two-stage commitment protocol maintains integrity
-    /// Falsifies if: Commitment hash doesn't match batch data
-    #[test]
-    fn test_wasm_commitment_protocol_integrity() {
+    #[wasm_bindgen_test]
+    fn commitment_protocol_integrity() {
         let engine = WasmEngine::new();
         let mut agent = WasmNetworkAgent::new(&engine);
-
-        // Add validators for leader election
         agent.join_peer("validator_0").unwrap();
 
         let batch = serde_json::json!({
             "transactions": [{"nonce": 0, "data": [1, 2, 3]}],
-            "previous_root": to_hex(&agent.consensus_root())
+            "previous_root": id_to_hex(&agent.consensus_root()).unwrap()
         })
         .to_string();
 
-        // Stage 1: Propose commitment (returns raw bytes)
-        let hash = agent.propose_commitment(&batch).expect("Commitment proposal should succeed");
+        let hash = agent.propose_commitment(&batch).expect("propose ok");
+        assert_eq!(hash.len(), 32);
 
-        assert!(!hash.is_empty(), "Commitment hash should not be empty");
-        assert_eq!(hash.len(), 32, "Commitment hash should be 32 bytes");
-
-        // Stage 1: Verify commitment (accepts raw bytes)
         let is_valid =
-            agent.check_commitment(&hash, 0, 0).expect("Commitment check should succeed");
+            agent.check_commitment(&hash, 0, 0, "validator_0", 1).expect("check ok");
+        assert!(is_valid);
 
-        assert!(is_valid, "Valid commitment should pass verification");
-
-        // Stage 2: Finalize with correct hash should succeed (accepts raw bytes)
         let result = agent.finalize_batch(&batch, &hash);
-        assert!(result.is_ok(), "Finalization with correct hash should succeed");
+        assert!(result.is_ok());
     }
 
-    /// Test: WASM rejects tampered commitment hash
-    /// Falsifies if: WASM accepts batch with wrong commitment hash
-    #[test]
-    fn test_wasm_commitment_hash_tampering_rejected() {
+    #[wasm_bindgen_test]
+    fn check_commitment_rejects_empty_leader_id() {
+        // W10 closure: empty leader_id is no longer a silent accept.
+        let engine = WasmEngine::new();
+        let agent = WasmNetworkAgent::new(&engine);
+        let fake_hash = vec![0u8; 32];
+        assert!(agent.check_commitment(&fake_hash, 0, 0, "", 1).is_err());
+    }
+
+    #[wasm_bindgen_test]
+    fn finalize_rejects_tampered_hash() {
         let engine = WasmEngine::new();
         let mut agent = WasmNetworkAgent::new(&engine);
         agent.join_peer("validator_0").unwrap();
 
         let batch = serde_json::json!({
             "transactions": [{"nonce": 0, "data": [1, 2, 3]}],
-            "previous_root": to_hex(&agent.consensus_root())
+            "previous_root": id_to_hex(&agent.consensus_root()).unwrap()
         })
         .to_string();
+        let _ = agent.propose_commitment(&batch).expect("propose ok");
 
-        // Propose commitment
-        let _correct_hash =
-            agent.propose_commitment(&batch).expect("Commitment proposal should succeed");
-
-        // Attacker creates different hash (32 zero bytes)
-        let tampered_hash = vec![0u8; 32];
-
-        // Should reject tampered hash
-        let result = agent.finalize_batch(&batch, &tampered_hash);
-        assert!(
-            result.is_err(),
-            "FALSIFICATION FAILED: Accepted batch with tampered commitment hash"
-        );
+        let tampered = vec![0u8; 32];
+        assert!(agent.finalize_batch(&batch, &tampered).is_err());
     }
 
-    /// Test: WASM rejects commitment with wrong nonce
-    /// Falsifies if: WASM accepts out-of-order transactions
-    #[test]
-    fn test_wasm_commitment_nonce_enforcement() {
+    #[wasm_bindgen_test]
+    fn check_commitment_rejects_wrong_nonce() {
         let engine = WasmEngine::new();
         let mut agent = WasmNetworkAgent::new(&engine);
         agent.join_peer("validator_0").unwrap();
 
         let batch = serde_json::json!({
             "transactions": [{"nonce": 0, "data": [1, 2, 3]}],
-            "previous_root": to_hex(&agent.consensus_root())
+            "previous_root": id_to_hex(&agent.consensus_root()).unwrap()
         })
         .to_string();
+        let hash = agent.propose_commitment(&batch).expect("propose ok");
 
-        let hash = agent.propose_commitment(&batch).expect("Commitment proposal should succeed");
-
-        // Check with wrong nonce (expected 0, checking 999)
-        let is_valid = agent.check_commitment(&hash, 999, 0).expect("Check should not error");
-
-        assert!(!is_valid, "FALSIFICATION FAILED: Accepted commitment with wrong nonce");
+        let is_valid =
+            agent.check_commitment(&hash, 999, 0, "validator_0", 1).expect("check ok");
+        assert!(!is_valid);
     }
 
-    /// Test: WASM validator enforces atomic failure
-    /// Falsifies if: Partial batch application possible
-    #[test]
-    fn test_wasm_validator_atomic_failure() {
+    #[wasm_bindgen_test]
+    fn validator_atomic_failure() {
         let engine = WasmEngine::new();
         let mut validator = WasmValidator::new(&engine);
 
         let initial_root = validator.current_root();
-
-        // Batch with invalid nonce in second transaction
         let bad_batch = serde_json::json!({
             "transactions": [
                 {"nonce": 0, "data": [1, 2, 3]},
-                {"nonce": 999, "data": [4, 5, 6]}  // Wrong nonce
+                {"nonce": 999, "data": [4, 5, 6]}
             ],
-            "previous_root": to_hex(&initial_root)
+            "previous_root": id_to_hex(&initial_root).unwrap()
         })
         .to_string();
 
-        let result = validator.validate_batch(&bad_batch);
-
-        // Should reject entire batch
-        assert!(result.is_err(), "Invalid batch should be rejected");
-
-        // Root should be unchanged (atomic failure)
-        assert_eq!(
-            validator.current_root(),
-            initial_root,
-            "FALSIFICATION FAILED: Partial batch application occurred"
-        );
-
-        // Nonce should be unchanged
-        assert_eq!(
-            validator.expected_nonce(),
-            0,
-            "FALSIFICATION FAILED: Nonce changed despite batch rejection"
-        );
+        assert!(validator.validate_batch(&bad_batch).is_err());
+        assert_eq!(validator.current_root(), initial_root);
+        assert_eq!(validator.expected_nonce(), 0);
     }
 
-    /// Test: WASM hex decoding correctness
-    /// Falsifies if: Hex conversion corrupts data
-    #[test]
-    fn test_wasm_hex_decoding_correctness() {
-        let original = [42u8; 32];
-        let encoded = to_hex(&original);
-        let decoded = hex::decode(&encoded).expect("Decoding should succeed");
-
-        assert_eq!(decoded.len(), 32);
-        assert_eq!(&decoded[..], &original[..], "Hex decoding corrupted data");
-    }
-
-    /// Test: WASM deterministic leader election through subsystem
-    /// Falsifies if: Same validator set produces different leaders
-    #[test]
-    fn test_wasm_deterministic_leader_election() {
+    #[wasm_bindgen_test]
+    fn deterministic_leader_election() {
         let engine = WasmEngine::new();
         let mut agent1 = WasmNetworkAgent::new(&engine);
         let mut agent2 = WasmNetworkAgent::new(&engine);
-
-        // Add same validators to both agents
         for i in 0..5 {
             let peer_id = format!("validator_{}", i);
             agent1.join_peer(&peer_id).unwrap();
             agent2.join_peer(&peer_id).unwrap();
         }
-
-        let leader1 = agent1.get_leader();
-        let leader2 = agent2.get_leader();
-
-        // Determinism: same validator set → same leader
-        assert_eq!(leader1, leader2, "FALSIFICATION FAILED: Leader election is non-deterministic");
+        assert_eq!(agent1.get_leader(), agent2.get_leader());
     }
 
-    /// Test: Batch benchmark functions work correctly
-    #[test]
-    fn test_wasm_batch_benchmarks() {
+    #[wasm_bindgen_test]
+    fn batch_benchmarks() {
         let engine = WasmEngine::new();
+        assert_eq!(engine.benchmark_synthesis(100), 100);
 
-        // Test synthesis benchmark
-        let iterations = engine.benchmark_synthesis(100);
-        assert_eq!(iterations, 100);
-
-        // Test leader election benchmark
         let mut agent = WasmNetworkAgent::new(&engine);
         for i in 0..3 {
             agent.join_peer(&format!("validator_{}", i)).unwrap();
         }
-        let iterations = agent.benchmark_leader_election(100);
-        assert_eq!(iterations, 100);
+        assert_eq!(agent.benchmark_leader_election(100), 100);
 
-        // Test validation benchmark
         let mut validator = WasmValidator::new(&engine);
-        let iterations = validator.benchmark_validation(10);
-        assert_eq!(iterations, 10);
+        assert_eq!(validator.benchmark_validation(10), 10);
     }
 
-    /// Test: Bulk peer join works correctly
-    #[test]
-    fn test_wasm_bulk_peer_join() {
+    #[wasm_bindgen_test]
+    fn bulk_peer_join() {
         let engine = WasmEngine::new();
         let mut agent = WasmNetworkAgent::new(&engine);
-
         let peer_ids: Vec<String> = (0..5).map(|i| format!("validator_{}", i)).collect();
-        let result = agent.join_peers(peer_ids);
-
-        assert!(result.is_ok());
+        assert!(agent.join_peers(peer_ids).is_ok());
         assert_eq!(agent.validator_count(), 5);
+    }
+
+    /// Diagnostic helper used for printing IDs in assertion failures.
+    #[allow(dead_code)]
+    fn _dbg_prefix(bytes: &[u8]) -> String {
+        to_hex_prefix(bytes)
     }
 }

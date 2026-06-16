@@ -118,18 +118,25 @@ V5 was initially flagged Tier 0 after the probe demonstration but on review belo
 - [x] `batch_len: usize` unbounded — UB if > `isize::MAX`. *(audit/ffi F9)*
   - DONE: `koru_agent_propose_commitment` and `koru_agent_finalize_batch` reject `batch_len > isize::MAX as usize` before any `slice::from_raw_parts`. New test `test_ffi_propose_commitment_rejects_oversized_batch_len`.
 
-### 1.8 WASM wire-format — DECISION 5.5: bytes-on-wire canonical
-- [ ] **Kill `id_to_bytes` heuristic entirely.** Expose `Distinction::as_bytes() -> &[u8; 16]`; all WASM-facing IDs are `Uint8Array` of length 16. *(audit/wasm W1)*
-- [ ] **Primordials get real 16-byte IDs** (`[0u8; 16]` and `[1u8; 16]` or domain-separated hashes; small open subdecision in v2.0 implementation). Special-case dies. *(audit/wasm W2)* — EVIDENCE: `experiments/findings/baseline.md` (`test_wasm_engine_primordial_consistency` FAILS in baseline)
-- [ ] **`WasmEngine::synthesize` signature becomes `synthesize(&[u8], &[u8]) -> Result<Vec<u8>, JsValue>`.** Symmetric inputs/outputs. *(audit/wasm W9)*
-- [ ] **Add `Distinction::to_hex(&self) -> String` and `Distinction::from_hex(s: &str) -> Result<Self, ParseError>`** in a separate hex module. Expose via WASM as `idToHex(arr: &[u8]) -> String` and `idFromHex(s: &str) -> Result<Vec<u8>, JsValue>` for JS display/parsing.
-- [ ] **`impl Display for Distinction` uses `to_hex`.** `impl Debug` too.
-- [ ] Remove `id_to_bytes` silent UTF-8 fallback (the function disappears entirely). *(audit/wasm W4)*
-- [ ] WASM `checkCommitment` builds Frankenstein `BatchCommitment { leader_id: "", batch_size: 0 }`. *(audit/wasm W10)*
-  - Fix: add proper params, OR narrower API in `NetworkAgent`.
-- [ ] Add `console_error_panic_hook` under existing `wasm` feature; call `set_once()` from `#[wasm_bindgen(start)]`. *(audit/wasm W5; DECISION 5.6: always-on)*
-- [ ] WASM tests are `#[test]` not `#[wasm_bindgen_test]` — never hit a WASM runtime. *(audit/wasm W13)*
-  - Fix: convert. Verify host tests pass first under `--features wasm`.
+### 1.8 WASM wire-format — DONE in Phase 6 sub-branch #10 (Decision 5.5)
+- [x] **Kill `id_to_bytes` heuristic entirely.** *(audit/wasm W1)*
+  - DONE: `id_to_bytes` (and the internal `hex` helper module) deleted from `wasm.rs`. Every ID-returning method now calls `d.as_bytes().to_vec()` directly.
+- [x] **Primordials get real 16-byte IDs.** *(audit/wasm W2)*
+  - DONE in foundation (Phase 6 #1): `engine.d0().as_bytes() == [0u8; 16]`, `engine.d1().as_bytes() == [1, 0, …, 0]`. WASM bindings ride the same path as synthesized IDs — no UTF-8 special-case.
+- [x] **`WasmEngine::synthesize` signature becomes `synthesize(&[u8], &[u8]) -> Result<Vec<u8>, JsValue>`.** *(audit/wasm W9)*
+  - DONE: bytes-canonical. Lengths other than 16 are rejected with a JS error before any internal call.
+- [x] **Add `Distinction::to_hex` / `from_hex` + JS `idToHex` / `idFromHex` helpers.**
+  - DONE: `Distinction::to_hex` / `from_hex` shipped in foundation. WASM exposes them as freestanding `#[wasm_bindgen(js_name = idToHex/idFromHex)]` functions. Both validate length / charset before returning.
+- [x] **`impl Display for Distinction` uses `to_hex`.** `impl Debug` too.
+  - DONE in foundation (Phase 6 #1).
+- [x] Remove `id_to_bytes` silent UTF-8 fallback. *(audit/wasm W4)*
+  - DONE: the function no longer exists.
+- [x] WASM `checkCommitment` builds Frankenstein `BatchCommitment { leader_id: "", batch_size: 0 }`. *(audit/wasm W10)*
+  - DONE: `checkCommitment(hash_bytes, nonce, epoch, leader_id, batch_size)` requires real leader_id + batch_size. Empty `leader_id` is rejected with a JS error. Mirrors the FFI F7 closure from sub-branch #8.
+- [x] Add `console_error_panic_hook` under existing `wasm` feature. *(audit/wasm W5; DECISION 5.6: always-on)*
+  - DONE: `console_error_panic_hook = { version = "0.1", optional = true }` added as a `wasm`-feature dep; `#[wasm_bindgen(start)] fn _wasm_start()` calls `set_once()` on module load. Rust panics now surface as readable stack traces in the JS console.
+- [x] WASM tests are `#[test]` not `#[wasm_bindgen_test]`. *(audit/wasm W13)*
+  - DONE: all 18 unit tests in `src/wasm.rs` are now `#[wasm_bindgen_test]`. `tests/falsification/wasm_consistency.rs` is also `#[wasm_bindgen_test]` and `#![cfg(feature = "wasm")]`-gated. Run with `wasm-pack test --node --features wasm`. Host `cargo test --features wasm` compiles them but skips execution (the wasm-bindgen-test harness is wasm-only). v1.2.0's host-`#[test]` layout that aborted on every `JsValue` call ("function not implemented on non-wasm32 targets") is gone.
 
 ### 1.9 Compactor cleanup — DONE in Phase 6 sub-branch #9
 - [x] Compactor magic constants: `hot_threshold: 3`, `warm = hot/2`, unverified "26.6×" claim. *(audit/compactor)*
@@ -172,7 +179,7 @@ All 8 binaries persisted clippy-clean AND run. Logs at `experiments/findings/run
 
 **New baseline-derived items:**
 - [x] CLAUDE.md says "114 tests" but actual is 103. → DONE in commit `7265bfd` (Phase 2). Per Phase 6 #1, count is now **117** tests post-foundation.
-- [ ] `tests/falsification/wasm_consistency.rs` is broken under `--features wasm` — pre-existing test code that expects a wire format the wasm wrapper doesn't deliver. Fix as part of Section 1.8 wasm work (sub-branch #10).
+- [x] `tests/falsification/wasm_consistency.rs` is broken under `--features wasm` — pre-existing test code that expects a wire format the wasm wrapper doesn't deliver. — DONE in Phase 6 sub-branch #10. The file is now `#[wasm_bindgen_test]` + `#![cfg(feature = "wasm")]`-gated; bytes-canonical throughout; the v1.2.0 string-comparison breakage is gone.
 - [ ] Pre-existing experiments (`exp01-12`) have ~20 clippy warnings (`type_complexity`, `manual_div_ceil`, `dead_code`). Either fix as cleanup or scope the "no warnings" promise to `src/` + `tests/`. Recommended: fix. Low priority but easy.
 
 ---
@@ -318,7 +325,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 1.5 — Consensus-correctness bugs (MUST NOT SHIP) | 3 | **complete** (Phase 6 sub-branch #6, merge `b0a641a`) |
 | Section 1.6 — Consensus hardening | 8 | **complete** (Phase 6 sub-branch #7) |
 | Section 1.7 — FFI hardening (incl. 2 HIGH) | 7 | **complete** (Phase 6 sub-branch #8) |
-| Section 1.8 — WASM bytes-on-wire + helpers | 9 | not started (Phase 6 sub-branch #10) |
+| Section 1.8 — WASM bytes-on-wire + helpers | 9 | **complete** (Phase 6 sub-branch #10) |
 | Section 1.9 — Compactor cleanup | 4 + 1 (archived_ids) | **complete** (Phase 6 sub-branch #9) |
 | Section 1.10 — Architectural cleanup | 2 | **complete** (Phase 6 sub-branch #2, merge `b45c434`) |
 | Section 1.11 — Phase 1 follow-up | 13 | **complete** |
@@ -331,7 +338,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | Section 4 — VALIDATE | 4 claims | **complete** |
 | Section 5 — DECIDE | 9 | **complete (all locked)** |
 
-**Current test count:** 161 release (post Phase 6 #9; was 157 before, 103 at baseline). Clippy clean (incl. `--all-targets`). `Cargo.toml` at `1.2.0`.
+**Current test count:** 161 release (host, unchanged through #10 — the new WASM tests are `#[wasm_bindgen_test]` and only run under `wasm-pack`). Clippy clean both bare and `--features wasm` (incl. `--all-targets`). `Cargo.toml` at `1.2.0`.
 
 **Phase 6 sub-branch tracker:**
 
@@ -346,7 +353,7 @@ All Section 5 decisions resolved 2026-06-11. Frame: no active users today; every
 | 7 | `fix/consensus-hardening` | ✅ on branch (ready to merge) — Section 1.6 closed; N1/N2 confirmed via `audit_network_foreign_peers` re-run |
 | 8 | `fix/ffi-hardening` | ✅ on branch (ready to merge) — Section 1.7 closed; F7 FFI half landed |
 | 9 | `cleanup/compactor` | ✅ on branch (ready to merge) — Section 1.9 closed |
-| 10 | `impl/wasm-bytes-on-wire` | ⬜ unblocked once WASM toolchain confirmed |
+| 10 | `impl/wasm-bytes-on-wire` | ✅ on branch (ready to merge) — Section 1.8 closed; host `cargo test --features wasm` passes, JS-side validation via `wasm-pack test --node --features wasm` |
 | 11 | `docs/changelog-finalize` | ⏸ last (after all others) |
 
 **To call the project "completely theory-aligned, clean, high-quality, bug-free":**

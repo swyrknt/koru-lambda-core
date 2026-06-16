@@ -29,10 +29,20 @@ crossbeam-queue = "0.3"
 wasm-bindgen = { version = "0.2", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
 js-sys = { version = "0.3", optional = true }
+# W5 / Decision 5.6: always-on under the wasm feature.
+# Sets up `console.error` panic hooks so panics in WASM code surface as
+# readable stack traces in the JS console instead of opaque
+# `RuntimeError: unreachable executed`.
+console_error_panic_hook = { version = "0.1", optional = true }
 
 [features]
 default = []
-wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys"]
+wasm = [
+    "wasm-bindgen",
+    "serde-wasm-bindgen",
+    "js-sys",
+    "console_error_panic_hook",
+]
 
 [build-dependencies]
 cbindgen = "0.26"
@@ -42,6 +52,12 @@ criterion = "0.5"
 proptest = "1.0"
 petgraph = "0.6"
 rand = "0.8"
+# W13 closure (CHECKLIST 1.8 / Phase 6 sub-branch #10). Lets WASM
+# tests run under `wasm-pack test --node` (or any other
+# wasm-bindgen-test driver) instead of pretending to be host-side
+# `#[test]`s — the v1.2.0 layout compiled but exercised the native
+# Rust code path, not the WASM runtime.
+wasm-bindgen-test = "0.3"
 
 [[bench]]
 name = "performance"
