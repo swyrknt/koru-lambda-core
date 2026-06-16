@@ -464,8 +464,8 @@ mod tests {
         let engine = Arc::new(DistinctionEngine::new());
 
         // Parse a hex string the engine has never synthesized.
-        let fabricated = Distinction::from_hex(&"f".repeat(32))
-            .expect("32 hex chars parse to a Distinction");
+        let fabricated =
+            Distinction::from_hex(&"f".repeat(32)).expect("32 hex chars parse to a Distinction");
         assert_eq!(
             engine.degree(&fabricated),
             0,

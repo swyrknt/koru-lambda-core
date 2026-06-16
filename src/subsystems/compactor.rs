@@ -142,11 +142,7 @@ impl StructuralCompactor {
     /// sub-branch #5). The full state-snapshot clone that v1.2.0
     /// performed is no longer required.
     pub fn calculate_sis(&self, engine: &Arc<DistinctionEngine>) -> HashMap<String, usize> {
-        engine
-            .get_distinctions_snapshot()
-            .iter()
-            .map(|d| (d.to_hex(), engine.degree(d)))
-            .collect()
+        engine.get_distinctions_snapshot().iter().map(|d| (d.to_hex(), engine.degree(d))).collect()
     }
 
     /// Classify distinctions into thermal states using the compactor's
@@ -194,20 +190,15 @@ impl StructuralCompactor {
             }
         }
 
-        CompactionAction {
-            sis_threshold: self.hot_threshold,
-            preserved_count,
-        }
+        CompactionAction { sis_threshold: self.hot_threshold, preserved_count }
     }
 
     /// Current compaction statistics.
     pub fn get_stats(&self) -> CompactionStats {
         let total_known = self.thermal_states.len();
         let hot_count = self.thermal_states.values().filter(|s| **s == ThermalState::Hot).count();
-        let warm_count =
-            self.thermal_states.values().filter(|s| **s == ThermalState::Warm).count();
-        let cold_count =
-            self.thermal_states.values().filter(|s| **s == ThermalState::Cold).count();
+        let warm_count = self.thermal_states.values().filter(|s| **s == ThermalState::Warm).count();
+        let cold_count = self.thermal_states.values().filter(|s| **s == ThermalState::Cold).count();
 
         CompactionStats {
             total_distinctions: total_known,

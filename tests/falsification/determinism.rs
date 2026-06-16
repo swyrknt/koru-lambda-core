@@ -63,9 +63,17 @@ fn test_falsify_determinism_across_engines() {
     // ============================================================
 
     // Verify primordial distinctions
-    assert_eq!(d0_1.to_hex(), d0_2.to_hex(), "FALSIFIED: Primordial distinction d0 differs across engines");
+    assert_eq!(
+        d0_1.to_hex(),
+        d0_2.to_hex(),
+        "FALSIFIED: Primordial distinction d0 differs across engines"
+    );
 
-    assert_eq!(d1_1.to_hex(), d1_2.to_hex(), "FALSIFIED: Primordial distinction d1 differs across engines");
+    assert_eq!(
+        d1_1.to_hex(),
+        d1_2.to_hex(),
+        "FALSIFIED: Primordial distinction d1 differs across engines"
+    );
 
     // Verify intermediate distinctions
     assert_eq!(

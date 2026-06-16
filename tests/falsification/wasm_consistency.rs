@@ -132,12 +132,8 @@ fn falsify_wasm_byzantine_commitment_bypass() {
     let fake_hash = vec![0xdeu8; 32];
     assert!(agent.finalize_batch(&batch, &fake_hash).is_err());
 
-    assert!(!agent
-        .check_commitment(&legit_hash, 999, 0, "attacker", 1)
-        .unwrap());
-    assert!(!agent
-        .check_commitment(&legit_hash, 0, 999, "attacker", 1)
-        .unwrap());
+    assert!(!agent.check_commitment(&legit_hash, 999, 0, "attacker", 1).unwrap());
+    assert!(!agent.check_commitment(&legit_hash, 0, 999, "attacker", 1).unwrap());
 }
 
 #[wasm_bindgen_test]

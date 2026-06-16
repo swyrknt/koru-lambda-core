@@ -65,10 +65,7 @@ impl BatchSynthesizer {
     pub fn canonicalize_bytes_batch(&self, bytes: Vec<u8>) -> Vec<Distinction> {
         use crate::Canonicalizable;
 
-        bytes
-            .into_par_iter()
-            .map(|byte| byte.to_canonical_structure(&self.engine))
-            .collect()
+        bytes.into_par_iter().map(|byte| byte.to_canonical_structure(&self.engine)).collect()
     }
 }
 

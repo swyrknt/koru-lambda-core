@@ -618,7 +618,8 @@ pub unsafe extern "C" fn koru_agent_propose_batch(
 
     let mut guard = (*(agent as *mut FfiAgent)).lock().expect("agent mutex poisoned");
     match guard.propose_commitment(batch.clone(), &engine_md) {
-        Ok(commitment) => match guard.finalize_batch(batch, commitment.commitment_hash, &engine_md) {
+        Ok(commitment) => match guard.finalize_batch(batch, commitment.commitment_hash, &engine_md)
+        {
             Ok(_) => KORU_SUCCESS,
             Err(_) => KORU_ERROR_BATCH_REJECTED,
         },
@@ -1045,12 +1046,8 @@ mod tests {
             assert_eq!(nonce, 0);
 
             let root = CString::new("0".repeat(32)).unwrap();
-            let result = koru_agent_restore_state(
-                std::ptr::null_mut(),
-                std::ptr::null(),
-                root.as_ptr(),
-                42,
-            );
+            let result =
+                koru_agent_restore_state(std::ptr::null_mut(), std::ptr::null(), root.as_ptr(), 42);
             assert_eq!(result, KORU_ERROR_NULL_POINTER);
         }
     }

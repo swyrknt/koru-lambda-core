@@ -32,8 +32,8 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 use crate::subsystems::{
-    BatchCommitment, CommitmentAgent, ConsensusValidator,
-    LocalCausalAgent, NetworkAgent, PeerIdentity, TransactionBatch,
+    BatchCommitment, CommitmentAgent, ConsensusValidator, LocalCausalAgent, NetworkAgent,
+    PeerIdentity, TransactionBatch,
 };
 use crate::{Distinction, DistinctionEngine};
 
@@ -66,9 +66,8 @@ pub fn _wasm_start() {
 /// Returns an error if `bytes` is not exactly 16 bytes.
 #[wasm_bindgen(js_name = idToHex)]
 pub fn id_to_hex(bytes: &[u8]) -> Result<String, JsValue> {
-    let arr: [u8; 16] = bytes
-        .try_into()
-        .map_err(|_| JsValue::from_str("idToHex: expected 16 bytes"))?;
+    let arr: [u8; 16] =
+        bytes.try_into().map_err(|_| JsValue::from_str("idToHex: expected 16 bytes"))?;
     Ok(Distinction::from_bytes_internal(arr).to_hex())
 }
 
@@ -221,8 +220,8 @@ impl WasmNetworkAgent {
     pub fn join_peers(&mut self, peer_ids: Vec<String>) -> Result<Vec<u8>, JsValue> {
         let mut new_root = self.inner.get_current_root().clone();
         for peer_id in peer_ids {
-            let peer = PeerIdentity::new(peer_id, &self.engine)
-                .map_err(|e| JsValue::from_str(&e))?;
+            let peer =
+                PeerIdentity::new(peer_id, &self.engine).map_err(|e| JsValue::from_str(&e))?;
             new_root = self.inner.join_peer(peer, &self.engine);
         }
         Ok(new_root.as_bytes().to_vec())
@@ -354,10 +353,7 @@ pub struct WasmValidator {
 impl WasmValidator {
     #[wasm_bindgen(constructor)]
     pub fn new(engine: &WasmEngine) -> Self {
-        Self {
-            inner: ConsensusValidator::new(&engine.inner),
-            engine: engine.inner.clone(),
-        }
+        Self { inner: ConsensusValidator::new(&engine.inner), engine: engine.inner.clone() }
     }
 
     #[wasm_bindgen(js_name = currentRoot)]
@@ -582,8 +578,7 @@ mod tests {
         let hash = agent.propose_commitment(&batch).expect("propose ok");
         assert_eq!(hash.len(), 32);
 
-        let is_valid =
-            agent.check_commitment(&hash, 0, 0, "validator_0", 1).expect("check ok");
+        let is_valid = agent.check_commitment(&hash, 0, 0, "validator_0", 1).expect("check ok");
         assert!(is_valid);
 
         let result = agent.finalize_batch(&batch, &hash);
@@ -629,8 +624,7 @@ mod tests {
         .to_string();
         let hash = agent.propose_commitment(&batch).expect("propose ok");
 
-        let is_valid =
-            agent.check_commitment(&hash, 999, 0, "validator_0", 1).expect("check ok");
+        let is_valid = agent.check_commitment(&hash, 999, 0, "validator_0", 1).expect("check ok");
         assert!(!is_valid);
     }
 

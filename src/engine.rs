@@ -228,7 +228,16 @@ impl DistinctionEngine {
         degree_cache.insert(d0.bytes, AtomicUsize::new(1));
         degree_cache.insert(d1.bytes, AtomicUsize::new(1));
 
-        Self { d0, d1, all_distinctions, relationships, log, parents_index, children_index, degree_cache }
+        Self {
+            d0,
+            d1,
+            all_distinctions,
+            relationships,
+            log,
+            parents_index,
+            children_index,
+            degree_cache,
+        }
     }
 
     /// Returns a reference to the first primordial distinction (Δ₀).
@@ -828,11 +837,8 @@ mod synthesis_log_tests {
         let c = engine.synthesize(engine.d0(), &d1);
         let _ = engine.synthesize(&c, &d1);
 
-        let entries: Vec<LogEntry> = engine
-            .synthesis_log_snapshot()
-            .into_iter()
-            .map(|(a, b)| LogEntry { a, b })
-            .collect();
+        let entries: Vec<LogEntry> =
+            engine.synthesis_log_snapshot().into_iter().map(|(a, b)| LogEntry { a, b }).collect();
         let json = serde_json::to_string(&entries).expect("serialize");
         let restored: Vec<LogEntry> = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(entries, restored);

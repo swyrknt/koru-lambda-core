@@ -247,11 +247,7 @@ impl NetworkAgent {
         // (corrupted/swapped) distinctions could BOTH be kept out of
         // the set, AND inversely one peer's distinction could be
         // shadow-paired with a different peer's id without rejection.
-        if self
-            .validator_set
-            .iter()
-            .any(|p| p.id == peer.id && p.distinction == peer.distinction)
-        {
+        if self.validator_set.iter().any(|p| p.id == peer.id && p.distinction == peer.distinction) {
             return self.local_root.clone();
         }
 
@@ -720,8 +716,8 @@ mod tests {
         let engine = Arc::new(DistinctionEngine::new());
         let mut agent = NetworkAgent::new(&engine);
 
-        let fabricated = Distinction::from_hex(&"f".repeat(32))
-            .expect("32 hex chars parse to a Distinction");
+        let fabricated =
+            Distinction::from_hex(&"f".repeat(32)).expect("32 hex chars parse to a Distinction");
 
         let result = agent.restore_consensus_validator_state(&engine, fabricated, 100);
         assert!(result.is_err());
@@ -763,17 +759,11 @@ mod tests {
         let engine = DistinctionEngine::new();
 
         let act_a = NetworkAction::BatchProposed {
-            batch: TransactionBatch {
-                transactions: vec![],
-                previous_root: "a".repeat(32),
-            },
+            batch: TransactionBatch { transactions: vec![], previous_root: "a".repeat(32) },
         }
         .to_canonical_structure(&engine);
         let act_b = NetworkAction::BatchProposed {
-            batch: TransactionBatch {
-                transactions: vec![],
-                previous_root: "b".repeat(32),
-            },
+            batch: TransactionBatch { transactions: vec![], previous_root: "b".repeat(32) },
         }
         .to_canonical_structure(&engine);
 
@@ -794,10 +784,7 @@ mod tests {
         }
         .to_canonical_structure(&engine);
         let act_short = NetworkAction::BatchProposed {
-            batch: TransactionBatch {
-                transactions: vec![],
-                previous_root: "deadbeef".to_string(),
-            },
+            batch: TransactionBatch { transactions: vec![], previous_root: "deadbeef".to_string() },
         }
         .to_canonical_structure(&engine);
         let act_nonhex = NetworkAction::BatchProposed {
