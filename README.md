@@ -5,6 +5,21 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Build Status](https://github.com/swyrknt/koru-lambda-core/actions/workflows/ci.yml/badge.svg)](https://github.com/swyrknt/koru-lambda-core/actions)
 
+> ### ⚠️ v2.0 redesign in progress on `release/2.0.0`
+>
+> The body of this README describes the v1.2 API and is partly out of date.
+> v2.0 is a clean rewrite from `dev` with:
+> - 4 axioms (not 5), 2 primordials, 1 operator — see [`THEORY.md`](THEORY.md)
+> - Byte-canonical `Distinction([u8; 16])` with content-addressed identity
+> - 3-field engine (`all_distinctions`, `parents_of`, `degree_counts`)
+> - Tier-0 audit bugs (N5/N6/V5) designed structurally impossible
+> - Theory/budget/hygiene gate split with un-amendable axiom gates
+>
+> Plan-of-record docs on `release/2.0.0`:
+> [`THEORY.md`](THEORY.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DESIGN.md`](DESIGN.md) · [`CHECKLIST.md`](CHECKLIST.md)
+>
+> A full README rewrite ships with v2.0 (Step 5 of the checklist).
+
 A minimal axiomatic system for computation based on distinction calculus. This engine implements a timeless, self-consistent computational substrate where complex distributed system properties arise from simple synthesis operations.
 
 ## 🌟 Key Features
