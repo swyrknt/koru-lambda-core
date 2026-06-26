@@ -825,19 +825,52 @@ first attempt is the cost of "minimal" applied consistently.**
 
 Beyond what dev already pulls (dashmap, sha2, serde, lru, rayon, hex):
 
-- `bytemuck = "1"` — `Pod` + `Zeroable` derives on `Distinction` enable
-  zero-copy slice views without `unsafe`.
+- `bytemuck = { version = "1", features = ["derive"] }` — `Pod` +
+  `Zeroable` derives on `Distinction` enable zero-copy slice views
+  without `unsafe`. **The `derive` feature is NOT default; pinning it
+  is mandatory or the `#[derive(bytemuck::Pod, Zeroable)]` macros will
+  not be available and the substrate will not compile.**
 - `thiserror = "1"` (already in dev) — typed errors (`ParseError`,
   `ReplayError`, `PeerIdentityError`).
 - `parking_lot = "0.12"` — FFI-internal `Mutex` (5× faster uncontended,
-  no poisoning).
+  no poisoning). Lives entirely behind opaque FFI handles; the
+  `cdylib` and any Rust caller are built from the same `Cargo.lock` so
+  cross-version ABI is not a concern.
 - `console_error_panic_hook = "0.1"` (optional, under `wasm` feature) —
-  surfaces Rust panics as readable JS console errors.
+  surfaces Rust panics as readable JS console errors. No-op when the
+  `wasm` feature is off.
 - `static_assertions = "1"` (dev-dep) — compile-time trait assertions
   for `Distinction: Copy + Send + Sync + Pod` and `SynthesisRecorder:
   !Send + !Sync`.
+- `loom = "0.7"` (dev-dep) — memory-ordering model checker for the
+  Release/Acquire kernel (see Part 6 for scope honesty).
+- `dhat = "0.3"` (dev-dep) — per-distinction memory probe.
+- `blake3 = "1"` (dev-dep) — alternative hash for differential test
+  reference (see Part 6 for what it actually catches).
 
 No new heavyweight deps. Every addition serves a specific design goal.
+
+### Edition and MSRV
+
+- **Edition:** Rust 2021. v2.0 does not bump to 2024 — the patterns the
+  substrate uses are stable on 2021, and bumping the edition is an
+  orthogonal concern that would expand the migration surface for
+  consumers without delivering substrate value.
+- **MSRV:** `rust-version = "1.80"` in `Cargo.toml`. Pinned because
+  `DashMap 6` requires 1.71 and `bytemuck::Pod` derive is stable on
+  1.74; 1.80 leaves headroom for `LazyLock` and `OnceLock` usage in
+  the substrate without surprising consumers. Bumping MSRV is a
+  breaking change for consumers and requires its own minor-version
+  release after v2.0. ALIS / koru-protocol pin `1.80` in their
+  `rust-toolchain.toml` upon migrating to v2.0.
+
+### Workspace structure
+
+- **Single-crate, not a workspace member.** `experiments/` is referenced
+  as a "separate workspace" only in the sense that it has its own
+  `Cargo.toml` and doesn't ship in the published crate. The published
+  `koru-lambda-core` is one `Cargo.toml`, one crate, one published
+  artifact.
 
 ---
 
@@ -877,14 +910,22 @@ No new heavyweight deps. Every addition serves a specific design goal.
   deviations. The structural law's correctness at scale, not just at small
   N (Exp 2 carried forward).
 - **`degree_counts` Release/Acquire correctness** — `loom` model checker
-  test over a minimal kernel (writer thread `fetch_add(Release)`, reader
-  thread `load(Acquire)`, assert reader observes the increment). Loom
-  enumerates the abstract memory-model interleavings — catches a missing
-  `Acquire` deterministically regardless of host architecture. TSan on
-  x86-TSO would silently pass even with `Relaxed` (the architecture
-  provides Acquire for free), so loom is the load-bearing verifier here.
-  Also runs under `RUSTFLAGS=-Zsanitizer=thread` on the concurrent-write
-  byte-equivalence test as a belt-and-suspenders runtime check.
+  test over a **minimal abstract kernel** (writer thread `fetch_add(Release)`,
+  reader thread `load(Acquire)`, assert reader observes the increment).
+  Loom enumerates the abstract memory-model interleavings — catches a
+  missing `Acquire` deterministically regardless of host architecture.
+  TSan on x86-TSO would silently pass even with `Relaxed` (the architecture
+  provides Acquire for free), so loom is the load-bearing verifier for
+  the **ordering contract**, not for the shipped code.
+  **Scope honesty:** loom cannot model DashMap's internal locking
+  (`parking_lot`, hazard pointers, shard masking are not loom-aware).
+  What we verify is "the abstract Release/Acquire contract holds when
+  separated from DashMap"; DashMap's own correctness is trusted via its
+  upstream tests + TSan. The combined contract — "if loom passes AND
+  DashMap is correct, then our hot path is correct" — is the
+  load-bearing claim. The TSan run on the concurrent-write byte-equivalence
+  test catches DashMap-specific issues; loom catches our atomic ordering;
+  neither alone covers both.
 - **Primordial invariants on a fresh engine** — `let e = DistinctionEngine::new();`
   then assert: `e.distinction_count() == 2`, `e.parents_of(d0).is_none()`,
   `e.parents_of(d1).is_none()`, `e.degree(d0) == 1`, `e.degree(d1) == 1`
@@ -1101,7 +1142,7 @@ direct probes of axioms and load-bearing structural laws:
 
 **Engineering** (performance and resource budgets):
 - 8-thread throughput on primary hardware ≥ X M ops/sec (see Part 10 for X)
-- Memory per distinction at 1M scale ≤ 140 B (dhat live-heap, steady state — see Part 10 gate 13)
+- Memory per distinction at 1M scale ≤ 180 B (dhat live-heap, steady state, including DashMap shard slack — see Part 10 gate 13)
 - WASM bytes-on-wire round-trip fingerprint match (native vs wasm-pack-node)
 
 (The "100M-synth churn, no leaks" probe was considered and dropped: the
@@ -1285,9 +1326,30 @@ below the floor, redesign is required.
 |---|---|---|---|
 | 11 | Single-thread synthesis throughput | ≥ 450K ops/sec | ≥ 300K ops/sec |
 | 12 | 8-thread synthesis throughput | ≥ 12M ops/sec AND ≥ 4× single-thread | ≥ 8M ops/sec AND ≥ 4× ratio non-negotiable |
-| 13 | Memory per distinction at 1M scale | ≤ 140 B | ≤ 180 B |
+| 13 | Memory per distinction at 1M scale (dhat live-heap, steady state, *including DashMap shard capacity slack* — see arithmetic below) | ≤ 180 B | ≤ 220 B |
 | 14 | Fold Law d₀/d₁ hub ratio | ≥ 100× | ≥ 50× |
 | 15 | Coding Law ρ (against pinned exp18 corpus pair `(exp18.log, exp18.freq.bin)` at `/tests/corpora/`, where `exp18.log` is the canonical `(min, max)` synthesis pair log and `exp18.freq.bin` is the Zipf-draw frequency array `freq[k]`; both produced by Step 1 from `alpha=1.0`, `seed=0xC0DE`, `N=4096`, `M=8N`; Step 4 consumes both bit-exactly — corpus alone is insufficient because Spearman ρ correlates `freq[k]` against `degree_after[k] − degree_before[k]`, and `freq` cannot be re-derived from the saturated pair log unambiguously) | ≥ 0.985 | ≥ 0.97 |
+
+**Gate 13 memory arithmetic — including capacity slack:**
+
+Raw per-distinction footprint: 16 (all_distinctions key) + 16 (value) +
+16 (parents_of key) + 32 (tuple value) + 16 (degree_counts key) + 8
+(AtomicUsize) = **104 B** of stored data.
+
+DashMap shards each hold a hashbrown SwissTable that doubles capacity
+on grow. At steady state, `len/cap` typically lands in `[0.5, 0.75]`,
+so each shard carries 25–50% slack. Across three maps at 1M entries
+each: shard overhead per entry ≈ 30–60 B, depending on where in the
+load-factor cycle we measure. Total predicted: 104 + ~50 = **~155 B
+per distinction in practice**, with run-to-run variance in the 140–180 B
+range depending on which side of the rehash boundary the engine is on.
+
+The earlier 140 B gate was the *arithmetic-only* prediction; the 180 B
+gate above incorporates measured capacity slack. The 220 B floor is
+the "this is design failure" line — above 220 B implies a per-shard
+issue or an unintended allocation we haven't audited. dhat measures
+malloc-tracked allocations only (`[u8;16]` stack data passes through);
+the gate is honest about what dhat actually sees.
 
 Floors are sized to absorb measurement noise and allocator variance but
 not to absorb design regressions. A miss at the floor is a design event.

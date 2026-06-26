@@ -100,7 +100,7 @@ Two engines synthesizing the same parent pairs converge to byte-identical
 state regardless of the order in which they apply the pairs. Replay is
 content-validated, not chronologically dependent.
 
-### Law 10 — Mediated self-reference → infinite novelty
+### Law 10 — Mediated self-reference → unbounded novelty (within ID space)
 Direct `synthesize(x, x)` is irreflexive (Axiom 3) and produces no novelty.
 But `synthesize(synthesize(x, observation), x)` produces a unique
 distinction at every depth when `observation` is a deterministic function
@@ -109,6 +109,15 @@ cycling and constant `observation`; random `observation` is also unique
 but loses the "self-referential" framing — the loophole is about
 *structured* mediation, not about novelty in the abstract). This is the
 structural loophole that lets the substrate represent self-aware systems.
+
+**Bounded by ID space, not by depth.** Novelty here means "no irreflexive
+collapse," not literally infinite. Distinctions are 16 bytes (128 bits of
+identity), so the substrate carries at most 2^128 distinct distinctions
+and the birthday bound kicks in well before that — at ~2^64 distinctions
+any random synthesis has non-negligible collision probability with prior
+structure. This is a property of content-addressed identity, not a defect
+of mediated self-reference. The probes verify uniqueness at depth ≥ 10K;
+extrapolation to "infinite" would overclaim what's been measured.
 
 ### Law 11 — Fold Law
 The two primordials become topological mega-hubs. By construction, byte
@@ -120,15 +129,26 @@ each byte folds through 8 synthesis steps (one per bit), with `d₀` and
 longer fold-determined — Coding Law takes over.
 
 ### Law 12 — Coding Law
-Beyond the fold layer, degree-centrality tracks usage frequency. The
-Spearman rank correlation between a distinction's degree (its total
-synthesis participations) and its frequency-of-use settles around
-ρ ≈ 0.99 with run-to-run noise of ~0.005 against the workload exp18
-implements (length-N chain pool, Zipf-sampled index pairs). The v2.0
-gate is ρ ≥ 0.985 — tight enough to falsify any structural regression
-that perturbs the degree-counting hot path, loose enough to absorb
-measurement noise. High-attention distinctions become high-degree nodes
-naturally — no PageRank, no curator, no learning algorithm.
+Beyond the fold layer, degree-centrality tracks usage frequency *under
+non-pathological workloads*. The Spearman rank correlation between a
+distinction's degree (its total synthesis participations) and its
+frequency-of-use settles around ρ ≈ 0.99 with run-to-run noise of ~0.005
+against the workload exp18 implements (length-N chain pool, Zipf-sampled
+index pairs at α=1.0). The v2.0 gate is ρ ≥ 0.985 on this pinned workload.
+
+**Workload-conditional, not universal.** Coding Law is an empirical
+regularity observed under "natural" usage (Zipf-distributed access,
+which is itself a common distribution but not the only one). Under
+adversarial workloads — uniform sampling, anti-Zipf rare-favoring,
+bursty hot-set rotation — ρ can be arbitrarily lower without violating
+any axiom. The substrate doesn't *enforce* Coding Law; it *exhibits* it
+when usage concentrates the way human-like access patterns concentrate.
+Calling it a "law" is a useful shorthand for the warroom evidence;
+calling it a universal property would overclaim.
+
+High-attention distinctions become high-degree nodes naturally — no
+PageRank, no curator, no learning algorithm — *given* the workloads
+empirical systems typically produce.
 
 ---
 
@@ -163,9 +183,15 @@ that are difficult or impossible to obtain through other means:
   independence (Law 8) means two machines processing the same operations
   produce identical state. The hash function IS the consensus protocol.
 
-- **Append-only by construction.** There is no `remove_distinction`
-  primitive in the theory. The graph is monotone — synthesized
-  distinctions exist forever. Auditability is structural.
+- **Append-only by design choice (not by axiom).** The four axioms
+  don't forbid removal — they constrain *what `synthesize` does*, not
+  what other operations the engine exposes. We *chose* append-only
+  because it's what makes engine-independence (Law 8) and order-
+  independent reconstruction (Law 9) hold cleanly: if the graph is
+  monotone, replay from any subset converges. Garbage collection by
+  partial-reroot replay is theoretically permissible; v2.0 deliberately
+  excludes it. Auditability is therefore a *design* property, enabled by
+  but not forced by the theory.
 
 - **Emergent attention without orchestration.** Coding Law (Law 12) means
   high-usage distinctions become high-degree nodes by physics, not policy.
@@ -202,8 +228,17 @@ protocol (koru) without either feeling like a hack on top of the other.
 
 The 50+ experiments in the warroom record stress-test every claim above
 at scales appropriate to each claim — axioms and small-graph invariants
-at 10K–1M, the structural laws and Coding/Fold gates at 1M–5M, with
-single-engine memory ceilings on commodity laptops cresting ~80M. Zero
-exceptions to the axioms or structural laws have been found within the
-probed range. Claims at scales beyond what was actually run are
-extrapolations from the four axioms, not empirical observations.
+at 10K–1M, the structural laws and Coding/Fold gates at 1M–5M. Single-
+engine memory consumption on commodity laptops is *predicted* to scale
+linearly to ~80M distinctions on a 16 GB system based on the measured
+per-distinction footprint (~80–140 B), but **this ceiling has not been
+empirically tested above 5M**. The 5M → 80M extrapolation is 16× and
+assumes linearity in DashMap shard distribution, IdentityHasher bucket
+variance, and allocator behavior — all of which can turn non-linear
+in practice.
+
+Zero exceptions to the axioms or structural laws have been found within
+the probed range. Claims at scales beyond what was actually run are
+extrapolations from the four axioms, not empirical observations. A
+ceiling probe at 50M+ is on the Step 4 backlog; until it runs, "~80M
+ceiling" is a prediction, not a measurement.
