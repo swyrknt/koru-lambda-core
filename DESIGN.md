@@ -1423,10 +1423,11 @@ is allowed only when ALL of the following hold:
 
 1. The PR cites the measured value (with full harness specification —
    hardware, runtime, exact criterion/dhat command lines, repeatable
-   seed) and shows the regression delta from the empirical baseline
-   measured on `dev` (see "Baseline freeze" below).
+   seed) AND demonstrates how the measurement compares against the
+   gate's **absolute target**, **hard-cap floor**, and (where applicable)
+   the warroom v2.0 byte-API reference numbers below.
 2. The PR appends a new row to `BUDGET_LOG.md` with:
-   `date | gate | old target | new target | baseline delta | author | signers | justification`.
+   `date | gate | old target | new target | absolute delta | floor delta | author | signers | justification`.
 3. The new target stays **at or above the hard-cap floor** for that
    gate. An amendment that would cross a floor is not a budget amendment
    — it is a redesign event.
@@ -1449,59 +1450,41 @@ measurement at or below the floor means the substrate is not delivering
 its capability claim. The response is rewrite or version-flag, not
 amendment.
 
-### Baseline freeze (pre-flight) — two baselines, by what dev can measure
+### Reference measurements (what we compare against, and why no dev baseline)
 
-The amendment-cites-baseline contract is honest only when a baseline
-exists. Dev has the v1.2 String-API surface; it cannot measure
-`parents_of()` or `degree()` (v2.0-only APIs), and the Coding Law
-workload was never run against dev. Forcing one baseline to cover
-everything is incoherent — so we pin **two** baselines, each scoped to
-what its origin can actually measure.
+A `dev`-branch baseline was originally proposed but is structurally
+incoherent: `dev` ships the v1.2 String-API (`Distinction { id: String }`,
+`synthesize(&D, &D)`, ~629 B/distinction) with no `parents_of()` or
+`degree()` traversal. Comparing v2.0's byte-API throughput / memory to
+dev's String-API throughput / memory is apples-to-oranges — the numbers
+don't measure the same thing. A regression delta against an incomparable
+baseline is rhetoric, not evidence.
 
-**`BASELINE_DEV_M3_PRO`** — captured by running the criterion (synthesize
-cold/warm, end-to-end engine throughput) and dhat (memory per
-distinction at 1M) workloads on `dev` HEAD with explicit reproducibility
-pins (see below). Covers regression deltas for **gates 11, 12, 13**
-(throughput single + 8-thread, memory).
+Instead, amendments compare against **`BASELINE_WARROOM_M3_PRO`** — the
+only prior codebase that measured this engine with the v2.0 byte-API
+surface — plus the **absolute targets and floors** in the gate table
+itself. This is apples-to-apples and falsifiable.
 
-**`BASELINE_WARROOM_M3_PRO`** — lifted from the first v2.0 attempt at
-`research/warroom-experiments` commit `22dbbce`, which was the only
-codebase that ever measured Fold Law d₀/d₁ ratio and Coding Law ρ on
-this engine. Covers regression deltas for **gates 14, 15** (Fold Law,
-Coding Law). Numbers to pin verbatim from that branch:
+**`BASELINE_WARROOM_M3_PRO`** — pinned from `research/warroom-experiments`
+commit `22dbbce`, which had the same byte-canonical Distinction +
+3-field engine (with `children_of` instead of `degree_counts`, but the
+synthesize hot path is comparable):
 
-- Fold Law d₀/d₁ hub ratio: measured ~250× post-foundation (Exp 20)
-- Coding Law ρ: measured 0.99 ± 0.005 on exp18 (`alpha=1.0`, `seed=0xC0DE`)
+```
+[BASELINE_WARROOM_M3_PRO]
+commit                          = "22dbbce"
+single_thread_throughput        = 500_000      # ops/sec (Exp 10)
+8_thread_throughput             = 15_300_000   # ops/sec (Exp 10)
+memory_per_distinction          = 80           # bytes at 1M (Exp 13-16)
+fold_law_d0_d1_ratio            = 250          # ≥ 100× gate target (Exp 20)
+coding_law_rho                  = 0.99         # ± 0.005 (Exp 18, exp18 workload)
+```
 
-Every amendment PR cites the delta against the appropriate baseline.
-
-### Baseline capture procedure (must be specified to be reproducible)
-
-Two engineers running "criterion + dhat on dev HEAD" would produce
-20%+ divergent numbers without these pins. Specify all of:
-
-1. **Commit hash:** the exact `dev` commit being measured (currently
-   `c2d331b` "Update README" — pin this in `BASELINE_DEV_M3_PRO`).
-2. **Allocator:** system allocator on macOS; do not swap in jemalloc.
-   For dhat, use the `dhat-rs`-instrumented binary built from a
-   sibling worktree of `dev` HEAD with `#[global_allocator] = dhat::Alloc`
-   added in `main.rs` only — not committed to dev.
-3. **Build flags:** `cargo bench --bench performance --release` for
-   criterion; `cargo run --release --bin <bench-binary>` for dhat.
-   No `RUSTFLAGS` overrides; no `lto` changes.
-4. **Criterion config:** `--measurement-time 20 --sample-size 100
-   --warm-up-time 5`. Median of samples.
-5. **Thermal protocol:** M3 Pro throttles under sustained load.
-   Idle the machine 5 minutes between runs; do not run during charging;
-   close other heavy processes. Capture should complete within 30 minutes
-   total to stay inside one thermal envelope.
-6. **Capture output:** commit results as `BASELINE_DEV_M3_PRO.toml` at
-   the repo root, with `[harness]`, `[results]`, and `[platform]`
-   sections. Same shape for `BASELINE_WARROOM_M3_PRO.toml`.
-
-Without these pins, "engineering reality" is rhetoric; with them, the
-amendment must show why v2.0's code is fundamentally different from
-what the baseline measured.
+**For Step 1 amendment PRs:** cite measured value against the
+v2.0 absolute target + hard-cap floor (primary constraint), and against
+the warroom byte-API reference (sanity check — v2.0 hot path is a clean
+rewrite of the warroom one, so substantial regression from warroom
+suggests something specific went wrong, not "engineering reality").
 
 ### What this policy buys
 
