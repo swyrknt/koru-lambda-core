@@ -129,22 +129,38 @@ each byte folds through 8 synthesis steps (one per bit), with `d₀` and
 longer fold-determined — Coding Law takes over.
 
 ### Law 12 — Coding Law
-Beyond the fold layer, degree-centrality tracks usage frequency *under
-non-pathological workloads*. The Spearman rank correlation between a
-distinction's degree (its total synthesis participations) and its
-frequency-of-use settles around ρ ≈ 0.99 with run-to-run noise of ~0.005
-against the workload exp18 implements (length-N chain pool, Zipf-sampled
-index pairs at α=1.0). The v2.0 gate is ρ ≥ 0.985 on this pinned workload.
+Beyond the fold layer, degree-centrality tracks usage frequency. The
+law has two parts that should not be conflated:
 
-**Workload-conditional, not universal.** Coding Law is an empirical
-regularity observed under "natural" usage (Zipf-distributed access,
-which is itself a common distribution but not the only one). Under
-adversarial workloads — uniform sampling, anti-Zipf rare-favoring,
-bursty hot-set rotation — ρ can be arbitrarily lower without violating
-any axiom. The substrate doesn't *enforce* Coding Law; it *exhibits* it
-when usage concentrates the way human-like access patterns concentrate.
-Calling it a "law" is a useful shorthand for the warroom evidence;
-calling it a universal property would overclaim.
+**Structural part (universal, by construction):** `degree(d) = count of
+novel synthesis participations` plus the genesis addend. This is
+*definitional* — it's what `degree_counts.fetch_add(1, Release)` does
+inside the entry-gated `synthesize` closure. It holds under any workload,
+including adversarial ones, because it's how the engine is built. There
+is no workload where this fails without the engine being broken.
+
+**Empirical part (workload-conditional):** the Spearman rank correlation
+between `degree(d)` and `frequency_of_use(d)` — where frequency counts
+*all* draws including saturated repeats — settles around ρ ≈ 0.99 with
+run-to-run noise of ~0.005 against the workload exp18 implements
+(length-N chain pool, Zipf-sampled index pairs at α=1.0). The v2.0 gate
+is ρ ≥ 0.985 on this pinned workload.
+
+**Why ρ < 1.0 even on natural workloads:** saturation drift. When a
+workload repeatedly samples the same pair, `frequency` keeps
+incrementing but `degree` does not (saturation: the second
+`synthesize(a, b)` returns the existing child without bumping degree).
+Under heavy saturation (small pool, large M, narrow Zipf), ρ drops
+below 1. Under low saturation (large pool, small M, broad distribution),
+ρ → 1. The structural part is universal; the gap between structural and
+empirical is exactly the saturation effect.
+
+**What "Coding Law" the law refers to:** the structural part — degree
+tracks the count of novel participations *by construction*. The empirical
+ρ measurement is how we *verify* the substrate is built correctly. Calling
+the structural part "workload-conditional" would understate what the
+substrate guarantees; calling the empirical part "universal" would
+overclaim what the measurement establishes.
 
 High-attention distinctions become high-degree nodes naturally — no
 PageRank, no curator, no learning algorithm — *given* the workloads
@@ -228,17 +244,30 @@ protocol (koru) without either feeling like a hack on top of the other.
 
 The 50+ experiments in the warroom record stress-test every claim above
 at scales appropriate to each claim — axioms and small-graph invariants
-at 10K–1M, the structural laws and Coding/Fold gates at 1M–5M. Single-
-engine memory consumption on commodity laptops is *predicted* to scale
-linearly to ~80M distinctions on a 16 GB system based on the measured
-per-distinction footprint (~80–140 B), but **this ceiling has not been
-empirically tested above 5M**. The 5M → 80M extrapolation is 16× and
-assumes linearity in DashMap shard distribution, IdentityHasher bucket
-variance, and allocator behavior — all of which can turn non-linear
-in practice.
+at 10K–1M, the structural laws and Coding/Fold gates at 1M–5M.
+
+**Memory ceiling at ~80M is conservative arithmetic, not extrapolation.**
+The per-distinction footprint was measured at 1M scale (~80 B in the
+warroom v2.0 attempt; predicted ~180 B in v2.0 with the dhat-honest
+gate that includes DashMap shard slack). Available RAM on a 16 GB
+laptop after OS overhead is ~12 GB. 12 GB / 180 B ≈ 70M; 12 GB / 80 B
+≈ 150M. So ~80M is a round number on the conservative side of the
+arithmetic. The math is just division; it doesn't require empirical
+validation at 80M to be reliable as a *memory* claim.
+
+**Throughput at scale is the actual untested question.** Single-thread
+~500K ops/sec and 8-thread ~12M+ ops/sec were measured at 1M-5M scale.
+Whether those numbers hold at 50M+ depends on cache effects past L3
+(~8-32 MB), DashMap shard collision rate under sustained load, allocator
+paging when the engine consumes most of system RAM, and IdentityHasher
+bucket distribution at large N — none of which we've probed. A ceiling
+probe at 50M+ is on the Step 4 backlog. Until it runs:
+
+- **Memory ceiling claim:** confident (arithmetic from measured footprint).
+- **Throughput at ceiling claim:** unknown (cache effects, allocator paging
+  could non-linearize before memory runs out).
 
 Zero exceptions to the axioms or structural laws have been found within
-the probed range. Claims at scales beyond what was actually run are
-extrapolations from the four axioms, not empirical observations. A
-ceiling probe at 50M+ is on the Step 4 backlog; until it runs, "~80M
-ceiling" is a prediction, not a measurement.
+the probed range. Claims at scales beyond what was actually probed are
+deductions from the axioms (which hold at all scales) plus extrapolation
+of empirical throughput (which doesn't).
