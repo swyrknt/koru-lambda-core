@@ -335,8 +335,12 @@ pub fn synthesize(&self, a: Distinction, b: Distinction) -> Distinction {
         // Both parents already have a degree_counts entry (pre-seeded at
         // their own insertion, or at construction for d₀/d₁), so get() is
         // sufficient — no write-lock needed.
-        self.degree_counts.get(&first.0).unwrap().fetch_add(1, Ordering::Release);
-        self.degree_counts.get(&second.0).unwrap().fetch_add(1, Ordering::Release);
+        self.degree_counts.get(&first.0)
+            .expect("degree_counts pre-seeded at parent insertion (invariant)")
+            .fetch_add(1, Ordering::Release);
+        self.degree_counts.get(&second.0)
+            .expect("degree_counts pre-seeded at parent insertion (invariant)")
+            .fetch_add(1, Ordering::Release);
         new_d
     });
 
@@ -1250,8 +1254,12 @@ not amend the gate. These cannot be loosened, deferred, or marked
 5. ✅ Phantom-node count = 0 on the 256-byte exercise.
 6. ✅ Concurrent-write byte-equivalence: 8 threads synthesizing the same
    chain → byte-identical final engine state; `sum(degree_counts) == 2 * parents_of.len()`.
-7. ✅ `replay_topological(snapshot_parentage(e))` round-trip produces
-   byte-identical state.
+7. ✅ **Replay byte-equivalence (Laws 8 + 9).** `replay_topological(snapshot_parentage(e))`
+   produces byte-identical state to the source engine on:
+   (a) the natural snapshot order, AND
+   (b) any random permutation of the snapshot (order-independent reconstruction,
+   Law 9 — falsifies any implicit order dependence in the engine).
+   Both probes are mandatory; failure of either is a theory event.
 8. ✅ **Append-only invariant.** The substrate exposes no path that removes,
    clears, truncates, or otherwise non-monotonically alters a distinction
    in `all_distinctions`, `parents_of`, or `degree_counts`. Enforced
@@ -1279,7 +1287,7 @@ below the floor, redesign is required.
 | 12 | 8-thread synthesis throughput | ≥ 12M ops/sec AND ≥ 4× single-thread | ≥ 8M ops/sec AND ≥ 4× ratio non-negotiable |
 | 13 | Memory per distinction at 1M scale | ≤ 140 B | ≤ 180 B |
 | 14 | Fold Law d₀/d₁ hub ratio | ≥ 100× | ≥ 50× |
-| 15 | Coding Law ρ (against pinned exp18 corpus at `/tests/corpora/exp18.log`, Zipf alpha=1.0, seed=0xC0DE, N=4096, M=8N, Spearman frequency vs degree-delta) | ≥ 0.985 | ≥ 0.97 |
+| 15 | Coding Law ρ (against pinned exp18 corpus pair `(exp18.log, exp18.freq.bin)` at `/tests/corpora/`, where `exp18.log` is the canonical `(min, max)` synthesis pair log and `exp18.freq.bin` is the Zipf-draw frequency array `freq[k]`; both produced by Step 1 from `alpha=1.0`, `seed=0xC0DE`, `N=4096`, `M=8N`; Step 4 consumes both bit-exactly — corpus alone is insufficient because Spearman ρ correlates `freq[k]` against `degree_after[k] − degree_before[k]`, and `freq` cannot be re-derived from the saturated pair log unambiguously) | ≥ 0.985 | ≥ 0.97 |
 
 Floors are sized to absorb measurement noise and allocator variance but
 not to absorb design regressions. A miss at the floor is a design event.
@@ -1379,14 +1387,59 @@ measurement at or below the floor means the substrate is not delivering
 its capability claim. The response is rewrite or version-flag, not
 amendment.
 
-### Baseline freeze (pre-flight)
+### Baseline freeze (pre-flight) — two baselines, by what dev can measure
 
-Before Step 1's first commit, run the criterion + dhat workloads on
-`dev` HEAD and pin numbers in this document as `BASELINE_DEV_M3_PRO`.
-Every amendment PR cites the regression delta against this baseline.
-Without the baseline, "engineering reality" is rhetoric; with it, the
+The amendment-cites-baseline contract is honest only when a baseline
+exists. Dev has the v1.2 String-API surface; it cannot measure
+`parents_of()` or `degree()` (v2.0-only APIs), and the Coding Law
+workload was never run against dev. Forcing one baseline to cover
+everything is incoherent — so we pin **two** baselines, each scoped to
+what its origin can actually measure.
+
+**`BASELINE_DEV_M3_PRO`** — captured by running the criterion (synthesize
+cold/warm, end-to-end engine throughput) and dhat (memory per
+distinction at 1M) workloads on `dev` HEAD with explicit reproducibility
+pins (see below). Covers regression deltas for **gates 11, 12, 13**
+(throughput single + 8-thread, memory).
+
+**`BASELINE_WARROOM_M3_PRO`** — lifted from the first v2.0 attempt at
+`research/warroom-experiments` commit `22dbbce`, which was the only
+codebase that ever measured Fold Law d₀/d₁ ratio and Coding Law ρ on
+this engine. Covers regression deltas for **gates 14, 15** (Fold Law,
+Coding Law). Numbers to pin verbatim from that branch:
+
+- Fold Law d₀/d₁ hub ratio: measured ~250× post-foundation (Exp 20)
+- Coding Law ρ: measured 0.99 ± 0.005 on exp18 (`alpha=1.0`, `seed=0xC0DE`)
+
+Every amendment PR cites the delta against the appropriate baseline.
+
+### Baseline capture procedure (must be specified to be reproducible)
+
+Two engineers running "criterion + dhat on dev HEAD" would produce
+20%+ divergent numbers without these pins. Specify all of:
+
+1. **Commit hash:** the exact `dev` commit being measured (currently
+   `c2d331b` "Update README" — pin this in `BASELINE_DEV_M3_PRO`).
+2. **Allocator:** system allocator on macOS; do not swap in jemalloc.
+   For dhat, use the `dhat-rs`-instrumented binary built from a
+   sibling worktree of `dev` HEAD with `#[global_allocator] = dhat::Alloc`
+   added in `main.rs` only — not committed to dev.
+3. **Build flags:** `cargo bench --bench performance --release` for
+   criterion; `cargo run --release --bin <bench-binary>` for dhat.
+   No `RUSTFLAGS` overrides; no `lto` changes.
+4. **Criterion config:** `--measurement-time 20 --sample-size 100
+   --warm-up-time 5`. Median of samples.
+5. **Thermal protocol:** M3 Pro throttles under sustained load.
+   Idle the machine 5 minutes between runs; do not run during charging;
+   close other heavy processes. Capture should complete within 30 minutes
+   total to stay inside one thermal envelope.
+6. **Capture output:** commit results as `BASELINE_DEV_M3_PRO.toml` at
+   the repo root, with `[harness]`, `[results]`, and `[platform]`
+   sections. Same shape for `BASELINE_WARROOM_M3_PRO.toml`.
+
+Without these pins, "engineering reality" is rhetoric; with them, the
 amendment must show why v2.0's code is fundamentally different from
-what `dev` measured.
+what the baseline measured.
 
 ### What this policy buys
 
@@ -1471,7 +1524,7 @@ That's the demonstration package. Theory + patterns + worked examples.
 | String-based Distinction | Gone. `Distinction(pub(crate) [u8; 16])` newtype. |
 | `relationships: DashMap` field | Gone. Subsumed by `parents_of`. |
 | `synthesis_log` (proposed in first v2.0 attempt) | Gone. Replaced by consumer-side `snapshot_parentage` + `replay_topological` + `SynthesisRecorder`. |
-| `degree_cache` (proposed in first v2.0 attempt) | **Kept and renamed `degree_counts`.** Round 4 reversed the first-attempt reasoning: degree (the count) is the load-bearing primitive Coding/Fold Law name; children iteration is the derived form. `AtomicUsize` per node, `fetch_add(1, Relaxed)` in the synth hot path. |
+| `degree_cache` (proposed in first v2.0 attempt) | **Kept and renamed `degree_counts`.** Round 4 reversed the first-attempt reasoning: degree (the count) is the load-bearing primitive Coding/Fold Law name; children iteration is the derived form. `AtomicUsize` per node, `fetch_add(1, Release)` in the synth hot path (promoted from `Relaxed` in round 4 verification for uniform happens-before contract; see Part 6 loom test). |
 | `children_of: DashMap<[u8;16], Vec<Distinction>>` (round-3 plan kept this) | **Dropped in round 4.** Grep across every probe + subsystem + test found zero load-bearing consumers of children iteration; every caller uses `degree(d)`. Vec realloc on d₀/d₁ stalls the synth hot path. Consumers needing children iteration call `replay::build_children_index` (O(N) once, O(1) thereafter). |
 | Static byte cache | Gone. ByteMapping folds through caller's engine. |
 | `get_state_snapshot` | Renamed to `get_state_snapshot_unsynchronized` per Decision 5.8 (from first attempt). |
@@ -1480,7 +1533,7 @@ That's the demonstration package. Theory + patterns + worked examples.
 | `ParseError` from hex parsing | Typed error (was `String` in first attempt). |
 | `PeerIdentity::new` error | Typed `PeerIdentityError` (was `String` in first attempt). |
 | `IdentityHasher` (proposed XOR-rotation) | Simplified: leading 8 bytes only. Guards on misuse. |
-| `synthesize` proposed hot path | Rewritten with entry-gated insert to eliminate the race. By-value `Distinction` args (Copy enables this). Writes to `parents_of` and the two `degree_counts.fetch_add(1, Relaxed)` calls happen INSIDE the `or_insert_with` closure, under the shard lock for `all_distinctions[new_bytes]`, so observable engine state is always consistent. AtomicUsize replaces Vec push for the degree update — strictly cheaper, no realloc on hubs. |
+| `synthesize` proposed hot path | Rewritten with entry-gated insert to eliminate the race. By-value `Distinction` args (Copy enables this). Writes to `parents_of`, pre-seeded `degree_counts.insert(new_bytes, AtomicUsize::new(0))` for the new child, and the two `degree_counts.get(parent.0).expect("…invariant").fetch_add(1, Release)` calls all happen INSIDE the `or_insert_with` closure, under the shard lock for `all_distinctions[new_bytes]`, so observable engine state is always consistent. AtomicUsize replaces Vec push for the degree update — strictly cheaper, no realloc on hubs. Pre-seed enables `get()` fast path on the parent bump (read-lock vs write-lock). |
 | `SynthesisRecorder` (round-2 introduction) | Single-thread-only contract enforced via `PhantomData<*const ()>` marker. Novelty check uses dedup against own log (not racy `distinction_count`). Documented as observer, not LCA. |
 | `replay_topological` (round-2 introduction) | Returns `Result<Arc<DistinctionEngine>, ReplayError>`. Release-safe content-address mismatch detection (no `debug_assert_eq!`). Distinguishes corrupted parentage (cycle / missing parent → `Unreachable`) from tampered (`Mismatch`). |
 | `from_hex` cross-engine injection | `synthesize` `debug_assert`s both parents are registered in this engine; debug-build panic catches misuse in tests. Release builds trust the contract documented on `from_hex`. |
