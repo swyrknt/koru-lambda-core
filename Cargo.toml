@@ -41,6 +41,5 @@ proptest = "1.0"
 petgraph = "0.6"
 rand = "0.8"
 
-[[bench]]
-name = "performance"
-harness = false
+# benches/performance.rs deleted in pre-flight (v1.2 String-API bench).
+# Step 1 creates benches/substrate.rs against the v2.0 byte-API surface.

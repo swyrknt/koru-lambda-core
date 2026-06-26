@@ -274,10 +274,14 @@ clean (gate 16); `wasm-pack test --node --features wasm` passes
 
 - [x] Stale local `release/2.0.0` branch deleted (was at `913473c` from first v2.0 attempt; deleted in this branch's setup)
 - [x] `release/2.0.0` cut from `dev` HEAD (`c2d331b`, the "Update README" commit) — verified
-- [ ] Clean working-tree from dev's leftover untracked dirs (`.claude/`, `experiments/`, `warroom/`) — decide which to keep on `release/2.0.0` before Step 1's first commit. Notes: `.claude/` is editor config (probably gitignore); `experiments/` is the warroom probe workspace (rebuild fresh per `engine-architect` rather than carry forward — v1.2 API mismatch); `warroom/` is research artifacts (review for archival).
-- [ ] Decide fate of dev's `benches/performance.rs` — it benches the String API. Either delete (Step 1 replaces with `benches/substrate.rs`) or keep as `benches/_archive_performance.rs.bak` for reference. Recommend delete.
-- [ ] `cargo audit` clean on `dev`'s `Cargo.lock` before Step 1 starts. Any advisories on direct deps must be either patched on `dev` first or explicitly accepted with a note in this checklist.
-- [ ] **Capture `BASELINE_DEV_M3_PRO`** — run criterion (synthesize cold/warm, parents_of, degree) + dhat (memory per distinction at 1M) on `dev` HEAD as a pre-flight measurement. Pin the numbers in `DESIGN.md` Part 10.5 as the regression-delta baseline. Every Step 1+ budget amendment cites this baseline. Without it, "engineering reality" is rhetoric.
+- [x] Working tree clean — `.claude/`, `experiments/`, `warroom/` all gitignored (commit `214a11e`, expanded in commit on dev). Directories stay on disk for reference but don't pollute the branch.
+- [x] **`benches/performance.rs` deleted.** It benched the v1.2 String API and won't compile against v2.0. Step 1 creates `benches/substrate.rs` fresh against the byte-API surface. `Cargo.toml` `[[bench]]` entry also removed.
+- [x] `cargo audit` run on `dev`'s `Cargo.lock`. **Result: 0 vulnerabilities, 5 warnings, all accepted with rationale below.** No blocking advisories on any direct dep. The 5 warnings:
+  - `atty` (RUSTSEC-2024-0375 unmaintained, RUSTSEC-2021-0145 potential unaligned read) — transitive via `criterion`. Not in v2.0's substrate-only build path. `criterion`'s next minor will likely drop `atty`; not v2.0-blocking.
+  - `lru` (RUSTSEC-2026-0002 IterMut Stacked Borrows) — direct dep via `subsystems/network.rs`'s `pending_commitments`. v2.0 uses `lru::LruCache::put`/`pop_lru`, NOT `IterMut`. The unsound code path is not reachable from our usage. Verify post-Step-2 that no `IterMut` usage creeps in via hygiene grep (Step 5).
+  - `rand` 0.8.5 + 0.9.2 (RUSTSEC-2026-0097 custom-logger unsound) — `rand` is a dev-dep for proptest + Zipf workload. Both versions pulled transitively. We do not use custom loggers with rand; the unsound code path is not reachable. exp18 corpus generator pins `rand = "=0.8.5"` per Step 1 plan; the unsound path remains unreachable.
+  - **Recheck before v2.0 ship:** rerun `cargo audit` at Step 5 release prep. If any of these has been promoted to a CVE or if direct usage of the unsound code paths has crept in, address before tagging 2.0.0.
+- [ ] **Capture `BASELINE_DEV_M3_PRO`** — run criterion (synthesize cold/warm, parents_of, degree) + dhat (memory per distinction at 1M) on `dev` HEAD as a pre-flight measurement. Pin the numbers in `BASELINE_DEV_M3_PRO.toml` at repo root + reference from `DESIGN.md` Part 10.5. Every Step 1+ budget amendment cites this baseline. Without it, "engineering reality" is rhetoric. **Procedure scaffold at `BASELINE_DEV_M3_PRO.toml` ready for user-driven capture run (~30 min focused work, idle thermal envelope).**
 
 ---
 
