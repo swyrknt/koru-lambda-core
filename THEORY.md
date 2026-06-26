@@ -101,23 +101,53 @@ state regardless of the order in which they apply the pairs. Replay is
 content-validated, not chronologically dependent.
 
 ### Law 10 — Mediated self-reference → unbounded novelty (within ID space)
-Direct `synthesize(x, x)` is irreflexive (Axiom 3) and produces no novelty.
-But `synthesize(synthesize(x, observation), x)` produces a unique
-distinction at every depth when `observation` is a deterministic function
-of the recursion depth (the warroom experiments verified this for both
-cycling and constant `observation`; random `observation` is also unique
-but loses the "self-referential" framing — the loophole is about
-*structured* mediation, not about novelty in the abstract). This is the
-structural loophole that lets the substrate represent self-aware systems.
 
-**Bounded by ID space, not by depth.** Novelty here means "no irreflexive
-collapse," not literally infinite. Distinctions are 16 bytes (128 bits of
-identity), so the substrate carries at most 2^128 distinct distinctions
-and the birthday bound kicks in well before that — at ~2^64 distinctions
-any random synthesis has non-negligible collision probability with prior
-structure. This is a property of content-addressed identity, not a defect
-of mediated self-reference. The probes verify uniqueness at depth ≥ 10K;
-extrapolation to "infinite" would overclaim what's been measured.
+Direct `synthesize(x, x) = x` (Axiom 3, irreflexivity). A distinction
+synthesized with itself produces itself — no new structure. This is
+load-bearing: without irreflexivity, the substrate could fall into
+trivial recursive loops where every node generates new structure forever
+without anchoring to anything.
+
+But `synthesize(synthesize(x, observation), x)` produces a unique
+distinction at every depth when `observation` differs at each step
+(the warroom experiments verified this for both cycling and constant
+`observation` schedules). The mediation through `observation` breaks
+the irreflexive collapse: the inner synthesis produces something that's
+no longer equal to `x`, so the outer synthesis is no longer reflexive.
+
+**Why this matters structurally.** Most computational systems that try
+to represent themselves hit one of three failure modes:
+
+1. **Infinite recursion.** The system tries to model itself as part of
+   its state. Each level of self-modeling requires another level
+   underneath it. Stack blows up. (Naive self-reference.)
+2. **Explicit fixed-point machinery.** Gödel encoding, Y combinator,
+   typed reflection. These work, but they require careful construction
+   and don't compose naturally with the system's main operations.
+3. **Forbid self-reference.** Many systems just don't allow it.
+   Restrictive but simple.
+
+Mediated self-reference is a fourth path. The substrate has self-reference
+*as a structural primitive*: `synth(synth(self, obs), self)` is a legal
+composition of `synthesize` calls with no special-case machinery. The
+result is a distinction that genuinely *refers to* `self` while being
+distinct from `self`. It composes cleanly with everything else the
+substrate does because synthesis is the only operation.
+
+**Why it doesn't infinite-recurse.** Each `(synth(synth(x, obs_n), x))_n`
+chain produces a *finite* chain of distinct distinctions, one per
+recursion depth, terminated by whatever stopping condition the consumer
+chooses. The substrate doesn't enforce termination — that's the
+consumer's job — but it doesn't enable runaway recursion either.
+Every distinction synthesized goes into `parents_of` and `degree_counts`;
+no hidden stack growth.
+
+**Bounded by ID space, not by depth.** Distinctions are 16 bytes (128
+bits of identity), so the substrate carries at most 2^128 distinct
+distinctions and the birthday bound kicks in at ~2^64. The probes
+verify uniqueness at depth ≥ 10K (CHECKLIST.md Step 1); above that the
+limit is hash-space exhaustion, not the self-reference loophole. "Unbounded"
+means "not bounded by the irreflexivity axiom," not literally infinite.
 
 ### Law 11 — Fold Law
 The two primordials become topological mega-hubs. By construction, byte
@@ -125,8 +155,17 @@ folding through `synthesize` routes every byte through `d₀` and `d₁`
 multiple times, making them appear on every derivation path. The
 "depth ≤ 8" bound comes directly from the `ByteMapping` implementation:
 each byte folds through 8 synthesis steps (one per bit), with `d₀` and
-`d₁` participating in every step. Above depth 8, the topology is no
-longer fold-determined — Coding Law takes over.
+`d₁` participating in every step.
+
+**Fold Law and Coding Law both operate at all depths.** They're not
+sequential — there's no "handoff" at depth 8. Fold Law dominates the
+*topology* at shallow depths (≤ 8) because byte-fold structure mechanically
+routes paths through d₀/d₁ before usage patterns have had time to
+concentrate elsewhere. Coding Law dominates the *content distribution*
+beyond the fold layer because most distinctions exist there and usage
+concentration drives degree centrality. Both are observable simultaneously
+in a mature engine; the "depth" distinction is about which mechanism
+explains the most variance in degree-centrality at that depth.
 
 ### Law 12 — Coding Law
 Beyond the fold layer, degree-centrality tracks usage frequency. The
@@ -174,19 +213,39 @@ The substrate by itself is timeless. It enforces the axioms; it knows
 about distinctions and parents; it does not know about order, history,
 identity-of-perspective, or causality.
 
-A productive consumer of the substrate is a **Local Causal Agent (LCA)**:
+The substrate's **reference consumption pattern** is the Local Causal
+Agent (LCA):
 
-13. Every LCA anchors to a **local root distinction** — its perspective.
+13. An LCA anchors to a **local root distinction** — its perspective.
 14. State transitions are **causal syntheses** from the local root + the
     canonical structure of the action being taken.
 15. LCAs **update their perspective forward** as their causal chain
     advances.
 
-This is the only pattern the substrate sanctions for "using" it. Time is
-what LCAs do.
+**This is a pattern, not an axiom.** The four axioms don't *require*
+consumers to be LCAs; they constrain what `synthesize` does, not how
+consumers structure their use of it. A consumer with a different
+shape — multi-perspective agents that anchor to several roots
+simultaneously, consumers that synthesize from non-root state, or
+consumers that ignore perspective entirely and just record raw
+synthesis events — could exist and still get the substrate's
+correctness guarantees.
 
-The trait `LocalCausalAgent` in the codebase formalizes this pattern. It
-is substrate, not subsystem — the trait IS the consumer contract.
+The LCA pattern is the *reference* because:
+
+- It's how every consumer we've actually built (ALIS, koru-protocol,
+  the reference subsystems) uses the substrate.
+- It cleanly captures "time is what consumers do" — the substrate
+  stays timeless, the LCA carries the causal chain.
+- The trait `LocalCausalAgent` makes the pattern composable, so
+  multi-consumer systems can interoperate without re-inventing the
+  perspective discipline.
+
+The trait lives at `src/agent.rs` (substrate level, not subsystems)
+because it formalizes the canonical *consumer contract*, not because
+it's the only legal way to consume the substrate. Future consumers
+that need different shapes are welcome; they'll just write their own
+traits and lose the interop benefits the LCA contract provides.
 
 ---
 
@@ -227,20 +286,25 @@ path; everything else follows.
 
 ---
 
-## Why this is small
+## Why the theory is small
 
-The theory has been deliberately compressed. One operator. Four axioms.
-Two primordials. Eight structural laws as named consequences. The LCA
-pattern as a single contract.
+One operator. Four axioms. Two primordials. Eight structural laws as
+named consequences. One reference consumption pattern.
 
-Smallness is load-bearing. Every implementation must enforce the axioms;
-every consumer must conform to the LCA pattern. If the theory's surface
-were larger, the implementation surface would be larger, and divergence
-between consumers would be inevitable.
+Smallness is a deliberate constraint, not an accident. Every implementation
+that claims to be `koru-lambda-core` must enforce the four axioms exactly
+— there's nowhere for a violation to hide because the surface is so
+small. Every consumer that wants the substrate's correctness guarantees
+gets them whether or not they use the LCA pattern, because the
+guarantees flow from the axioms, not from the consumer's shape.
 
-The bet is that a small, complete theory produces a substrate strong
-enough to carry both a cognitive architecture (ALIS) and an economic
-protocol (koru) without either feeling like a hack on top of the other.
+The bet: a small, internally-consistent theory produces a substrate
+strong enough to carry domains that usually require their own,
+domain-specific foundations. The current evidence is two consumers
+(ALIS for cognition, koru-protocol for economic consensus) both built
+on the same engine. Whether the bet generalizes to a third domain is
+an open question; whether it holds for the two we have is what the
+warroom experiments and v2.0 release are about.
 
 The 50+ experiments in the warroom record stress-test every claim above
 at scales appropriate to each claim — axioms and small-graph invariants
