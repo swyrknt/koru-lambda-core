@@ -254,9 +254,18 @@ traits and lose the interop benefits the LCA contract provides.
 The theory's promises, taken together, give the substrate properties
 that are difficult or impossible to obtain through other means:
 
-- **Deterministic distributed state without consensus.** Engine
-  independence (Law 8) means two machines processing the same operations
-  produce identical state. The hash function IS the consensus protocol.
+- **Deterministic distributed *state* agreement without a consensus
+  protocol.** Engine independence (Law 8) means two machines processing
+  the same operations produce identical state. The hash function IS the
+  consensus mechanism for state and identity. **The substrate does not
+  solve inclusion** (which operations belong in the canonical set),
+  **liveness** (when a batch is finalized), **attribution** (who
+  performed an operation), or **censorship resistance** (preventing
+  withholding) — those concerns require knowing about peers, time, and
+  actor identity, which the substrate is designed not to know. Consumer
+  protocols (koru-protocol's leader election + commitment schemes) layer
+  on top to solve those. The substrate's contribution is removing the
+  state-agreement problem entirely; consumers handle the rest.
 
 - **Append-only by design choice (not by axiom).** The four axioms
   don't forbid removal — they constrain *what `synthesize` does*, not
