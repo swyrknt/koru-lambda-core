@@ -28,4 +28,6 @@ pub mod distinction_hex;
 pub mod engine;
 
 pub use distinction_hex::ParseError;
-pub use engine::{Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher};
+pub use engine::{
+    Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher, InvariantError,
+};
