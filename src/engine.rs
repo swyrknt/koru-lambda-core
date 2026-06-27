@@ -511,6 +511,27 @@ impl DistinctionEngine {
         self.parents_of.len() * 2 + 1
     }
 
+    /// Snapshot of every distinction registered in this engine.
+    ///
+    /// Returns a `Vec<Distinction>` — a snapshot, not a live iterator.
+    /// Iterating a `DashMap` requires holding shard locks; materializing
+    /// to a `Vec` lets callers process the result without blocking other
+    /// threads' synthesis calls.
+    ///
+    /// Order is unspecified (DashMap iteration order is shard-dependent
+    /// and not stable across runs). For deterministic ordering, sort
+    /// the returned `Vec` by `Distinction::as_bytes()`.
+    ///
+    /// Cost: O(N) where N is `distinction_count()`.
+    ///
+    /// Intended for traversal probes (Coding Law degree-vs-frequency
+    /// in Step 4, Fold Law dominance tests, diagnostic dumps). Not
+    /// intended for the synthesis hot path.
+    #[must_use]
+    pub fn snapshot_distinctions(&self) -> Vec<Distinction> {
+        self.all_distinctions.iter().map(|entry| *entry.value()).collect()
+    }
+
     /// Verify structural law `r = 2d − 3` holds.
     ///
     /// In the engine's representation, this is equivalent to

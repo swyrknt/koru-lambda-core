@@ -944,13 +944,23 @@ No new heavyweight deps. Every addition serves a specific design goal.
   which inflates **parent** degrees, not the new child's. Falsifies any
   refactor that moves `fetch_add` outside the closure or breaks the
   entry-gate.
-- **Fold Law byte coverage lower bound** — after running the 256-byte
+- **Fold Law byte coverage exact bound** — after running the 256-byte
   exercise (every byte 0..=255 folded through the engine via
-  `ByteMapping::map_byte_to_distinction`), assert `engine.degree(d0) >= 256 * 8`
-  AND `engine.degree(d1) >= 256 * 8` (each byte folds 8 times through
-  the primordials). Catches a future fast-path-by-byte-value regression
-  that silently skips the fold for some bytes (a bug the phantom-count
-  probe wouldn't detect).
+  `ByteMapping::map_byte_to_distinction`), assert `engine.degree(d0) == 512`
+  AND `engine.degree(d1) == 512`. Derivation: at bit-step `i+1`, only
+  `2^(i+1)` unique accumulator values exist across all 256 bytes (one
+  per bit-prefix). Each unique acc spawns one novel `synth(acc, d_X)`
+  and one novel `synth(intermediate, d_Y)` (the bit value determines
+  which primordial is which). Cumulative novel bumps per primordial:
+  `2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 = 510`. Plus 1 from the
+  initial `synth(d0, d1)` saturated after byte 0. Plus 1 from the
+  genesis addend in `degree()`. Total: 512 exactly — this is the
+  topological maximum for the 8-bit fold shape under content-addressing
+  saturation. Catches both (a) regression below 512 (fewer novel
+  intermediates than predicted; broken saturation or skipped bytes) and
+  (b) regression above 512 (extra synth calls; Fold redesign).
+  (The earlier `>= 256 * 8 = 2048` gate ignored saturation entirely;
+  it would have flagged a correct implementation as broken.)
 - Mediated self-reference uniqueness at depth ≥ 10K (iterative, not recursive)
 - Fold Law — d₀/d₁ degree ratio ≥ 100× after byte folds
 - `replay_topological(snapshot_parentage(e))` produces a byte-identical engine

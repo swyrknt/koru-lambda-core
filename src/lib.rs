@@ -24,10 +24,14 @@
 #![warn(clippy::missing_const_for_fn)]
 #![warn(missing_docs)]
 
+pub mod agent;
 pub mod distinction_hex;
 pub mod engine;
+pub mod primitives;
 
+pub use agent::{synthesize_causal_action, LocalCausalAgent};
 pub use distinction_hex::ParseError;
 pub use engine::{
     Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher, InvariantError,
 };
+pub use primitives::{ByteMapping, Canonicalizable};
