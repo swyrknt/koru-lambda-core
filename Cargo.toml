@@ -2,6 +2,7 @@
 name = "koru-lambda-core"
 version = "1.2.0"
 edition = "2021"
+rust-version = "1.80"
 description = "A minimal axiomatic system for distributed computation"
 authors = ["Sawyer Kent <sawyerkent.me@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -13,33 +14,39 @@ categories = ["algorithms", "wasm"]
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
 
+[profile.release]
+panic = "abort"
+
 [dependencies]
 sha2 = "0.10"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0"
 dashmap = "6.0"
-rayon = "1.10"
-lru = "0.16"
-once_cell = "1.19"
+hex = "0.4"
+bytemuck = { version = "1", features = ["derive"] }
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 
-# WASM support
+# WASM support (Step 3)
 wasm-bindgen = { version = "0.2", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
 js-sys = { version = "0.3", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
 
 [features]
 default = []
-wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys"]
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "console_error_panic_hook"]
 
-[build-dependencies]
-cbindgen = "0.26"
+# cbindgen returns in Step 3 (FFI bindings); deferred to keep
+# sub-milestone 1a build clean.
 
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.0"
-petgraph = "0.6"
-rand = "0.8"
+rand = "=0.8.5"          # exact-version pin for exp18 corpus reproducibility
+static_assertions = "1"
+loom = "0.7"
+dhat = "0.3"
+blake3 = "1"
+serde_json = "1.0"
 
 # benches/performance.rs deleted in pre-flight (v1.2 String-API bench).
 # Step 1 creates benches/substrate.rs against the v2.0 byte-API surface.
