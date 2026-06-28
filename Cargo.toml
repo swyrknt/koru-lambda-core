@@ -17,6 +17,13 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 [profile.release]
 panic = "abort"
 
+[lints.rust]
+# `cfg(loom)` is a workflow-specific build flag set via
+# `RUSTFLAGS="--cfg loom"` when running the loom model-checker tests
+# in `tests/loom_kernel.rs` (DESIGN.md gate 24). Declared here so the
+# unexpected_cfgs lint passes without `--cfg loom` set.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+
 [dependencies]
 sha2 = "0.10"
 dashmap = "6.0"
