@@ -2,7 +2,10 @@
 //! [`DistinctionEngine`] with the entry-gated synthesize hot path.
 //!
 //! This is the heart of the crate. See `THEORY.md` for the axioms it
-//! enforces and `ARCHITECTURE.md` for the three-projection engine state.
+//! enforces and `ARCHITECTURE.md` for the engine state layout (a single
+//! `nodes` map of `<id, EngineNode { parents, degree }>` exposing the
+//! three canonical O(1) projections — saturation check, parent lookup,
+//! degree query — as per-node fields).
 
 use dashmap::DashMap;
 use sha2::{Digest, Sha256};
@@ -221,34 +224,47 @@ pub enum InvariantError {
 // DistinctionEngine
 // ---------------------------------------------------------------------------
 
-/// Canonical `(min, max)` parent pair recorded in the engine's
-/// `parents_of` projection (via [`DistinctionEngine::parents_of`] and
+/// Canonical `(min, max)` parent pair recorded in an `EngineNode` (via
+/// [`DistinctionEngine::parents_of`] and
 /// [`DistinctionEngine::snapshot_parentage`]). The ordering is
 /// guaranteed: `pair.0.as_bytes() <= pair.1.as_bytes()`.
 pub type ParentPair = (Distinction, Distinction);
 
-/// Crate-internal alias for the engine's `all_distinctions` map type.
-type DistinctionMap = DashMap<[u8; 16], Distinction, IdentityBuildHasher>;
+/// The per-distinction record stored in the engine's single `nodes` map.
+///
+/// `parents` is `None` for the two primordials and `Some(min, max)` for
+/// every other distinction. `degree` counts the number of NOVEL syntheses
+/// in which this distinction has been used as a parent (saturated repeats
+/// contribute nothing). The primordial genesis edge (d₀↔d₁) is accounted
+/// for in [`DistinctionEngine::degree`] as a +1 addend, not in the field.
+struct EngineNode {
+    parents: Option<ParentPair>,
+    degree: AtomicUsize,
+}
 
-/// Crate-internal alias for the engine's `parents_of` map type.
-type ParentsMap = DashMap<[u8; 16], ParentPair, IdentityBuildHasher>;
-
-/// Crate-internal alias for the engine's `degree_counts` map type.
-type DegreeMap = DashMap<[u8; 16], AtomicUsize, IdentityBuildHasher>;
+/// Crate-internal alias for the engine's `nodes` map type.
+type NodeMap = DashMap<[u8; 16], EngineNode, IdentityBuildHasher>;
 
 /// The substrate engine — implements the four axioms in
 /// [`synthesize`](DistinctionEngine::synthesize) and exposes the
-/// canonical O(1) projections.
+/// canonical O(1) projections through a single `nodes` map.
 ///
 /// # State
 ///
-/// Five fields total: two primordial constants + three indexed
-/// projections, each a canonical O(1) view of a theory-required
-/// operation:
+/// Three fields total: two primordial constants + one indexed `nodes`
+/// map whose value is an [`EngineNode`] carrying both parents and degree
+/// per distinction. The three conceptual O(1) projections live as
+/// per-node fields:
 ///
-/// - `all_distinctions`: O(1) saturation check (Law 7).
-/// - `parents_of`: O(1) child → parents lookup (Law 5, binary parentage).
-/// - `degree_counts`: O(1) degree query (Law 12 Coding Law + Law 11 Fold Law).
+/// - **Saturation check** (Law 7): `nodes.contains_key(id)`.
+/// - **Parent lookup** (Law 5, binary parentage): `nodes[id].parents`.
+/// - **Degree query** (Law 12 Coding Law + Law 11 Fold Law):
+///   `nodes[id].degree` + the appropriate genesis/parent-edges addend.
+///
+/// Merging into one map (vs. three side-by-side maps) preserves the
+/// O(1) semantics of every projection and removes the two extra shard
+/// lookups per novel synthesis. Identity-IS-process: each distinction
+/// is one node.
 ///
 /// No log. No observation channel. No order-bearing state. The substrate
 /// is timeless; time is what consumers (`LocalCausalAgent`) do.
@@ -260,13 +276,13 @@ type DegreeMap = DashMap<[u8; 16], AtomicUsize, IdentityBuildHasher>;
 /// shared engine reference (typically `Arc<DistinctionEngine>`).
 ///
 /// The entry-gated insert in [`synthesize`](DistinctionEngine::synthesize)
-/// ensures byte-equivalent state regardless of thread interleaving.
+/// ensures byte-equivalent post-join state regardless of thread
+/// interleaving. See `synthesize`'s "happens-before contract" for the
+/// in-flight ordering details.
 pub struct DistinctionEngine {
     d0: Distinction,
     d1: Distinction,
-    all_distinctions: DistinctionMap,
-    parents_of: ParentsMap,
-    degree_counts: DegreeMap,
+    nodes: NodeMap,
 }
 
 impl DistinctionEngine {
@@ -278,26 +294,24 @@ impl DistinctionEngine {
     /// - `degree(d0) == 1` and `degree(d1) == 1` (the genesis d₀↔d₁ edge)
     /// - `check_structural_invariant().is_ok()` (r = 2d − 3 with d = 2, r = 1)
     /// - `synthesize(d0, fresh_x)` immediately after construction does not
-    ///   panic (degree_counts pre-seeded for both primordials).
+    ///   panic (primordial `EngineNode`s pre-seeded for both d₀ and d₁).
     #[must_use]
     pub fn new() -> Self {
         let d0 = PRIMORDIAL_D0;
         let d1 = PRIMORDIAL_D1;
 
-        let all_distinctions = DashMap::with_hasher(IdentityBuildHasher::default());
-        all_distinctions.insert(d0.0, d0);
-        all_distinctions.insert(d1.0, d1);
+        let nodes = DashMap::with_hasher(IdentityBuildHasher::default());
+        // Pre-seed primordial nodes so the synthesize hot path's
+        // `nodes.get(...).expect("(invariant)")` never trips on a fresh
+        // engine where d0 or d1 is the first parent in a synthesis.
+        // Primordials have `parents: None` (they have no parents) and
+        // `degree: 0` (no novel-synthesis participations yet — the
+        // genesis d₀↔d₁ edge is accounted for in `degree()` as a +1
+        // addend).
+        nodes.insert(d0.0, EngineNode { parents: None, degree: AtomicUsize::new(0) });
+        nodes.insert(d1.0, EngineNode { parents: None, degree: AtomicUsize::new(0) });
 
-        let parents_of = DashMap::with_hasher(IdentityBuildHasher::default());
-
-        let degree_counts = DashMap::with_hasher(IdentityBuildHasher::default());
-        // Pre-seed primordial degree_counts so the synthesize hot path's
-        // `degree_counts.get(...).expect("(invariant)")` never trips on
-        // a fresh engine where d0 or d1 is the first parent in a synthesis.
-        degree_counts.insert(d0.0, AtomicUsize::new(0));
-        degree_counts.insert(d1.0, AtomicUsize::new(0));
-
-        Self { d0, d1, all_distinctions, parents_of, degree_counts }
+        Self { d0, d1, nodes }
     }
 
     /// Borrow the first primordial.
@@ -341,12 +355,41 @@ impl DistinctionEngine {
     /// # Concurrency
     ///
     /// Safe to call concurrently from any number of threads against a
-    /// shared engine reference. The entry-gated insert into
-    /// `all_distinctions` serializes novel insertions for a given
-    /// `new_bytes` on a single shard write-lock; concurrent reads through
-    /// the saturation fast-path don't block writes for *different*
-    /// `new_bytes`. See the implementation comments below for the full
-    /// happens-before contract.
+    /// shared engine reference. The entry-gated insert into `nodes`
+    /// serializes novel insertions for a given `new_bytes` on a single
+    /// shard write-lock; concurrent reads through the saturation
+    /// fast-path don't block writes for *different* `new_bytes`. See
+    /// the implementation comments below for the full happens-before
+    /// contract.
+    ///
+    /// # Happens-before contract
+    ///
+    /// Two distinct guarantees with different scopes:
+    ///
+    /// 1. **New-child observation → parents.** A reader that observes
+    ///    `new_d` via [`nodes`](Self::has) or [`parents_of`](Self::parents_of)
+    ///    is guaranteed (via the entry shard lock) to observe the new
+    ///    node's `parents` field — the parent identities are committed
+    ///    atomically with the new node's insertion.
+    /// 2. **Parent degree bumps — eventually consistent.** Parent degree
+    ///    `fetch_add`s occur AFTER the entry shard lock releases (so that
+    ///    a parent hashing to the same shard as `new_bytes` cannot
+    ///    self-deadlock — the merged-map's B1 mitigation). A racing
+    ///    reader that observes `new_d` and immediately queries
+    ///    `degree(parent)` may transiently see the pre-bump value. Post-
+    ///    join state is consistent: the `Release`/`Acquire` pair on
+    ///    `degree` ensures the bump becomes visible to subsequent loads,
+    ///    and the per-parent sum invariant
+    ///    `sum_of_degrees == 2 * non_primordial_count` holds at every
+    ///    quiescent point.
+    ///
+    /// Consumers (`LocalCausalAgent`) drive synthesis sequentially within
+    /// a single LCA, so the relaxed in-flight ordering between distinct
+    /// LCAs is invisible to any contract built on the LCA pattern. Probes
+    /// reading degree directly (`Coding Law`, `Fold Law` traversals)
+    /// should call them at a quiescent point (after a join barrier or
+    /// after consumer-driven epoch boundary), not mid-flight, to get the
+    /// post-bump values they expect.
     ///
     /// [`replay_topological`]: crate::replay::replay_topological
     #[must_use]
@@ -355,15 +398,15 @@ impl DistinctionEngine {
         // The `pub(crate)` Distinction field closes mint-from-thin-air at
         // compile time, but `Distinction::from_hex` can produce a value
         // whose bytes aren't registered in any engine. The debug_assert
-        // catches this in debug; the closure's expect (below) catches it
-        // in release.
+        // catches this in debug; the post-entry `expect` (below) catches
+        // it in release on the parent lookup.
         debug_assert!(
-            self.all_distinctions.contains_key(&a.0),
+            self.nodes.contains_key(&a.0),
             "synthesize: parent `a` ({:?}) not registered in this engine — foreign-byte injection",
             a
         );
         debug_assert!(
-            self.all_distinctions.contains_key(&b.0),
+            self.nodes.contains_key(&b.0),
             "synthesize: parent `b` ({:?}) not registered in this engine — foreign-byte injection",
             b
         );
@@ -385,59 +428,67 @@ impl DistinctionEngine {
         new_bytes.copy_from_slice(&digest[..16]);
 
         // Law 7 — saturation. Fast path: if the child already exists,
-        // return it without touching parents_of or degree_counts. This is
-        // load-bearing: repeated syntheses must contribute NOTHING to
-        // degree.
-        if let Some(existing) = self.all_distinctions.get(&new_bytes) {
-            return *existing;
+        // return it without taking any shard write-lock. This is load-
+        // bearing: repeated syntheses must contribute NOTHING to degree.
+        // The Some/None result is purely an optimization; correctness
+        // comes from the entry's exclusive Vacant/Occupied dispatch
+        // below.
+        if self.nodes.contains_key(&new_bytes) {
+            return Distinction(new_bytes);
         }
 
         let new_d = Distinction(new_bytes);
 
-        // Entry-gated insert (race-free).
+        // Entry-gated insert (race-free) with a per-thread "did I win"
+        // flag.
         //
-        // `or_insert_with` runs the closure under the DashMap shard
-        // write-lock for `new_bytes` in `all_distinctions`. The closure
-        // body completes BEFORE the lock releases. Any racing reader
-        // who later observes `new_d` via the saturation fast-path
-        // (`all_distinctions.get(&new_bytes)`) has a happens-before edge
-        // to the parents_of and degree_counts writes inside this
-        // closure.
+        // Without the flag, every thread that races past the saturation
+        // check would unconditionally fetch_add on the parents in the
+        // post-entry block — double-counting whenever two threads race
+        // the same novel `new_bytes`. The Vacant/Occupied match makes
+        // the closure-equivalent (parent bumps) run exactly once per
+        // novel insertion.
         //
-        // Lock-holding discipline: each inner DashMap call returns a
-        // Ref / RefMut whose guard drops at the end of its statement.
-        // We never hold two `degree_counts` shard locks simultaneously.
-        // The `all_distinctions` shard lock for `new_bytes` is held
-        // throughout, but `parents_of` and `degree_counts` are
-        // independent maps — different shards, no lock cycle possible.
-        //
-        // Pre-seed `degree_counts[new_bytes] = 0` so that when `new_d`
-        // is later used as a parent of some future synthesis, the inner
-        // `degree_counts.get(...).expect("(invariant)")` succeeds via
-        // the read-locked `get()` fast path (no write-locked
-        // `entry().or_default()` needed). Both parents already have
-        // their entries pre-seeded (at their own insertion, or at
-        // construction for d₀/d₁).
-        //
-        // `fetch_add(1, Ordering::Release)` pairs with `Ordering::Acquire`
-        // loads in `degree()` — probes reading `degree_counts` directly
-        // (without first touching `all_distinctions` or `parents_of`)
-        // still get a happens-before edge to the writing synthesis.
-        // Loom verifies this kernel; TSan on the concurrent-write
-        // byte-equivalence test verifies the DashMap-shard side.
-        self.all_distinctions.entry(new_bytes).or_insert_with(|| {
-            self.parents_of.insert(new_bytes, (first, second));
-            self.degree_counts.insert(new_bytes, AtomicUsize::new(0));
-            self.degree_counts
+        // Lock-holding discipline: the `Entry` value holds the shard
+        // write-lock for `new_bytes` in `nodes`. The block scope ensures
+        // the lock is dropped BEFORE the parent fetch_adds below. This
+        // is the merged-map's B1 deadlock mitigation: a parent
+        // (`first` / `second`) may hash to the same shard as
+        // `new_bytes`, and acquiring its shard read-lock while still
+        // holding the same shard's write-lock would self-deadlock.
+        let inserted_new = {
+            match self.nodes.entry(new_bytes) {
+                dashmap::Entry::Vacant(slot) => {
+                    slot.insert(EngineNode {
+                        parents: Some((first, second)),
+                        degree: AtomicUsize::new(0),
+                    });
+                    true
+                },
+                dashmap::Entry::Occupied(_) => false,
+            }
+            // Entry (and any RefMut from slot.insert) drops here,
+            // releasing the shard write-lock before parent fetch_adds.
+        };
+
+        if inserted_new {
+            // `fetch_add(1, Ordering::Release)` pairs with
+            // `Ordering::Acquire` loads in `degree()`. Probes reading
+            // node.degree directly (without first observing `new_d`)
+            // still get a happens-before edge to the writing synthesis.
+            // Loom verifies this kernel; TSan on the concurrent-write
+            // byte-equivalence test verifies the DashMap-shard side.
+            self.nodes
                 .get(&first.0)
-                .expect("degree_counts pre-seeded at parent insertion (invariant)")
+                .expect("first parent registered at its insertion (invariant)")
+                .degree
                 .fetch_add(1, Ordering::Release);
-            self.degree_counts
+            self.nodes
                 .get(&second.0)
-                .expect("degree_counts pre-seeded at parent insertion (invariant)")
+                .expect("second parent registered at its insertion (invariant)")
+                .degree
                 .fetch_add(1, Ordering::Release);
-            new_d
-        });
+        }
 
         new_d
     }
@@ -449,46 +500,46 @@ impl DistinctionEngine {
     /// this engine.
     #[must_use]
     pub fn parents_of(&self, d: Distinction) -> Option<(Distinction, Distinction)> {
-        self.parents_of.get(&d.0).map(|entry| *entry.value())
+        self.nodes.get(&d.0).and_then(|entry| entry.value().parents)
     }
 
     /// Compute the degree of a distinction (Law 12, Coding Law).
     ///
     /// Formula:
-    /// - For d₀ or d₁: `degree_counts[d].load(Acquire) + 1` — the +1
+    /// - For d₀ or d₁: `nodes[d].degree.load(Acquire) + 1` — the +1
     ///   accounts for the genesis d₀↔d₁ edge, the only edge in the
     ///   graph not derivable from `parents_of`.
     /// - For any other distinction REGISTERED in this engine:
-    ///   `degree_counts[d].load(Acquire) + 2` — the +2 accounts for the
+    ///   `nodes[d].degree.load(Acquire) + 2` — the +2 accounts for the
     ///   two parent edges every non-primordial has, recorded in
-    ///   `parents_of[d]` rather than in `degree_counts[d]`.
+    ///   `nodes[d].parents` rather than in `nodes[d].degree`.
     /// - For a distinction NOT registered in this engine: `0`. A foreign
     ///   distinction has no edges in this engine's graph; the genesis
     ///   addend doesn't apply to it.
     ///
-    /// `degree_counts[d]` counts the number of NOVEL syntheses in which
+    /// `nodes[d].degree` counts the number of NOVEL syntheses in which
     /// `d` participated as a parent (saturated repeats contribute nothing).
     /// `Acquire` ordering pairs with `Release` ordering on the
-    /// `fetch_add` inside `synthesize` so probes reading this map
+    /// `fetch_add` inside `synthesize` so probes reading this field
     /// directly get a happens-before edge to writes.
     #[must_use]
     pub fn degree(&self, d: Distinction) -> usize {
-        // Primordials: registered at construction with degree_counts
-        // pre-seeded to 0. The `map_or(0, ...)` is defensive — the entry
-        // should always exist for d0/d1 in a valid engine.
+        // Primordials: registered at construction with `degree` pre-seeded
+        // to 0. The `map_or(0, ...)` is defensive — the node should always
+        // exist for d0/d1 in a valid engine.
         if d == self.d0 || d == self.d1 {
             return self
-                .degree_counts
+                .nodes
                 .get(&d.0)
-                .map_or(0, |entry| entry.value().load(Ordering::Acquire))
+                .map_or(0, |entry| entry.value().degree.load(Ordering::Acquire))
                 + 1;
         }
         // Non-primordial: registration is signaled by the presence of a
-        // `degree_counts` entry (pre-seeded at insertion in the
-        // synthesize closure). Foreign distinctions get neither the
-        // addend nor any participation count.
-        match self.degree_counts.get(&d.0) {
-            Some(entry) => entry.value().load(Ordering::Acquire) + 2,
+        // node entry (pre-seeded at insertion in the synthesize hot
+        // path). Foreign distinctions get neither the addend nor any
+        // participation count.
+        match self.nodes.get(&d.0) {
+            Some(entry) => entry.value().degree.load(Ordering::Acquire) + 2,
             None => 0,
         }
     }
@@ -498,19 +549,21 @@ impl DistinctionEngine {
     /// At construction: 2 (just d₀ and d₁).
     #[must_use]
     pub fn distinction_count(&self) -> usize {
-        self.all_distinctions.len()
+        self.nodes.len()
     }
 
     /// Number of relationships in the engine.
     ///
     /// Each non-primordial child contributes 2 edges (one to each parent).
-    /// Plus 1 for the genesis d₀↔d₁ edge. So:
-    /// `relationship_count() == parents_of.len() * 2 + 1`.
+    /// Plus 1 for the genesis d₀↔d₁ edge. The primordials are always
+    /// present in `nodes`, so the non-primordial count is
+    /// `nodes.len() - 2`, giving:
+    /// `relationship_count() == (nodes.len() - 2) * 2 + 1`.
     ///
     /// At construction: 1 (just the genesis edge).
     #[must_use]
     pub fn relationship_count(&self) -> usize {
-        self.parents_of.len() * 2 + 1
+        (self.nodes.len() - 2) * 2 + 1
     }
 
     /// Test whether a distinction is registered in this engine.
@@ -527,28 +580,32 @@ impl DistinctionEngine {
     /// O(1) — single DashMap lookup.
     #[must_use]
     pub fn has(&self, d: Distinction) -> bool {
-        self.all_distinctions.contains_key(&d.0)
+        self.nodes.contains_key(&d.0)
     }
 
     /// Snapshot every parent-child relationship as an owned `Vec`.
     ///
-    /// Returns the contents of `parents_of` as a list of `(child,
-    /// (parent_min, parent_max))` tuples. Order is unspecified
-    /// (DashMap iteration is shard-dependent and not stable across
-    /// runs). For deterministic ordering, sort the returned `Vec` by
-    /// child bytes.
+    /// Returns the contents of `parents` (across all nodes that have
+    /// one) as a list of `(child, (parent_min, parent_max))` tuples.
+    /// Order is unspecified (DashMap iteration is shard-dependent and
+    /// not stable across runs). For deterministic ordering, sort the
+    /// returned `Vec` by child bytes.
     ///
-    /// Primordials are NOT included — they have no parents.
+    /// Primordials are NOT included — their `parents` is `None`.
     ///
     /// This is the canonical persistence dump: combined with
     /// [`replay_topological`](crate::replay::replay_topological), it
     /// reconstructs a byte-identical engine on any machine
     /// (engine-independence, Law 8) in any input order (Law 9).
     ///
-    /// O(N) where N is the number of non-primordial distinctions.
+    /// O(N) where N is `distinction_count()` — iterates all nodes and
+    /// filters to those with parents.
     #[must_use]
     pub fn snapshot_parentage(&self) -> Vec<(Distinction, ParentPair)> {
-        self.parents_of.iter().map(|entry| (Distinction(*entry.key()), *entry.value())).collect()
+        self.nodes
+            .iter()
+            .filter_map(|entry| entry.value().parents.map(|p| (Distinction(*entry.key()), p)))
+            .collect()
     }
 
     /// Snapshot of every distinction registered in this engine.
@@ -569,27 +626,37 @@ impl DistinctionEngine {
     /// intended for the synthesis hot path.
     #[must_use]
     pub fn snapshot_distinctions(&self) -> Vec<Distinction> {
-        self.all_distinctions.iter().map(|entry| *entry.value()).collect()
+        self.nodes.iter().map(|entry| Distinction(*entry.key())).collect()
     }
 
     /// Verify structural law `r = 2d − 3` holds.
     ///
-    /// In the engine's representation, this is equivalent to
-    /// `all_distinctions.len() == parents_of.len() + 2` — every
-    /// non-primordial distinction has exactly one `parents_of` entry
-    /// (binary parentage, Law 5), plus 2 for the primordials.
+    /// In the merged-map representation, this verifies that
+    /// `nodes.len() == (count_of_nodes_with_parents) + 2` — every
+    /// non-primordial distinction has its `parents` field populated
+    /// (binary parentage, Law 5), and every primordial has `parents:
+    /// None`. The merged storage makes the *count* relationship
+    /// trivially true (a single `EngineNode` carries both id and
+    /// parents, so they cannot get out of sync), so this check primarily
+    /// catches a shape corruption (e.g., a primordial accidentally
+    /// having parents, or a non-primordial accidentally missing them).
     ///
     /// Failure is a *theory event*, not a budget event: it means the
     /// implementation no longer satisfies the structural laws. The
     /// response is rewrite, not amendment.
+    ///
+    /// Cost: O(N) where N is `distinction_count()` — one iteration over
+    /// all nodes counting parented ones. Not on the hot path.
     ///
     /// # Errors
     ///
     /// Returns [`InvariantError::BinaryParentageMismatch`] if the
     /// counts don't match.
     pub fn check_structural_invariant(&self) -> Result<(), InvariantError> {
-        let d_count = self.all_distinctions.len();
-        let p_plus_two = self.parents_of.len() + 2;
+        let d_count = self.nodes.len();
+        let with_parents =
+            self.nodes.iter().filter(|entry| entry.value().parents.is_some()).count();
+        let p_plus_two = with_parents + 2;
         if d_count != p_plus_two {
             return Err(InvariantError::BinaryParentageMismatch {
                 all_distinctions: d_count,
@@ -1130,13 +1197,85 @@ mod engine_tests {
         assert_eq!(e_concurrent.distinction_count(), e_single.distinction_count());
         assert_eq!(e_concurrent.relationship_count(), e_single.relationship_count());
 
-        // The round-2 invariant: sum of degree_counts == 2 * parents_of.len().
+        // The round-2 invariant: sum of node.degree == 2 * non_primordial_count.
         // Every novel synthesis contributes exactly two fetch_add(1) calls
-        // (one per parent). Race-winners don't matter to the sum.
-        let parents_count = e_concurrent.parents_of.len();
+        // (one per parent). Race-winners don't matter to the sum. The
+        // Acquire load pairs with the synthesize hot path's Release
+        // fetch_add — at this quiescent point (post-join), all writes
+        // are visible.
+        let nonprim_count =
+            e_concurrent.nodes.iter().filter(|entry| entry.value().parents.is_some()).count();
+        let degree_sum: usize = e_concurrent
+            .nodes
+            .iter()
+            .map(|entry| entry.value().degree.load(Ordering::Acquire))
+            .sum();
+        assert_eq!(degree_sum, 2 * nonprim_count);
+    }
+
+    #[test]
+    fn relaxed_happens_before_post_join_consistent() {
+        // qa-sentinel round-3 demand: the merged-map design releases
+        // the new_bytes shard write-lock BEFORE the parent degree
+        // fetch_adds (the B1 deadlock mitigation). This shifts the
+        // ordering contract: a racing reader who observes new_d via
+        // saturation may transiently see parent degrees not yet bumped.
+        //
+        // This test exercises that window with 32 threads and
+        // independent chains (so the engine grows novel distinctions
+        // continuously) and asserts that the POST-JOIN state is
+        // consistent — the eventual consistency claim holds even
+        // though the intermediate states may be loose.
+        //
+        // Falsification target: if the parent fetch_adds were ever
+        // dropped (e.g., a future refactor that lost the `if inserted_new`
+        // gate or the post-entry fetch_add block), this would catch it
+        // because degree_sum would diverge from 2 * non_primordial_count.
+        let e = Arc::new(DistinctionEngine::new());
+        let n_threads = 32;
+        let synth_per_thread = 50;
+
+        let handles: Vec<_> = (0..n_threads)
+            .map(|i| {
+                let e_clone = Arc::clone(&e);
+                thread::spawn(move || {
+                    // Build a distinct per-thread seed so chains diverge
+                    // (no cross-thread saturation hiding novel work).
+                    let mut acc = e_clone.synthesize(e_clone.d0(), e_clone.d1());
+                    for _ in 0..=i {
+                        acc = e_clone.synthesize(acc, e_clone.d0());
+                    }
+                    let mut prev = e_clone.d0();
+                    let mut cur = acc;
+                    for _ in 0..synth_per_thread {
+                        let next = e_clone.synthesize(cur, prev);
+                        prev = cur;
+                        cur = next;
+                    }
+                })
+            })
+            .collect();
+
+        for h in handles {
+            h.join().expect("thread join succeeds (invariant)");
+        }
+
+        // Post-join: structural invariant holds.
+        e.check_structural_invariant().expect("post-join r = 2d − 3 holds (invariant)");
+
+        // Post-join: the eventual consistency claim from synthesize's
+        // happens-before contract docstring — sum of degrees equals
+        // twice the non-primordial count. No fetch_add was lost despite
+        // the entry lock being released before the parent bumps.
+        let nonprim_count = e.nodes.iter().filter(|entry| entry.value().parents.is_some()).count();
         let degree_sum: usize =
-            e_concurrent.degree_counts.iter().map(|e| e.value().load(Ordering::Acquire)).sum();
-        assert_eq!(degree_sum, 2 * parents_count);
+            e.nodes.iter().map(|entry| entry.value().degree.load(Ordering::Acquire)).sum();
+        assert_eq!(
+            degree_sum,
+            2 * nonprim_count,
+            "relaxed happens-before: post-join sum invariant must hold (degree_sum={degree_sum}, expected={})",
+            2 * nonprim_count
+        );
     }
 
     #[test]
