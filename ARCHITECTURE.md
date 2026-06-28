@@ -155,14 +155,31 @@ The `expect("…invariant")` panic messages encode the proof obligation
 in source — a contributor who breaks the pre-seed invariant gets a
 breadcrumb to the right line instead of a bare `unwrapped None`.
 
+#### Public engine API
+
+| Method | Purpose | Complexity |
+|---|---|---|
+| `new()` | Construct engine with d₀, d₁ pre-seeded in `all_distinctions` AND `degree_counts` | O(1) |
+| `d0()`, `d1()` | Borrow primordials (by-value Copy) | O(1) |
+| `synthesize(a, b)` | The hot path — enforces all four axioms inline | O(1) amortized |
+| `parents_of(d)` | Lookup canonical `(min, max)` parent pair | O(1) |
+| `degree(d)` | Per-distinction degree with `Acquire` load + genesis addend (returns 0 for unregistered) | O(1) |
+| `distinction_count()`, `relationship_count()` | Engine size queries | O(1) |
+| `snapshot_distinctions()` | Materialize all distinctions as a `Vec<Distinction>` for traversal probes (Coding Law, Fold Law dominance, diagnostic dumps) | O(N) snapshot, then iter is local |
+| `check_structural_invariant()` | Quiescent-mode assertion that `all_distinctions.len() == parents_of.len() + 2` (equivalent to `r = 2d − 3`); returns `Result<(), InvariantError>` | O(1) |
+
+`InvariantError` is a public `#[non_exhaustive]` error enum with one
+variant `BinaryParentageMismatch { all_distinctions, parents_of_plus_two }`
+carrying both counts for programmatic inspection and display.
+
 ### `agent.rs` — the LCA trait
 
 ```rust
 pub trait LocalCausalAgent {
     type ActionData: Canonicalizable;
-    fn get_current_root(&self) -> &Distinction;
+    fn get_current_root(&self) -> Distinction;  // by value — Distinction is Copy
     fn synthesize_action(&mut self, action: Self::ActionData,
-                         engine: &Arc<DistinctionEngine>) -> Distinction;
+                         engine: &Arc<DistinctionEngine>) -> Distinction { /* default impl */ }
     fn update_local_root(&mut self, new_root: Distinction);
 }
 
@@ -171,9 +188,16 @@ pub fn synthesize_causal_action<A: Canonicalizable>(
 ) -> Distinction { /* ... */ }
 ```
 
-The trait IS substrate. Subsystems are implementers. The trait formalizes
-the LCA pattern: a consumer carries a local root, performs a causal
-synthesis from `(root, action)`, advances its root forward.
+The trait IS the substrate's reference consumer contract — not the only
+legal pattern. The four axioms constrain `synthesize`, not consumer
+shape; multi-perspective agents and non-root-anchored consumers can use
+the substrate directly. The LCA pattern is canonical because (a) it's
+how every consumer we've built (ALIS, koru-protocol, the reference
+subsystems) uses the substrate; (b) it captures "time is what consumers
+do" cleanly. The default `synthesize_action` implementation calls
+`synthesize_causal_action` then `update_local_root` — implementers
+override only when they need finer control (e.g., batching actions
+before advancing root).
 
 ### `primitives.rs` — Canonicalizable and ByteMapping
 

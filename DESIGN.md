@@ -176,8 +176,16 @@ Every other graph property derives from these three:
 | `distinction_count()` | `all_distinctions.len()` | O(1) |
 | `r = 2d − 3` invariant | `all_distinctions.len() == parents_of.len() + 2` (every non-primordial has parents recorded once; this directly tests the binary-parentage law) | O(1) check |
 | `get_relationships_snapshot()` | iterate `parents_of`, emit canonical edges | O(N) |
+| `snapshot_distinctions()` | iterate `all_distinctions`, materialize `Vec<Distinction>` for traversal probes (Coding Law, Fold Law dominance, diagnostic dumps) — snapshot not live iter, so callers don't hold shard locks | O(N) |
 | State reconstruction | `replay_topological(snapshot_parentage(source))` | O(N) typical, O(N²) worst case on pathological linear chains |
 | Chronological observation | consumer-side `SynthesisRecorder` (see Part 5) | consumer-defined |
+
+**Errors:** `InvariantError` (public, `#[non_exhaustive]`, `thiserror`)
+— one variant `BinaryParentageMismatch { all_distinctions, parents_of_plus_two }`
+returned by `check_structural_invariant()` when the engine's binary-parentage
+invariant fails. Carries both counts for programmatic inspection and Display.
+A failure is a *theory event*, not a budget event — the engine no longer
+satisfies Law 6 and must be redesigned, not amended.
 
 **Engine construction:** `DistinctionEngine::new()` inserts d₀ and d₁ into
 `all_distinctions` and seeds `degree_counts[d0] = 0`, `degree_counts[d1] = 0`.
@@ -385,14 +393,20 @@ pub trait LocalCausalAgent {
     type ActionData: Canonicalizable;
 
     #[must_use]
-    fn get_current_root(&self) -> &Distinction;
+    fn get_current_root(&self) -> Distinction;  // by value — Distinction is Copy
 
+    /// Default impl: calls `synthesize_causal_action` then
+    /// `update_local_root` on the result. Override for finer control.
     #[must_use]
     fn synthesize_action(
         &mut self,
         action: Self::ActionData,
         engine: &Arc<DistinctionEngine>,
-    ) -> Distinction;
+    ) -> Distinction {
+        let new_root = synthesize_causal_action(self.get_current_root(), action, engine);
+        self.update_local_root(new_root);
+        new_root
+    }
 
     fn update_local_root(&mut self, new_root: Distinction);
 }
