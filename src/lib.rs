@@ -28,10 +28,14 @@ pub mod agent;
 pub mod distinction_hex;
 pub mod engine;
 pub mod primitives;
+pub mod recorder;
+pub mod replay;
 
 pub use agent::{synthesize_causal_action, LocalCausalAgent};
 pub use distinction_hex::ParseError;
 pub use engine::{
-    Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher, InvariantError,
+    Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher, InvariantError, ParentPair,
 };
 pub use primitives::{ByteMapping, Canonicalizable};
+pub use recorder::SynthesisRecorder;
+pub use replay::{build_children_index, replay_topological, ReplayError};

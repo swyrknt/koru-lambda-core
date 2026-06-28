@@ -221,9 +221,11 @@ pub enum InvariantError {
 // DistinctionEngine
 // ---------------------------------------------------------------------------
 
-/// Canonical `(min, max)` parent pair recorded in
-/// [`DistinctionEngine::parents_of`].
-type ParentPair = (Distinction, Distinction);
+/// Canonical `(min, max)` parent pair recorded in the engine's
+/// `parents_of` projection (via [`DistinctionEngine::parents_of`] and
+/// [`DistinctionEngine::snapshot_parentage`]). The ordering is
+/// guaranteed: `pair.0.as_bytes() <= pair.1.as_bytes()`.
+pub type ParentPair = (Distinction, Distinction);
 
 /// Crate-internal alias for the engine's `all_distinctions` map type.
 type DistinctionMap = DashMap<[u8; 16], Distinction, IdentityBuildHasher>;
@@ -511,6 +513,44 @@ impl DistinctionEngine {
         self.parents_of.len() * 2 + 1
     }
 
+    /// Test whether a distinction is registered in this engine.
+    ///
+    /// Returns `true` for d₀, d₁, and any distinction produced by
+    /// `synthesize` against this engine. Returns `false` for any
+    /// distinction whose bytes weren't registered (e.g., a value parsed
+    /// via `Distinction::from_hex` for an ID that has never been
+    /// synthesized in this engine).
+    ///
+    /// Used by [`replay_topological`](crate::replay::replay_topological)
+    /// to determine which pending parentage entries are ready to apply.
+    ///
+    /// O(1) — single DashMap lookup.
+    #[must_use]
+    pub fn has(&self, d: Distinction) -> bool {
+        self.all_distinctions.contains_key(&d.0)
+    }
+
+    /// Snapshot every parent-child relationship as an owned `Vec`.
+    ///
+    /// Returns the contents of `parents_of` as a list of `(child,
+    /// (parent_min, parent_max))` tuples. Order is unspecified
+    /// (DashMap iteration is shard-dependent and not stable across
+    /// runs). For deterministic ordering, sort the returned `Vec` by
+    /// child bytes.
+    ///
+    /// Primordials are NOT included — they have no parents.
+    ///
+    /// This is the canonical persistence dump: combined with
+    /// [`replay_topological`](crate::replay::replay_topological), it
+    /// reconstructs a byte-identical engine on any machine
+    /// (engine-independence, Law 8) in any input order (Law 9).
+    ///
+    /// O(N) where N is the number of non-primordial distinctions.
+    #[must_use]
+    pub fn snapshot_parentage(&self) -> Vec<(Distinction, ParentPair)> {
+        self.parents_of.iter().map(|entry| (Distinction(*entry.key()), *entry.value())).collect()
+    }
+
     /// Snapshot of every distinction registered in this engine.
     ///
     /// Returns a `Vec<Distinction>` — a snapshot, not a live iterator.
@@ -563,6 +603,18 @@ impl DistinctionEngine {
 impl Default for DistinctionEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl std::fmt::Debug for DistinctionEngine {
+    /// Summary-only Debug — prints distinction and relationship counts.
+    /// Full state dump would be O(N) and not useful in panic messages
+    /// where `Debug` is typically invoked.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DistinctionEngine")
+            .field("distinction_count", &self.distinction_count())
+            .field("relationship_count", &self.relationship_count())
+            .finish_non_exhaustive()
     }
 }
 
