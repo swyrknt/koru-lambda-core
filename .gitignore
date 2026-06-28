@@ -79,6 +79,9 @@ temp/
 # Runtime data for benchmarks
 benches/data/
 
+# dhat heap profile output (`cargo run --example dhat_1m`)
+dhat-heap.json
+
 # Large test data
 tests/large_data/
 

@@ -1366,16 +1366,27 @@ times); the merged design holds the key once.
 DashMap shards each hold a hashbrown SwissTable that doubles capacity
 on grow. At steady state, `len/cap` typically lands in `[0.5, 0.75]`,
 so each shard carries 25–50% slack. Across **one map** at 1M entries:
-shard overhead per entry ≈ 15–30 B. Total predicted: 56 + ~25 = **~80 B
-per distinction in practice**, with run-to-run variance in the 70–100 B
-range depending on which side of the rehash boundary the engine is on.
+shard overhead per entry ≈ 70–80 B (capacity-doubled empty slots still
+occupy entry-sized storage; the 50% slack costs the same per-entry
+bytes as the loaded slots).
 
-The 180 B gate target and 220 B floor in the table above are conservative
-relative to this new prediction; they were set against the
-pre-refactor 104 B + 50 B = 155 B baseline. Step 4 dhat will produce
-the actual measurement; if the merged-map prediction holds, expect to
-amend the target downward (toward ~100 B target / ~140 B floor) at
-that point.
+**Measured at Step 1e** (commit at branch tip, `cargo run --example
+dhat_1m`, debug build per the dhat aarch64 release-mode bug — measurement
+is allocator-level and not affected by debug vs release):
+
+- Peak live heap: 137,388,552 bytes
+- Live blocks: 66 (mostly DashMap shard backing storage)
+- **Per distinction: 137.4 B** — clears the 180 B target with 24%
+  headroom; clears the 220 B floor with 38% headroom.
+
+The earlier 80 B prediction in this section was wrong — it
+underestimated `Option<(Distinction, Distinction)>` padding (32 → 40 B
+due to the 1-byte discriminant + alignment) and SwissTable's
+per-empty-slot cost (each empty slot at 50% load is the same width as
+a full slot, not just the control byte). The measured 137 B remains
+well under the gate. A future amendment may tighten the target toward
+~150 B if measurements stay stable across allocator updates; deferred
+until Step 4 reruns at full scale with the Step 4 probe harness.
 
 The earlier 140 B gate was the *arithmetic-only* prediction; the 180 B
 gate above incorporates measured capacity slack. The 220 B floor is
