@@ -38,6 +38,10 @@ wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "console_error_panic_hoo
 # cbindgen returns in Step 3 (FFI bindings); deferred to keep
 # sub-milestone 1a build clean.
 
+[[bench]]
+name = "substrate"
+harness = false
+
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.0"
