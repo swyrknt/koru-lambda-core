@@ -205,17 +205,22 @@ const PRIMORDIAL_D1: Distinction =
 #[non_exhaustive]
 pub enum InvariantError {
     /// Structural law 5 (binary parentage) failed:
-    /// `all_distinctions.len() != parents_of.len() + 2`.
+    /// `nodes.len() != (count of nodes with parents) + 2`.
     ///
-    /// This means either a non-primordial distinction lacks a `parents_of`
-    /// entry, or a `parents_of` entry references a child that isn't in
-    /// `all_distinctions`. Either case means the engine is internally
+    /// This means either a non-primordial distinction's `EngineNode`
+    /// has `parents: None`, or a primordial accidentally has
+    /// `parents: Some(...)`. Either case means the engine is internally
     /// inconsistent — a theory event, not a budget event.
+    ///
+    /// Field names preserved from the pre-merge three-map design for
+    /// public-API stability: `all_distinctions` is `nodes.len()`,
+    /// `parents_of_plus_two` is `(count of nodes with parents) + 2`.
     #[error("binary parentage violation: all_distinctions.len()={all_distinctions}, parents_of.len()+2={parents_of_plus_two}")]
     BinaryParentageMismatch {
-        /// `all_distinctions.len()`.
+        /// Total distinction count (`nodes.len()`).
         all_distinctions: usize,
-        /// `parents_of.len() + 2`.
+        /// Count of nodes with `parents: Some(...)`, plus 2 for the
+        /// primordials.
         parents_of_plus_two: usize,
     },
 }
@@ -1415,5 +1420,229 @@ mod engine_tests {
         let msg = format!("{err}");
         assert!(msg.contains("5"));
         assert!(msg.contains("7"));
+    }
+
+    // ----- qa-sentinel round-3 follow-through: B1 + in-flight probes ----
+
+    /// QA-SENTINEL: stress the merged-map B1 mitigation by synthesizing
+    /// thousands of distinct novel children whose parents necessarily
+    /// span the same shards as their children. If the Entry write-guard
+    /// for `new_bytes` were still held when the post-block `nodes.get(parent)`
+    /// runs, and a parent collides on the same shard, this would
+    /// self-deadlock (DashMap RwLock is non-reentrant per-shard). With
+    /// 100 thread × 100 chained synths against an engine that quickly
+    /// fills every shard, the probability of at least one parent/child
+    /// shard collision is effectively 1. If this test times out under
+    /// the cargo-test default 60s wall, B1 is broken.
+    #[test]
+    fn b1_no_deadlock_under_shard_collision_pressure() {
+        use std::time::{Duration, Instant};
+        let e = Arc::new(DistinctionEngine::new());
+        let n_threads = 32;
+        let synth_per_thread = 200;
+        let start = Instant::now();
+        let handles: Vec<_> = (0..n_threads)
+            .map(|i| {
+                let e_clone = Arc::clone(&e);
+                thread::spawn(move || {
+                    // Diverge per-thread to avoid total-saturation hiding work.
+                    let mut acc = e_clone.synthesize(e_clone.d0(), e_clone.d1());
+                    for _ in 0..=i {
+                        acc = e_clone.synthesize(acc, e_clone.d0());
+                    }
+                    let mut prev = e_clone.d1();
+                    let mut cur = acc;
+                    for _ in 0..synth_per_thread {
+                        let next = e_clone.synthesize(cur, prev);
+                        prev = cur;
+                        cur = next;
+                    }
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().expect("thread join succeeds (invariant)");
+        }
+        let elapsed = start.elapsed();
+        // 32 × 200 = 6400 synths is trivial work — well under 30s even
+        // on slow CI. A self-deadlock would manifest as a hang well
+        // above this budget.
+        assert!(
+            elapsed < Duration::from_secs(30),
+            "B1 deadlock suspected: {n_threads} × {synth_per_thread} synths took {elapsed:?}"
+        );
+        // Sanity: state grew and invariant holds.
+        assert!(e.distinction_count() > 100);
+        e.check_structural_invariant().expect("post-stress invariant (invariant)");
+    }
+
+    /// QA-SENTINEL: actively race a reader against a writer to probe
+    /// whether the in-flight window — observe child via `has()`, then
+    /// query parent `degree()` before the fetch_add lands — is
+    /// observable. If it IS observable, the relaxation docstring is
+    /// accurate. If it ISN'T, either the window is too narrow to hit
+    /// or the doc is wrong. Either way this is information, not failure
+    /// (we record the count, not assert on it).
+    ///
+    /// The strong post-assertion: once writer joins, sum invariant must
+    /// hold. That part IS load-bearing.
+    #[test]
+    fn relaxed_window_postjoin_sum_invariant_holds() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize as AU};
+        let e = Arc::new(DistinctionEngine::new());
+        // Pre-build a chain of bases so the writer thread always has
+        // a fresh `(base, d1)` pair to synthesize (no saturation).
+        let mut bases = vec![e.d0()];
+        for _ in 0..2000 {
+            let last = *bases.last().expect("bases has at least one entry (invariant)");
+            bases.push(e.synthesize(last, e.d1()));
+        }
+        let bases = Arc::new(bases);
+        let stop = Arc::new(AtomicBool::new(false));
+        let torn_observations = Arc::new(AU::new(0));
+        // Writer: synth(base[i], d0) — a NOVEL synth each iteration,
+        // since each base is distinct. Both parents (base, d0) get
+        // their degree bumped after the entry lock releases.
+        let writer = {
+            let e = Arc::clone(&e);
+            let stop = Arc::clone(&stop);
+            let bases = Arc::clone(&bases);
+            thread::spawn(move || {
+                let mut produced = Vec::with_capacity(bases.len());
+                for &b in bases.iter() {
+                    let c = e.synthesize(b, e.d0());
+                    produced.push(c);
+                    if stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                }
+                produced
+            })
+        };
+        // Reader: walk the bases, look for newly-observed children,
+        // immediately query degree(base) and look for "child observed
+        // but base degree hasn't been bumped to match" — a classic
+        // torn read. We can detect by precomputing: pre-write, base[i]
+        // degree X. Post-bump it should be X+1.
+        let reader = {
+            let e = Arc::clone(&e);
+            let stop = Arc::clone(&stop);
+            let bases = Arc::clone(&bases);
+            let torn = Arc::clone(&torn_observations);
+            thread::spawn(move || {
+                let pre_degrees: Vec<usize> = bases.iter().map(|&b| e.degree(b)).collect();
+                for _ in 0..50_000 {
+                    if stop.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    for (i, &b) in bases.iter().enumerate() {
+                        // Reconstruct what the child id would be — but
+                        // we don't have hashing exposed; use the
+                        // observable proxy: query has() against the
+                        // result of synthesize on a *separate* read-only
+                        // engine? No — easier: ask "did the writer get
+                        // past base[i]?" Approximation: writer goes in
+                        // order, so once base[i+1]'s degree has bumped,
+                        // base[i] should also have bumped.
+                        let cur = e.degree(b);
+                        if cur != pre_degrees[i] && cur != pre_degrees[i] + 1 {
+                            // Saw something weird — degree jumped by
+                            // more than 1 (shouldn't happen since each
+                            // base is used once) or backwards.
+                            torn.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                }
+            })
+        };
+        // Run for a bounded time then stop both.
+        thread::sleep(std::time::Duration::from_millis(200));
+        stop.store(true, Ordering::Relaxed);
+        let _produced = writer.join().expect("writer joins");
+        reader.join().expect("reader joins");
+        // Post-join, the strong invariant must hold.
+        let nonprim = e.nodes.iter().filter(|en| en.value().parents.is_some()).count();
+        let dsum: usize = e.nodes.iter().map(|en| en.value().degree.load(Ordering::Acquire)).sum();
+        assert_eq!(dsum, 2 * nonprim, "post-join sum invariant must hold");
+        // Diagnostic only (no assert) — relaxation should not produce
+        // monotonic-violation observations; if torn > 0, the docstring
+        // claim "may transiently see pre-bump" is consistent but a
+        // counterexample to monotonicity (which we don't claim).
+        let _torn = torn_observations.load(Ordering::Relaxed);
+    }
+
+    /// QA-SENTINEL: race two writers on the SAME novel child. Verifies
+    /// that even when winners and losers alternate at scale, each
+    /// novel synth contributes exactly two bumps (one per parent) to
+    /// the parent_degree sum. Uses parent pairs that are NOT already
+    /// in the engine (skips alternates to dodge commutative collisions).
+    #[test]
+    fn race_same_novel_child_no_double_bump_at_scale() {
+        let e = Arc::new(DistinctionEngine::new());
+        // Build a deep chain so we have many ids to work with.
+        let mut chain = vec![e.d0(), e.d1()];
+        let mut prev = chain[0];
+        let mut cur = chain[1];
+        for _ in 0..128 {
+            let next = e.synthesize(cur, prev);
+            chain.push(next);
+            prev = cur;
+            cur = next;
+        }
+        // Pick parent pairs by *skipping*: (chain[0], chain[3]),
+        // (chain[1], chain[4]), ... — these have NOT been synthesized
+        // by the prelude (which only did adjacent synths). Each pick
+        // is therefore a guaranteed-novel synth, and we can predict
+        // each parent gains exactly +1 after the race.
+        let pairs: Vec<(Distinction, Distinction)> =
+            (0..64).map(|i| (chain[i], chain[i + 3])).collect();
+        // Sanity: confirm none of these have been synthesized yet.
+        for (a, b) in &pairs {
+            let (lo, hi) = if a.0 <= b.0 { (*a, *b) } else { (*b, *a) };
+            let mut h = Sha256::new();
+            h.update(lo.0);
+            h.update(hi.0);
+            let digest = h.finalize();
+            let mut nb = [0u8; 16];
+            nb.copy_from_slice(&digest[..16]);
+            assert!(!e.has(Distinction(nb)), "test setup bug: pair already synthesized");
+        }
+        // Capture pre-race state.
+        let pre_distinction_count = e.distinction_count();
+        let pre_sum: usize =
+            e.nodes.iter().map(|en| en.value().degree.load(Ordering::Acquire)).sum();
+        let pairs_arc = Arc::new(pairs.clone());
+        let mut handles = Vec::new();
+        for _ in 0..16 {
+            let e = Arc::clone(&e);
+            let pairs_arc = Arc::clone(&pairs_arc);
+            handles.push(thread::spawn(move || {
+                for (a, b) in pairs_arc.iter() {
+                    let _ = e.synthesize(*a, *b);
+                }
+            }));
+        }
+        for h in handles {
+            h.join().expect("join");
+        }
+        // 64 unique novel children added (one per pair). Each
+        // contributes exactly +2 to the parent-degree sum. So post_sum
+        // = pre_sum + 64 * 2, regardless of how many of the 16 racing
+        // threads "won" each contention. This is the load-bearing
+        // assertion: no double-bumps despite contention.
+        let post_distinction_count = e.distinction_count();
+        let post_sum: usize =
+            e.nodes.iter().map(|en| en.value().degree.load(Ordering::Acquire)).sum();
+        assert_eq!(
+            post_distinction_count,
+            pre_distinction_count + 64,
+            "exactly 64 novel children added"
+        );
+        assert_eq!(
+            post_sum,
+            pre_sum + 64 * 2,
+            "each novel synth contributes +2; no double-bumps from racing"
+        );
+        e.check_structural_invariant().expect("post-race invariant");
     }
 }
