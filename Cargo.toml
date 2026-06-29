@@ -1,7 +1,20 @@
+[workspace]
+members = [".", "experiments/runner"]
+resolver = "2"
+
+# Workspace-shared dependencies — see CORPUS_PROVENANCE.md for the
+# rationale on pinning `rand` to "=0.8.5". Hoisting here closes the
+# silent-drift hazard where the root crate and experiments/runner could
+# carry different `rand` pins (Round 2 team review, rust-craftsman item
+# 5 + qa-sentinel Y2).
+[workspace.dependencies]
+rand = "=0.8.5"
+
 [package]
 name = "koru-lambda-core"
 version = "1.2.0"
 edition = "2021"
+rust-version = "1.80"
 description = "A minimal axiomatic system for distributed computation"
 authors = ["Sawyer Kent <sawyerkent.me@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -13,33 +26,54 @@ categories = ["algorithms", "wasm"]
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
 
+[profile.release]
+panic = "abort"
+
+[lints.rust]
+# `cfg(loom)` is a workflow-specific build flag set via
+# `RUSTFLAGS="--cfg loom"` when running the loom model-checker tests
+# in `tests/loom_kernel.rs` (DESIGN.md gate 24). `cfg(loom_mutant)`
+# additionally enables the regression-sentinel kernel that downgrades
+# the writer's fetch_add to Relaxed and expects loom to detect it.
+# Both declared here so the unexpected_cfgs lint passes when neither
+# flag is set.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(loom_mutant)'] }
+
 [dependencies]
 sha2 = "0.10"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0"
 dashmap = "6.0"
-rayon = "1.10"
-lru = "0.16"
-once_cell = "1.19"
+hex = "0.4"
+bytemuck = { version = "1", features = ["derive"] }
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 
-# WASM support
+# WASM support (Step 3)
 wasm-bindgen = { version = "0.2", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
 js-sys = { version = "0.3", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
 
 [features]
 default = []
-wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys"]
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "console_error_panic_hook"]
 
-[build-dependencies]
-cbindgen = "0.26"
+[[bench]]
+name = "substrate"
+harness = false
+
+[[bench]]
+name = "upper_bound"
+harness = false
 
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.0"
-petgraph = "0.6"
-rand = "0.8"
-
-# benches/performance.rs deleted in pre-flight (v1.2 String-API bench).
-# Step 1 creates benches/substrate.rs against the v2.0 byte-API surface.
+rand = { workspace = true } # see [workspace.dependencies] for the pin rationale
+static_assertions = "1"
+loom = "0.7"
+dhat = "0.3"
+serde_json = "1.0"
+# Workspace member — provides the reusable Coding Law workload module
+# consumed by `tests/coding_law.rs`. Step 4 will import the same module
+# at scale.
+koru-experiments-runner = { path = "experiments/runner" }
