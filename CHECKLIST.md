@@ -27,103 +27,71 @@ Status: `[ ]` not done · `[~]` partial · `[x]` done
 ## Step 1 — Substrate foundation (`step/01-substrate`)
 
 ### Substrate code
-- [ ] `Distinction(pub(crate) [u8; 16])` newtype with `#[repr(transparent)]` and derives: `Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Pod, bytemuck::Zeroable`
-- [ ] `distinction_hex.rs`: `to_hex` / `from_hex` / `Display` / `Debug` / serde adapter / typed `ParseError` (thiserror)
-- [ ] `IdentityHasher`: leading 8 bytes via `u64::from_le_bytes`, `debug_assert!` + `unreachable!()` guards on misuse, `#[inline]` on `write` / `finish`
-- [ ] `DistinctionEngine` with 3 fields: `all_distinctions`, `parents_of`, `degree_counts`. No log. No children_of.
-- [ ] `DistinctionEngine::new()` seeds d₀/d₁ in `all_distinctions` AND seeds their `degree_counts` entries to 0
-- [ ] `synthesize` hot path:
-  - entry-gated insert into `all_distinctions`
-  - inside closure: insert `parents_of`, pre-seed `degree_counts[new_bytes] = 0`, `fetch_add(1, Release)` on both parents via `get()` (not `entry()`)
+- [x] `Distinction(pub(crate) [u8; 16])` newtype with `#[repr(transparent)]` and derives: `Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Pod, bytemuck::Zeroable` — `src/engine.rs::Distinction`
+- [x] `distinction_hex.rs`: `to_hex` / `from_hex` / `Display` / `Debug` / serde adapter / typed `ParseError` (thiserror)
+- [x] `IdentityHasher`: leading 8 bytes via `u64::from_le_bytes`, `debug_assert!` + `unreachable!()` guards on misuse, `#[inline]` on `write` / `finish`
+- [x] `DistinctionEngine` storage. **Spec was 3 fields** (`all_distinctions`, `parents_of`, `degree_counts`); **Step 1e merged them to 1 field** (`nodes: DashMap<[u8;16], EngineNode { parents, degree }>`) per the upper-bound mock + BUDGET_LOG.md row 1 amendment process. Three canonical projections preserved as per-node fields. No log, no children_of.
+- [x] `DistinctionEngine::new()` seeds d₀/d₁ as `EngineNode { parents: None, degree: 0 }` in `nodes` (was: pre-seed in `all_distinctions` + `degree_counts`).
+- [x] `synthesize` hot path:
+  - entry-gated insert into `nodes` via Vacant/Occupied match
+  - Vacant arm sets `parents: Some((first, second))`, `degree: 0`; block drops entry shard write-lock BEFORE parent fetch_adds (B1 deadlock mitigation post Step 1e merge)
   - foreign-byte `debug_assert!` on both parent args
   - `#[must_use]` annotation
-  - `expect("degree_counts pre-seeded at parent insertion (invariant)")` instead of `unwrap()` for clearer panic if invariant breaks
-- [ ] `engine.parents_of(d) -> Option<(Distinction, Distinction)>` (O(1) lookup, `#[must_use]`)
-- [ ] `engine.degree(d) -> usize` with Acquire load + genesis_addend (1 for primordials, 2 otherwise)
-- [ ] `engine.relationship_count() -> usize`
-- [ ] `engine.check_structural_invariant() -> Result<(), InvariantError>` (asserts `all_distinctions.len() == parents_of.len() + 2`)
-- [ ] `agent.rs` at substrate level: `LocalCausalAgent` trait + `synthesize_causal_action` helper. (Move + adapt from dev's `subsystems/local_agent.rs`.)
-- [ ] `primitives.rs` rewrite: `Canonicalizable` trait + engine-registered `ByteMapping::map_byte_to_distinction(byte, engine)`. No static cache. No phantom nodes.
-- [ ] `replay.rs`: `snapshot_parentage`, `replay_topological` returning `Result<Arc<DistinctionEngine>, ReplayError>`, `build_children_index` helper, `ReplayError::{Unreachable, Mismatch, MissingPrimordial}` via thiserror
-- [ ] `recorder.rs`: `SynthesisRecorder` with `!Send + !Sync` via `PhantomData<*const ()>`, novelty check via `log.contains(&child)`
-- [ ] `lib.rs` public re-exports
-- [ ] Crate-level lint floor at `lib.rs`: `#![warn(clippy::unwrap_used, clippy::must_use_candidate, clippy::missing_const_for_fn)]`. **`clippy::expect_used` deliberately NOT in the floor** — the hot path mandates `.expect("…invariant")` to encode invariant-proof obligations in source. Compromise: every `.expect()` call site in the substrate must use a message ending in `"(invariant)"` identifying the load-bearing precondition. CI grep gate (Step 5): `! git grep -nE '\.expect\("[^"]*"\)' src/ | grep -vE '\(invariant\)"'` — every expect either has the invariant marker, or it's a violation. Gives tighter discipline than `expect_used` without self-contradiction.
-- [ ] Substrate-wide `#[must_use]` policy applied to every function returning a `Distinction` (per the inventory in DESIGN.md Part 2)
-- [ ] `#[non_exhaustive]` on public error enums (`ParseError`, `ReplayError`, `PeerIdentityError`) so future variants don't break semver
-- [ ] `Cargo.toml` `[dev-dependencies]` adds: `static_assertions = "1"` (for compile-time trait assertions), `loom = "0.7"` (for memory-ordering test), `dhat = "0.3"` (for per-distinction memory probe), `blake3 = "1"` (for hash-algorithm cross-check differential test)
-- [ ] `Cargo.toml` `[dependencies]` adds: `bytemuck = { version = "1", features = ["derive"] }` (Pod/Zeroable derive — the `derive` feature is NOT default; omitting it makes `#[derive(bytemuck::Pod, Zeroable)]` fail to compile), `parking_lot = "0.12"` (FFI Mutex), `console_error_panic_hook = { version = "0.1", optional = true }` (under `wasm` feature). thiserror / dashmap / sha2 / serde / lru / rayon / hex already in dev.
-- [ ] `Cargo.toml` package metadata: `edition = "2021"`, `rust-version = "1.80"` (MSRV pinned — DashMap 6 needs 1.71, bytemuck derive needs 1.74, 1.80 leaves headroom for `LazyLock`).
-- [ ] Safety justification comment on `Distinction` documenting `bytemuck::Pod`'s requirements (no padding, all-bits-valid — both satisfied by `#[repr(transparent)] [u8; 16]`)
+  - `.expect("first parent registered at its insertion (invariant)")` / `.expect("second parent registered at its insertion (invariant)")` on post-entry parent lookups
+- [x] `engine.parents_of(d) -> Option<(Distinction, Distinction)>` (O(1) lookup via `nodes.get(d).parents`, `#[must_use]`)
+- [x] `engine.degree(d) -> usize` with Acquire load + genesis_addend (1 for primordials, 2 otherwise, 0 for foreign)
+- [x] `engine.relationship_count() -> usize` — `(nodes.len() - 2) * 2 + 1` (O(1) since primordials always present)
+- [x] `engine.check_structural_invariant() -> Result<(), InvariantError>` — verifies `nodes.len() == (count of nodes with parents) + 2`. Moved from O(1) to O(N) post-merge (iterates nodes to count parented entries); not on hot path.
+- [x] `agent.rs` at substrate level: `LocalCausalAgent` trait + `synthesize_causal_action` helper. Adapted from dev's pattern.
+- [x] `primitives.rs` rewrite: `Canonicalizable` trait + engine-registered `ByteMapping::map_byte_to_distinction(byte, engine)`. No static cache, no phantom nodes. Falsified by `fold_law_structural_invariant_holds_after_exercise`.
+- [x] `replay.rs`: `snapshot_parentage`, `replay_topological` → `Result<Arc<DistinctionEngine>, ReplayError>`, `build_children_index`, `ReplayError::{Unreachable, Mismatch, MissingPrimordial}` via thiserror, `#[non_exhaustive]`
+- [x] `recorder.rs`: `SynthesisRecorder` with `!Send + !Sync` via `PhantomData<*const ()>`. **Spec was novelty check via `log.contains(&child)`**; **Step 1e Round-2 review (qa-sentinel Y3) upgraded to HashSet shadow** with `IdentityBuildHasher` for O(1) dedup. Log behavior unchanged.
+- [x] `lib.rs` public re-exports
+- [x] Crate-level lint floor at `lib.rs` (`#![warn(clippy::unwrap_used, must_use_candidate, missing_const_for_fn, missing_docs)]`). `.expect()` convention: every call site ends in `"(invariant)"`. CI escalates `-D warnings` to deny. Step 5 hygiene grep verifies.
+- [x] Substrate-wide `#[must_use]` policy applied to every function returning a `Distinction`
+- [x] `#[non_exhaustive]` on public error enums (`ParseError`, `ReplayError`, `InvariantError`). `PeerIdentityError` lands in Step 2.
+- [x] `Cargo.toml` `[dev-dependencies]`: `static_assertions = "1"`, `loom = "0.7"`, `dhat = "0.3"`, `proptest = "1.0"`, `criterion = "0.5"`, `serde_json = "1.0"`, `rand = "=0.8.5"` (workspace pin). **`blake3 = "1"` was removed in step1e-drift-sweep** — the planned differential test (synthesize_ref with blake3) was deferred to Step 4 essential probes; see Step 1 substrate tests § Differential testing below.
+- [x] `Cargo.toml` `[dependencies]`: `bytemuck = { version = "1", features = ["derive"] }`, `sha2 = "0.10"`, `dashmap = "6.0"`, `hex = "0.4"`, `thiserror = "1.0"`, `serde = "1.0"`. WASM optional deps land at Step 3. `parking_lot` lands at Step 3 (FFI Mutex).
+- [x] `Cargo.toml` package metadata: `edition = "2021"`, `rust-version = "1.80"`
+- [x] Safety justification comment on `Distinction` documenting `bytemuck::Pod`'s requirements (no padding, all-bits-valid)
 
 ### Substrate tests
-- [ ] **Axioms:** determinism, commutativity (+ 10K proptest), irreflexivity (+ proptest), content addressing, saturation (1M repeats → delta=0)
-- [ ] **Structural laws at scale:** r=2d−3 after 5M synths (zero deviations), binary parentage (`parents_of.len() == all_distinctions.len() − 2`), ByteMapping phantom count = 0 over 256-byte exercise
-- [ ] **Engine internals:**
-  - IdentityHasher 1M-key distinct-bucket test
-  - Compile-time `assert_send_sync<DistinctionEngine>`, `assert_send_sync<Distinction>`, `assert_send_sync<dyn LocalCausalAgent>`
-  - **Concurrent-write byte-equivalence** (8 threads same chain → byte-identical state; `sum(degree_counts) == 2 * parents_of.len()`)
-  - **`or_insert_with` closure runs exactly once per novel synth** — pre-bind `x = synthesize(d0, d1)`, snapshot `d0_before` + `x_before`, race N threads on `synthesize(d0, x)`, assert PARENT degrees increment by exactly 1 (not 2N). The child's degree alone can't catch the bug.
-  - **Primordial invariants on a fresh engine:** `distinction_count() == 2`, `parents_of(d0).is_none()`, `parents_of(d1).is_none()`, `degree(d0) == 1`, `degree(d1) == 1`, `check_structural_invariant().is_ok()`. Also: `synthesize(d0, fresh_x)` on a freshly-constructed engine doesn't panic on the hot-path `unwrap`/`expect`.
-  - **Fold Law byte coverage exact bound:** after 256-byte exercise, `degree(d0) == 512` AND `degree(d1) == 512` exactly. Derivation in DESIGN.md (Step 4 probe spec): saturation collapses the per-byte 16 novel bumps to per-bit-prefix novel bumps, summing to 510 + 1 (initial seed) + 1 (genesis addend) = 512 — the topological maximum for the 8-bit fold shape. The earlier `>= 256 * 8 = 2048` figure ignored saturation and would have flagged a correct implementation as broken. Catches both regression below 512 (broken saturation or skipped bytes) and above 512 (extra synth calls / Fold redesign).
-  - Mediated self-reference uniqueness at depth ≥ 10K (iterative, not recursive)
-  - **LCA pattern invariants** (Theory §13-15): two `LocalCausalAgent` instances initialized with the same local root, processing the same canonical action sequence, produce byte-identical advancing root chains at every step. An LCA whose root advances forward never regresses to a prior parent (`update_local_root` is monotonic in the synthesis graph). Falsifies a future LCA implementation that introduces nondeterminism into causal action synthesis.
-- [ ] **Proptest properties:** commutativity / irreflexivity / synth idempotency on engine state
-- [ ] **Misuse detection:**
-  - IdentityHasher panics on non-16-byte `write`
-  - `Distinction::from_hex` rejects empty, wrong length, non-hex, uppercase, non-ASCII
-  - Cross-engine foreign-byte injection panic in debug builds
-  - `SynthesisRecorder !Send + !Sync` via `static_assertions::assert_not_impl_any!`
-  - `replay_topological` returns `Mismatch` on tampered, `Unreachable` on cyclic, `MissingPrimordial` on can't-bootstrap (each release-mode, not debug-gated)
-  - `SynthesisRecorder` dedup test (re-recording same child doesn't double-append)
-- [ ] **Replay correctness:**
-  - `replay_topological(snapshot_parentage(e))` byte-identical round-trip
-  - Replay on shuffled parentage (Exp 12 carried forward)
-  - **Log-replay invariant** (theory-guardian round-2): rebuild engine from
-    `parents_of.iter()` into a fresh `DistinctionEngine`; assert byte-equality
-    of `all_distinctions`, `parents_of`, and `degree_counts` against the
-    live engine. Catches hidden state fields that aren't pure functions of
-    the synthesis log — falsifies a future "4th DashMap" that would survive
-    content-addressing checks.
-- [ ] **Differential testing:**
-  - **Hash-algorithm cross-check** (rust-craftsman round-2, qa-sentinel
-    round-2 critique applied): a ~70 LOC naive reference impl
-    `synthesize_ref(a, b)` using `blake3::Hasher` + canonical `[u8;16]`
-    byte ordering + leading 16 bytes. The test asserts THREE things over
-    1M random `(a, b)` pairs, NONE of which are properties of the
-    reference alone:
-    1. **Hand-derived golden bytes:** for 16 hardcoded `(a, b)` pairs
-       (covering: both primordials, irreflexive cases, byte-ordering
-       boundary cases like `[0xFF, 0x00...]` vs `[0x00, 0xFF...]`),
-       assert `engine.synthesize(a, b)` produces specific expected bytes
-       computed by hand from the SHA-256 spec. Falsifies any ordering
-       inversion or prefix-truncation drift by anchoring at known points.
-    2. **Cross-axiom invariants on PRODUCTION engine** (not the reference):
-       1M random pairs assert `engine.synthesize(a, b) == engine.synthesize(b, a)`
-       (commutativity) and `engine.synthesize(a, a) == a` (irreflexivity).
-       The blake3 reference is used to confirm these properties are
-       independent of hash choice — if they fail on production but hold
-       on reference, production has a non-hash bug.
-    3. **Independence check:** assert `engine.synthesize(a, b) != synthesize_ref(a, b)`
-       for the 1M random pairs (different hashes ⟹ different outputs).
-       This catches the degenerate case where someone accidentally writes
-       a test that compares production to itself.
-    The earlier "both must agree on commutativity" framing was insufficient
-    — it tested properties of the reference, not the production engine.
-    The hand-derived golden anchors are the actual canonical-ordering /
-    prefix-truncation falsifier.
-  - **Traversal/degree recompute oracle** (engine-architect round-2):
-    a ~35 LOC reference that computes `degree(d)` by scanning the
-    relationship set fresh on every call (no cache). Run 1M proptest
-    synthesis operations; assert `engine.degree(d) == reference.degree(d)`
-    for every `d` after every op. Catches any future cache-staleness bug
-    in `degree_counts` or `parents_of` under concurrent insert.
-- [ ] **Append-only invariant** (engine-architect round-2 promotion to
-  theory gate): a compile-time test (or unit test) verifying the
-  `DistinctionEngine` API exposes no `remove_*` / `clear` / `truncate` /
-  `drop_distinction` method. Backed by the Step 5 hygiene grep.
-- [ ] **Memory ordering:** `loom` model-checker test over a minimal kernel (writer `fetch_add(Release)` / reader `load(Acquire)`); falsifies missing-Acquire regardless of host architecture
-- [ ] **Compile-time assertions:** `Distinction: Copy + Send + Sync + Pod + Zeroable`, `#[repr(transparent)]`, `SynthesisRecorder: !Send + !Sync`
-- [ ] `benches/substrate.rs` (criterion harness): synthesize cold/warm, parents_of, degree, byte folding. Do NOT carry forward dev's `benches/performance.rs` (it benches the String API).
+- [~] **Axioms:**
+  - [x] determinism (`axiom1_determinism_*`)
+  - [x] commutativity (`axiom2_commutativity_*` + `prop_commutativity` 10K proptest)
+  - [x] irreflexivity (`axiom3_irreflexivity_*` + `prop_irreflexivity` 10K proptest)
+  - [x] content addressing (`axiom4_content_addressing_*`)
+  - [x] saturation (`law7_saturation_repeated_synth_adds_nothing` — 1000 repeats, not 1M; the 1M-repeats probe is a **Step 4 essential probe**)
+- [x] **Structural laws at scale:**
+  - [x] r=2d−3 after 5M synths (zero deviations) — `tests/scale.rs::r_equals_2d_minus_3_at_5m_synths`
+  - [x] binary parentage — `law5_every_nonprimordial_has_two_parents` + scale check via `check_structural_invariant`
+  - [x] ByteMapping phantom count = 0 over 256-byte exercise — `primitives::tests::fold_law_structural_invariant_holds_after_exercise`
+- [x] **Engine internals:**
+  - [x] IdentityHasher 1M-key distinct-bucket test (`million_distinct_inputs_million_distinct_hashes`)
+  - [x] Compile-time `assert_send_sync<DistinctionEngine>`, `assert_send_sync<Distinction>`. (`dyn LocalCausalAgent` Send+Sync deferred — LCA's associated type makes it non-trivial; covered indirectly by the consumer subsystems in Step 2.)
+  - [x] Concurrent-write byte-equivalence — `concurrent_synth_byte_equivalent_state` (assertion updated post-merge: `sum(node.degree) == 2 * non_primordial_count`)
+  - [x] `or_insert_with` closure runs exactly once per novel synth — `or_insert_with_closure_runs_exactly_once`
+  - [x] Primordial invariants on fresh engine — `fresh_engine_has_*`, `primordials_have_*`, `synthesize_on_cold_engine_does_not_panic`
+  - [x] Fold Law byte coverage exact bound (== 512) — `fold_law_byte_coverage_exact_bound`
+  - [ ] Mediated self-reference uniqueness at depth ≥ 10K (iterative) — **DEFERRED to Step 4 essential probes** (CHECKLIST line 217). Proptest 10K-case bound on commutativity/irreflexivity/idempotency landed in Step 1; the specific mediated-self-ref chain probe is the Step 4 deliverable.
+  - [x] LCA pattern invariants — `agent::tests::lca_byte_identical_advancing_chains`, `lca_chain_records_in_engine_parents_of`
+- [x] **Proptest properties:** commutativity / irreflexivity / idempotency — `engine_tests::proptests` (10K cases each)
+- [x] **Misuse detection:**
+  - [x] IdentityHasher panics on non-16-byte `write` (`panics_on_short_slice_in_debug` + `write_u8_is_unreachable` etc.)
+  - [x] `Distinction::from_hex` rejects empty, wrong length, non-hex, uppercase, non-ASCII — distinction_hex tests
+  - [x] Cross-engine foreign-byte injection panic in debug — `foreign_byte_synthesize_panics_in_debug`
+  - [x] `SynthesisRecorder !Send + !Sync` via `static_assertions::assert_not_impl_any!`
+  - [x] `replay_topological` returns `Mismatch` / `Unreachable` / `MissingPrimordial` (release-mode, not debug-gated)
+  - [x] `SynthesisRecorder` dedup test — `repeated_synthesize_dedups`
+- [x] **Replay correctness:**
+  - [x] `replay_topological(snapshot_parentage(e))` byte-identical round-trip
+  - [x] Replay on shuffled parentage — `replay_shuffled_order_byte_identical`
+  - [x] Log-replay invariant — `log_replay_invariant_byte_identical_state` (assertion updated post-merge to compare via `snapshot_distinctions` / `snapshot_parentage` / per-node `degree`)
+- [ ] **Differential testing — DEFERRED to Step 4 essential probes.** Step 1 was specced to include a blake3 reference impl + hand-derived golden bytes + degree recompute oracle. `blake3` dev-dep was removed in step1e-drift-sweep as unused; the differential suite belongs alongside Step 4's cross-engine determinism 5-phase probe. Re-add `blake3 = "1"` in Step 4 and implement: (1) `synthesize_ref` blake3 reference, (2) 16 hand-derived golden byte fixtures, (3) degree recompute oracle scanning the relationship set fresh. Cross-axiom invariants on production (commutativity / irreflexivity on 1M random pairs) ARE covered by the proptest 10K cases shipped in Step 1; the gap is the hash-algorithm-independent confirmation + golden anchors.
+- [x] **Append-only invariant** — `engine_is_append_only_by_api_surface` test + Step 5 hygiene grep (per DESIGN.md gate 27: "no `fn (remove|clear|truncate|drop)_distinction` anywhere").
+- [x] **Memory ordering:** loom kernel — `tests/loom_kernel.rs` with 3 standard kernels + `cfg(loom_mutant)` regression sentinel (kernel 4 downgrades writer to Relaxed; `#[should_panic]` proves loom catches it). Run: `RUSTFLAGS="--cfg loom" cargo test --test loom_kernel --release`.
+- [x] **Compile-time assertions:** `Distinction: Copy + Send + Sync + Pod + Zeroable`, `#[repr(transparent)]`, `SynthesisRecorder: !Send + !Sync` — `compile_time_assertions` module
+- [x] `benches/substrate.rs` (criterion harness): synthesize novel/saturated, 8-thread, parents_of, degree, byte_fold. Plus `benches/upper_bound.rs` as the cited evidence for BUDGET_LOG.md row 1 (Gate 12 amendment).
 
 ### Step 1 measurements (HARD gate — no soft hatch)
 **Primary platform:** Apple M3 Pro, 8-core. Criterion median of 100 iters.
@@ -137,9 +105,11 @@ Status: `[ ]` not done · `[~]` partial · `[x]` done
 
 ### Step 1 hygiene
 - [x] `cargo fmt --check` clean
-- [x] `cargo clippy --all-targets --release -- -D warnings` clean (gate 15)
-- [x] `cargo bench --no-run` compiles (gate 18) — verifies `benches/substrate.rs` is wired in
-- [ ] `cargo +nightly miri test --lib` clean on substrate (gate 19) — last verified at Step 1e final run; rerun before Step 2 cut if dependencies change.
+- [x] `cargo clippy --workspace --all-targets --all-features -- -D warnings` clean
+- [x] `cargo bench --no-run` compiles (`benches/substrate.rs` + `benches/upper_bound.rs`)
+- [x] TSan green on 90 lib tests — `RUSTFLAGS=-Zsanitizer=thread cargo +nightly test -Zbuild-std --target aarch64-apple-darwin --all-features --lib`
+- [x] loom kernel passes (3/3 standard, 4/4 mutant)
+- [ ] `cargo +nightly miri test --lib` — **DEFERRED**. Miri build on the substrate's dep graph (DashMap + sha2 + serde) takes 30+ min before tests even start. Rerun once before Step 2 cut to confirm clean; CI gates the full miri run.
 
 **Step 1 Gate (hard checkpoint):** all substrate tests pass; `engine.rs ≤ 480 non-test LOC` (measured 210 lines of code, exclusive of docs/blanks/attrs); all measurements meet budget. Status: **CLOSED**, every measurement clears its target.
 

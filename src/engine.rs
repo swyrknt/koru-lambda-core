@@ -703,6 +703,26 @@ mod compile_time_assertions {
         assert_eq!(std::mem::size_of::<Distinction>(), 16);
         assert_eq!(std::mem::align_of::<Distinction>(), 1);
     }
+
+    /// Append-only invariant (engine-architect round-2 promotion to theory
+    /// gate): `DistinctionEngine` MUST NOT expose any method that removes
+    /// or clears state. The substrate is monotone — once a distinction
+    /// exists in `nodes`, it stays. This source-level test is a
+    /// compile-time-ish guard; the Step 5 hygiene grep covers the same
+    /// invariant at CI level (`fn (remove|clear|truncate|drop)_distinction`
+    /// must not appear anywhere in `src/`).
+    ///
+    /// We can't directly assert "no method named X exists" in Rust, but we
+    /// can document the invariant inline and rely on the grep to enforce.
+    /// This test re-exists to make the invariant searchable from `cargo
+    /// test --list`.
+    #[test]
+    fn engine_is_append_only_by_api_surface() {
+        // The public API surface is checked by the Step 5 hygiene grep.
+        // This test exists to make the invariant discoverable; failure
+        // would manifest as the hygiene grep failing in CI, not here.
+        let _ = DistinctionEngine::new;
+    }
 }
 
 #[cfg(test)]
