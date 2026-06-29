@@ -331,6 +331,44 @@ mod tests {
     }
 
     #[test]
+    fn fold_law_d0_d1_hub_ratio_clears_100x_gate() {
+        // CHECKLIST.md line 135 / DESIGN.md gate 14: d0/d1 hub ratio
+        // ≥ 100× the maximum non-primordial degree after the full
+        // 256-byte exercise. This is the Fold Law's quantitative
+        // teeth: d0 and d1 aren't just slightly dominant (qa-sentinel
+        // round-2 test asserts strict-greater), they are TOPOLOGICAL
+        // MEGA-HUBS — orders of magnitude above any other node.
+        //
+        // Floor gate: ≥ 50× (DESIGN.md gate 14 hard-cap).
+        let e = DistinctionEngine::new();
+        for byte in 0u8..=255 {
+            let _ = ByteMapping::map_byte_to_distinction(byte, &e);
+        }
+        let d0_degree = e.degree(e.d0());
+        let d1_degree = e.degree(e.d1());
+        let primordial_min = d0_degree.min(d1_degree);
+
+        let max_nonprim_degree: usize = e
+            .snapshot_distinctions()
+            .into_iter()
+            .filter(|d| *d != e.d0() && *d != e.d1())
+            .map(|d| e.degree(d))
+            .max()
+            .unwrap_or(0);
+
+        // Guard against div-by-zero in degenerate engine.
+        assert!(max_nonprim_degree > 0, "non-primordials exist after 256-byte fold (sanity)");
+
+        let ratio = primordial_min as f64 / max_nonprim_degree as f64;
+        // Gate target ≥ 100×, floor ≥ 50×.
+        assert!(
+            ratio >= 100.0,
+            "Fold Law hub ratio {ratio:.1}× misses 100× target \
+             (d0={d0_degree}, d1={d1_degree}, max_nonprim={max_nonprim_degree})"
+        );
+    }
+
+    #[test]
     fn fold_law_structural_invariant_holds_after_exercise() {
         // Phantom-node regression guard: after the full 256-byte
         // exercise, the engine's r = 2d − 3 invariant must hold. If

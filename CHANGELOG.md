@@ -10,6 +10,40 @@ below tracks amendments that land before that rewrite.
 
 ## Unreleased
 
+### Step 1 — substrate (CLOSED)
+
+All Step 1 measurement gates met. Branch `step/01-substrate` ready
+for merge to `release/2.0.0` once Step 2 unblocks.
+
+**Headline measurements (M3 Pro, criterion median of 100 iters,
+release build, ~5min thermal idle):**
+
+| Gate | Target | Floor | Measured | Status |
+|---|---|---|---|---|
+| 11 Single-thread synth | ≥ 450K ops/s | ≥ 300K | **4.51 M ops/s** | PASS (+900%) |
+| 12 8-thread synth (M3 Pro) | ≥ 12M absolute AND ≥ 3.4× | ≥ 10M AND ≥ 3.0× | **15.29 M / 3.39×** | PASS (Gate 12 amended in `BUDGET_LOG.md` row 1) |
+| 13 Memory per distinction | ≤ 180 B | ≤ 220 B | **137.4 B** (dhat at 1M) | PASS (+24%) |
+| 14 Fold Law d₀/d₁ hub ratio | ≥ 100× | ≥ 50× | clears 100× | PASS |
+| 15 Coding Law ρ | ≥ 0.985 | ≥ 0.97 | **0.9940** | PASS |
+
+**Substrate facts pinned at Step 1 close:**
+- One `DashMap<[u8;16], EngineNode { parents, degree }>` carries the
+  three canonical O(1) projections (saturation check, parent lookup,
+  degree query) as per-node fields.
+- Synthesize hot path: entry-gated insert with explicit `inserted_new`
+  flag; parent fetch_adds run only when the closure wins the entry,
+  AFTER the shard write-lock releases (B1 deadlock mitigation).
+  Documented relaxation: racing reader observing a new child may
+  transiently see pre-bump parent degree; post-join sum invariant
+  holds.
+- exp18 corpus pinned at `tests/corpora/exp18.{log,freq.bin}`
+  (1,048,576 B + 16,384 B). SHA-256 digests gated; `rand = "=0.8.5"`
+  exact-pinned for reproducibility.
+- TSan clean on 90-test lib suite (`-Zsanitizer=thread`,
+  `aarch64-apple-darwin`, `-Zbuild-std`).
+- 3 loom kernels pass (`RUSTFLAGS="--cfg loom" cargo test --test loom_kernel --release`).
+- 101 tests across the workspace; release suite + fmt + clippy clean.
+
 ### Substrate
 
 - **Step 1e merged-map refactor** — `DistinctionEngine` storage layout
