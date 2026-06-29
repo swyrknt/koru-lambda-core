@@ -13,14 +13,10 @@
 
 use koru_lambda_core::DistinctionEngine;
 
-/// 5M synthesis chain extension; verifies `r = 2d − 3` with zero
-/// deviations and the explicit arithmetic `d = 2 + N, r = 2(2+N) − 3
-/// = 2N + 1`.
-///
-/// Falsifies any subtle bug that would only manifest at scale: a
-/// per-N-th-synthesis off-by-one in the parent edge accounting, a
-/// pre-seed contract violation that only shows up after enough chain
-/// extensions, etc.
+/// 5M chain extension; verifies `r = 2d − 3` and the explicit
+/// arithmetic d = N+2, r = 2N+1. Catches scale-only bugs:
+/// per-Nth-synth edge accounting off-by-one, pre-seed contract
+/// violations that only surface deep in a chain.
 #[test]
 fn r_equals_2d_minus_3_at_5m_synths() {
     const N: usize = 5_000_000;

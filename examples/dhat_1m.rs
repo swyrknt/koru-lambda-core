@@ -12,20 +12,12 @@
 //! ```
 //!
 //! **Run in debug mode, not release.** dhat 0.3.3 has a known
-//! backtrace-frame bug on aarch64-apple-darwin in release builds
-//! (panics in `Backtrace::get_frames_to_trim` because the release
-//! `panic = "abort"` profile strips backtrace frames). Debug builds
-//! preserve enough frames for dhat's symbol logic. The dhat
-//! measurement itself is allocator-level and identical between
-//! debug/release — only the wall-clock time differs.
+//! backtrace-frame bug on aarch64-apple-darwin in release builds; the
+//! allocator measurement is identical between debug/release, only
+//! wall-clock time differs.
 //!
-//! Why an example, not a test:
-//! - `#[global_allocator]` is a per-binary-crate setting. Applying
-//!   `dhat::Alloc` would slow EVERY test in the suite. An example is
-//!   a separate binary crate.
-//! - The gate is a one-off measurement, not a per-commit assertion.
-//!   CI invokes this example explicitly when a Gate 13 measurement
-//!   is needed.
+//! Not a test because `#[global_allocator]` would slow the entire
+//! test suite.
 //!
 //! # What the output means
 //!

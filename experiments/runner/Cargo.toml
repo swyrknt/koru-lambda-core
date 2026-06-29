@@ -22,3 +22,4 @@ koru-lambda-core = { path = "../.." }
 # the "minor version changed Zipf draw sequence" risk together.
 rand = { workspace = true }
 sha2 = "0.10"
+hex = "0.4"

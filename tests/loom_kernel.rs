@@ -1,37 +1,9 @@
-//! Loom model-checker test for the substrate's Release/Acquire memory
-//! ordering kernel — DESIGN.md gate 24.
+//! Loom model-checker for the synthesize() Release/Acquire kernel —
+//! DESIGN.md gate 24. DashMap isn't loom-compatible; this models the
+//! minimal kernel that captures the contract.
 //!
-//! Gates the load-bearing claim from `DistinctionEngine::synthesize`'s
-//! happens-before contract: parent `degree.fetch_add(Release)` paired
-//! with `degree.load(Acquire)` in `degree()` produces a sequentially-
-//! valid happens-before edge even when the writing thread publishes
-//! the new child node (via the DashMap shard lock release) BEFORE the
-//! parent degree bump.
-//!
-//! The substrate's actual synthesize hot path is too large for loom to
-//! model directly (DashMap uses parking_lot, not loom's mock primitives),
-//! so this file models the minimal kernel that captures the contract.
-//! If a future refactor weakens the Release on `degree.fetch_add` or
-//! the Acquire on `degree.load`, loom should detect a counterexample.
-//!
-//! # Running
-//!
-//! ```text
-//! # Standard run — kernels 1, 2, 3 (production memory ordering)
-//! RUSTFLAGS="--cfg loom" cargo test --test loom_kernel --release
-//!
-//! # Regression-sentinel run — additionally compiles kernel 4 which
-//! # downgrades the writer's fetch_add to Relaxed and is annotated
-//! # `#[should_panic]` because loom MUST find an interleaving where
-//! # the assertion fails. If kernel 4 passes WITHOUT panicking, the
-//! # production kernel's Release/Acquire pair has stopped being
-//! # load-bearing — investigate before merging.
-//! RUSTFLAGS="--cfg loom --cfg loom_mutant" cargo test --test loom_kernel --release
-//! ```
-//!
-//! Without `--cfg loom`, this file is empty (the entire body is gated)
-//! and the test binary compiles to a no-op. The standard `cargo test`
-//! workflow is unaffected.
+//! Standard: `RUSTFLAGS="--cfg loom" cargo test --test loom_kernel --release`
+//! Mutant:   `RUSTFLAGS="--cfg loom --cfg loom_mutant" cargo test --test loom_kernel --release`
 
 #![cfg(loom)]
 
@@ -133,20 +105,10 @@ fn two_writers_post_join_sum_is_two() {
     });
 }
 
-/// Kernel 3 — no-third-value sanity check (NOT a happens-before falsifier).
-///
-/// This is sanity, not contract. A single writer doing one fetch_add(1)
-/// on a usize initialized to 0 cannot produce any value outside {0, 1};
-/// the assertion `d <= 1` is satisfied by atomic-write atomicity alone
-/// regardless of memory ordering. The test is preserved as documentation
-/// that the relaxation window has only two valid observations from a
-/// reader's perspective, and would catch a hypothetical regression that
-/// somehow produced a third value (e.g. via memory corruption).
-///
-/// **The actual happens-before contract is verified by kernel 1.** Kernel
-/// 4 (cfg-gated `loom_mutant`) is the regression sentinel for the
-/// Release/Acquire pair on parent.degree. Together, kernels 1 + 4 are the
-/// load-bearing pair; this kernel is documentation.
+/// Kernel 3 — atomic-write atomicity sanity: the reader's degree load
+/// observes only {0, 1}, never a third value. NOT a happens-before
+/// falsifier (kernel 1 verifies that; kernel 4 is the mutant regression
+/// sentinel).
 #[test]
 fn no_third_value_sanity_for_relaxed_window_reader() {
     loom::model(|| {
@@ -193,18 +155,10 @@ fn no_third_value_sanity_for_relaxed_window_reader() {
 /// because the Relaxed write of parent_degree does not synchronize-with
 /// the writer's earlier Release store of new_child_published.
 ///
-/// Annotated `#[should_panic]`: the assertion failure inside the spawned
-/// thread propagates to a panic when the joined reader's panic is
-/// unwound. If loom CANNOT find the violating interleaving (i.e. this
-/// test panics with the wrong message, or doesn't panic at all), the
-/// production kernel's Release/Acquire pair has lost its load-bearing
-/// status — investigate before merging.
-///
-/// Run: `RUSTFLAGS="--cfg loom --cfg loom_mutant" cargo test --test loom_kernel --release`
-///
-/// This pattern (kernel 1 = positive verification, kernel 4 = mutant
-/// regression sentinel) is the qa-sentinel R2 demand: a model-checker
-/// test that *can* detect a regression, not just decoration.
+/// Annotated `#[should_panic]`: if loom CANNOT find the violating
+/// interleaving (test panics with wrong message, or doesn't panic),
+/// the production kernel's Release/Acquire pair has lost its
+/// load-bearing status — investigate before merging.
 #[cfg(loom_mutant)]
 #[test]
 #[should_panic(expected = "Acquire on parent_degree did not establish HB")]

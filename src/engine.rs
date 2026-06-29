@@ -1403,7 +1403,7 @@ mod engine_tests {
     /// shard collision is effectively 1. If this test times out under
     /// the cargo-test default 60s wall, B1 is broken.
     #[test]
-    fn b1_no_deadlock_under_shard_collision_pressure() {
+    fn b1_no_deadlock_under_shard_pressure() {
         use std::time::{Duration, Instant};
         let e = Arc::new(DistinctionEngine::new());
         let n_threads = 32;
@@ -1449,7 +1449,7 @@ mod engine_tests {
     /// asserted). The load-bearing assertion: post-join,
     /// `degree_sum == 2 * non_primordial_count`.
     #[test]
-    fn relaxed_window_postjoin_sum_invariant_holds() {
+    fn relaxed_window_postjoin_sum_holds() {
         use std::sync::atomic::{AtomicBool, AtomicUsize as AU};
         let e = Arc::new(DistinctionEngine::new());
         // Pre-build a chain of bases so the writer thread always has
@@ -1535,7 +1535,7 @@ mod engine_tests {
     /// the parent_degree sum. Uses parent pairs that are NOT already
     /// in the engine (skips alternates to dodge commutative collisions).
     #[test]
-    fn race_same_novel_child_no_double_bump_at_scale() {
+    fn race_novel_child_no_double_bump() {
         let e = Arc::new(DistinctionEngine::new());
         // Build a deep chain so we have many ids to work with.
         let mut chain = vec![e.d0(), e.d1()];

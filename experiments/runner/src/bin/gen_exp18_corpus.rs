@@ -99,16 +99,5 @@ fn sha256_of_file(path: &Path) -> std::io::Result<String> {
     let mut f = File::open(path)?;
     let mut buf = Vec::new();
     f.read_to_end(&mut buf)?;
-    let digest = Sha256::digest(&buf);
-    Ok(hex_encode(&digest))
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        s.push(HEX[(b >> 4) as usize] as char);
-        s.push(HEX[(b & 0x0F) as usize] as char);
-    }
-    s
+    Ok(hex::encode(Sha256::digest(&buf)))
 }

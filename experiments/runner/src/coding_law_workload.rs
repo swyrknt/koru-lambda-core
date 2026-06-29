@@ -117,8 +117,7 @@ impl CodingLawWorkload {
         let degree_before: Vec<usize> = self.pool.iter().map(|d| engine.degree(*d)).collect();
 
         for (i, j) in &self.pairs {
-            // SAFETY of indexing: generate() guarantees pair indices
-            // are in 0..pool.len().
+            // generate() guarantees i, j ∈ 0..pool.len() — direct index is safe.
             let _ = engine.synthesize(self.pool[*i as usize], self.pool[*j as usize]);
         }
 
@@ -218,7 +217,9 @@ fn rank<T: PartialOrd + Copy>(values: &[T]) -> Vec<f64> {
     // Index permutation sorted by value (stable for tie handling).
     let mut idx: Vec<usize> = (0..n).collect();
     idx.sort_by(|&a, &b| {
-        values[a].partial_cmp(&values[b]).expect("non-NaN inputs (invariant: caller checks)")
+        values[a]
+            .partial_cmp(&values[b])
+            .unwrap_or_else(|| panic!("rank() received NaN; ρ undefined"))
     });
 
     let mut ranks = vec![0.0; n];
