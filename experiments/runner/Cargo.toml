@@ -1,0 +1,23 @@
+[package]
+name = "koru-experiments-runner"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Reusable workload modules and probe binaries for koru-lambda-core gates. Lives in the experiments/ workspace; not published."
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "gen_exp18_corpus"
+path = "src/bin/gen_exp18_corpus.rs"
+
+[dependencies]
+koru-lambda-core = { path = "../.." }
+# `rand = "=0.8.5"` matches the main crate's dev-dep pin so the corpus
+# generator is reproducible across `cargo update`. Per DESIGN.md gate
+# language: corpus files are SHA-256-gated; rand version pinning closes
+# the "minor version changed Zipf draw sequence" risk.
+rand = "=0.8.5"
+sha2 = "0.10"

@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "experiments/runner"]
+resolver = "2"
+
 [package]
 name = "koru-lambda-core"
 version = "1.2.0"
@@ -62,6 +66,10 @@ loom = "0.7"
 dhat = "0.3"
 blake3 = "1"
 serde_json = "1.0"
+# Workspace member — provides the reusable Coding Law workload module
+# consumed by `tests/coding_law.rs`. Step 4 will import the same module
+# at scale.
+koru-experiments-runner = { path = "experiments/runner" }
 
 # benches/performance.rs deleted in pre-flight (v1.2 String-API bench).
 # Step 1 creates benches/substrate.rs against the v2.0 byte-API surface.
