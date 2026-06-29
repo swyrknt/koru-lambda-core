@@ -17,7 +17,16 @@
 //! # Running
 //!
 //! ```text
+//! # Standard run — kernels 1, 2, 3 (production memory ordering)
 //! RUSTFLAGS="--cfg loom" cargo test --test loom_kernel --release
+//!
+//! # Regression-sentinel run — additionally compiles kernel 4 which
+//! # downgrades the writer's fetch_add to Relaxed and is annotated
+//! # `#[should_panic]` because loom MUST find an interleaving where
+//! # the assertion fails. If kernel 4 passes WITHOUT panicking, the
+//! # production kernel's Release/Acquire pair has stopped being
+//! # load-bearing — investigate before merging.
+//! RUSTFLAGS="--cfg loom --cfg loom_mutant" cargo test --test loom_kernel --release
 //! ```
 //!
 //! Without `--cfg loom`, this file is empty (the entire body is gated)
@@ -124,19 +133,22 @@ fn two_writers_post_join_sum_is_two() {
     });
 }
 
-/// Kernel 3 — relaxed in-flight reader (documentation, not assertion).
+/// Kernel 3 — no-third-value sanity check (NOT a happens-before falsifier).
 ///
-/// Documents the relaxation flagged by qa-sentinel in round 3: a reader
-/// who observes `new_child_published` and IMMEDIATELY queries
-/// parent.degree may see EITHER the pre-bump value (0) or the post-bump
-/// value (1). Both are valid per the synthesize docstring's
-/// "eventually consistent" contract.
+/// This is sanity, not contract. A single writer doing one fetch_add(1)
+/// on a usize initialized to 0 cannot produce any value outside {0, 1};
+/// the assertion `d <= 1` is satisfied by atomic-write atomicity alone
+/// regardless of memory ordering. The test is preserved as documentation
+/// that the relaxation window has only two valid observations from a
+/// reader's perspective, and would catch a hypothetical regression that
+/// somehow produced a third value (e.g. via memory corruption).
 ///
-/// This test does NOT assert a specific outcome — it asserts that the
-/// reader sees ONE OF the two valid values. Loom exhaustively explores
-/// both interleavings and confirms no third value can appear.
+/// **The actual happens-before contract is verified by kernel 1.** Kernel
+/// 4 (cfg-gated `loom_mutant`) is the regression sentinel for the
+/// Release/Acquire pair on parent.degree. Together, kernels 1 + 4 are the
+/// load-bearing pair; this kernel is documentation.
 #[test]
-fn relaxed_window_reader_sees_pre_or_post_bump() {
+fn no_third_value_sanity_for_relaxed_window_reader() {
     loom::model(|| {
         let new_child_published = Arc::new(AtomicBool::new(false));
         let parent_degree = Arc::new(AtomicUsize::new(0));
@@ -152,14 +164,74 @@ fn relaxed_window_reader_sees_pre_or_post_bump() {
         let deg_r = Arc::clone(&parent_degree);
         let reader = thread::spawn(move || {
             // Reader observes child first (matches the relaxation
-            // window the docstring describes).
+            // window the synthesize docstring describes).
             if new_r.load(Ordering::Acquire) {
                 // The reader sees the child. The bump may or may not
-                // be visible yet. Both 0 and 1 are valid.
+                // be visible yet — both 0 and 1 are valid per the
+                // relaxation contract. We assert ONLY that no third
+                // value appears (this is atomic-write atomicity, not
+                // happens-before).
                 let d = deg_r.load(Ordering::Acquire);
                 assert!(
                     d <= 1,
                     "reader observed degree value outside {{0, 1}} — atomic-write atomicity broken"
+                );
+            }
+        });
+
+        writer.join().expect("writer joins (invariant)");
+        reader.join().expect("reader joins (invariant)");
+    });
+}
+
+/// Kernel 4 — Regression sentinel: downgrade-to-Relaxed mutant of kernel 1.
+///
+/// Compiled only under `--cfg loom_mutant`. The writer's `fetch_add` is
+/// intentionally `Ordering::Relaxed` instead of `Ordering::Release`. Under
+/// loom's exhaustive scheduler, this MUST produce an interleaving where
+/// the reader observes `bumped >= 1` AND `new_child_published == false`,
+/// because the Relaxed write of parent_degree does not synchronize-with
+/// the writer's earlier Release store of new_child_published.
+///
+/// Annotated `#[should_panic]`: the assertion failure inside the spawned
+/// thread propagates to a panic when the joined reader's panic is
+/// unwound. If loom CANNOT find the violating interleaving (i.e. this
+/// test panics with the wrong message, or doesn't panic at all), the
+/// production kernel's Release/Acquire pair has lost its load-bearing
+/// status — investigate before merging.
+///
+/// Run: `RUSTFLAGS="--cfg loom --cfg loom_mutant" cargo test --test loom_kernel --release`
+///
+/// This pattern (kernel 1 = positive verification, kernel 4 = mutant
+/// regression sentinel) is the qa-sentinel R2 demand: a model-checker
+/// test that *can* detect a regression, not just decoration.
+#[cfg(loom_mutant)]
+#[test]
+#[should_panic(expected = "Acquire on parent_degree did not establish HB")]
+fn mutant_parent_degree_relaxed_writer_loses_publication_visibility() {
+    loom::model(|| {
+        let new_child_published = Arc::new(AtomicBool::new(false));
+        let parent_degree = Arc::new(AtomicUsize::new(0));
+
+        let new_w = Arc::clone(&new_child_published);
+        let deg_w = Arc::clone(&parent_degree);
+        let writer = thread::spawn(move || {
+            new_w.store(true, Ordering::Release);
+            // BUG (intentional): Relaxed instead of Release.
+            // Should give loom an interleaving that breaks kernel 1's
+            // assertion.
+            deg_w.fetch_add(1, Ordering::Relaxed);
+        });
+
+        let new_r = Arc::clone(&new_child_published);
+        let deg_r = Arc::clone(&parent_degree);
+        let reader = thread::spawn(move || {
+            let bumped = deg_r.load(Ordering::Acquire);
+            if bumped >= 1 {
+                assert!(
+                    new_r.load(Ordering::Acquire),
+                    "Acquire on parent_degree did not establish HB with new_child publication \
+                     (degree.fetch_add Release downgraded to Relaxed?)"
                 );
             }
         });

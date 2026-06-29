@@ -32,9 +32,12 @@ panic = "abort"
 [lints.rust]
 # `cfg(loom)` is a workflow-specific build flag set via
 # `RUSTFLAGS="--cfg loom"` when running the loom model-checker tests
-# in `tests/loom_kernel.rs` (DESIGN.md gate 24). Declared here so the
-# unexpected_cfgs lint passes without `--cfg loom` set.
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+# in `tests/loom_kernel.rs` (DESIGN.md gate 24). `cfg(loom_mutant)`
+# additionally enables the regression-sentinel kernel that downgrades
+# the writer's fetch_add to Relaxed and expects loom to detect it.
+# Both declared here so the unexpected_cfgs lint passes when neither
+# flag is set.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(loom_mutant)'] }
 
 [dependencies]
 sha2 = "0.10"

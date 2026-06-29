@@ -19,7 +19,8 @@
 //! the substrate doesn't ship the wrapper because the right discipline
 //! is workload-dependent.
 
-use crate::{Distinction, DistinctionEngine};
+use crate::{Distinction, DistinctionEngine, IdentityBuildHasher};
+use std::collections::HashSet;
 use std::marker::PhantomData;
 
 /// Chronological observer of novel syntheses through an engine.
@@ -41,7 +42,13 @@ use std::marker::PhantomData;
 /// error; concurrent use within a thread is not possible because
 /// `synthesize` takes `&mut self`.
 pub struct SynthesisRecorder {
+    /// Chronological order of novel observations. Each entry appears
+    /// exactly once; presence is mirrored in `seen` for O(1) dedup.
     log: Vec<Distinction>,
+    /// Shadow set for O(1) dedup. `IdentityBuildHasher` reads the
+    /// leading 8 bytes of the 16-byte distinction identity as the
+    /// hash key (SHA-256 prefixes are uniformly distributed).
+    seen: HashSet<Distinction, IdentityBuildHasher>,
     /// Marker that makes this `!Send + !Sync`. The `*const ()` choice
     /// is the canonical idiom (used internally by `Rc`); negative
     /// impls (`impl !Send`) require nightly.
@@ -51,17 +58,22 @@ pub struct SynthesisRecorder {
 impl SynthesisRecorder {
     /// Create an empty recorder.
     #[must_use]
-    pub const fn new() -> Self {
-        Self { log: Vec::new(), _not_thread_safe: PhantomData }
+    pub fn new() -> Self {
+        Self {
+            log: Vec::new(),
+            seen: HashSet::with_hasher(IdentityBuildHasher::default()),
+            _not_thread_safe: PhantomData,
+        }
     }
 
     /// Synthesize `a` ⊗ `b` through `engine`, recording the result in
     /// the log if it has not been seen by this recorder before.
     ///
-    /// Deduplication is via `log.contains(&child)` — O(N) per call in
-    /// the log size. For long-running recorders, prefer maintaining a
-    /// `HashSet<Distinction>` alongside the `Vec` (a consumer-side
-    /// optimization; the reference impl prioritizes clarity).
+    /// Deduplication is via a `HashSet<Distinction, IdentityBuildHasher>`
+    /// shadow — O(1) per call in expectation. (Previously O(N) via
+    /// `log.contains`; Round 2 review qa-sentinel Y3.) The shadow uses
+    /// the substrate's `IdentityBuildHasher` so dedup is cheap even on
+    /// dense workloads.
     ///
     /// **Single-thread only** — `!Send + !Sync` enforced at compile
     /// time.
@@ -73,7 +85,8 @@ impl SynthesisRecorder {
         b: Distinction,
     ) -> Distinction {
         let child = engine.synthesize(a, b);
-        if !self.log.contains(&child) {
+        if self.seen.insert(child) {
+            // `insert` returns true when child was NOT previously present.
             self.log.push(child);
         }
         child
