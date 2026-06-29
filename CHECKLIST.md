@@ -223,7 +223,7 @@ clean (gate 16); `wasm-pack test --node --features wasm` passes
 - [ ] Fold Law d₀/d₁ ratio ≥ 100×
 
 ### Engineering probes
-- [ ] 8-thread throughput on M3 Pro ≥ 12M ops/sec
+- [ ] 8-thread throughput on M3 Pro: ≥ 12M ops/sec AND ≥ 3.4× single-thread (Gate 12 platform-named target; see DESIGN.md Part 10.5 + `BUDGET_LOG.md` row 1). Hard-cap floor: ≥ 10M AND ≥ 3.0× ratio. On symmetric server hardware: ≥ 4× single-thread as regression watch.
 - [ ] Memory per distinction at 1M scale ≤ 180 B (dhat; includes DashMap shard slack)
 - [ ] WASM bytes-on-wire round-trip fingerprint match (native vs wasm-pack-node)
 

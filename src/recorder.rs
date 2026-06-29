@@ -65,6 +65,7 @@ impl SynthesisRecorder {
     ///
     /// **Single-thread only** — `!Send + !Sync` enforced at compile
     /// time.
+    #[must_use]
     pub fn synthesize(
         &mut self,
         engine: &DistinctionEngine,

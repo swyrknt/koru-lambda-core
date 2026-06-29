@@ -19,16 +19,23 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 ///
 /// Constructed exclusively by [`DistinctionEngine`]: either by retrieving
 /// a primordial (`engine.d0()`, `engine.d1()`), by synthesis
-/// (`engine.synthesize(a, b)`), or by parsing bytes the engine has
-/// already registered ([`Distinction::from_hex`] of a known ID).
+/// (`engine.synthesize(a, b)`), or by parsing bytes that happen to match
+/// an already-registered identity via [`Distinction::from_hex`] — the
+/// parse itself is purely syntactic and does NOT verify engine
+/// membership; the engine's foreign-byte guard catches a non-matching
+/// parse only at the next `synthesize` call.
 ///
 /// The field is `pub(crate)` — there is no public constructor. Foreign-byte
-/// injection is closed structurally: external code cannot mint a
-/// `Distinction` that didn't originate from a `DistinctionEngine`. The
-/// only exception is [`Distinction::from_hex`], which parses bytes
-/// without validating engine membership; passing such a value to
-/// `engine.synthesize` triggers a debug-build panic via the foreign-byte
-/// guard.
+/// injection is closed structurally at synthesize-time, not parse-time:
+/// external code cannot mint a `Distinction` that didn't originate from a
+/// `DistinctionEngine`, but `Distinction::from_hex` will produce a
+/// syntactically valid value from any hex string of the right length.
+/// Passing a from_hex value whose bytes aren't registered in the receiving
+/// engine triggers a debug-build panic (and a release-build `expect`
+/// panic on the post-entry parent lookup) at the next `synthesize` call.
+/// Consumers MUST register such values before use — either by calling
+/// `engine.has(d)` to check, or by trusting a known-good source
+/// (e.g. a replay log produced by the same engine).
 ///
 /// `#[repr(transparent)]`: layout-compatible with `[u8; 16]`, enabling
 /// zero-copy FFI/WASM transit (`*const Distinction` ↔ `*const [u8; 16]`).
