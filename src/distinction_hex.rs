@@ -72,12 +72,12 @@ impl Distinction {
         let bytes = s.as_bytes();
         let mut out = [0u8; 16];
 
-        for (i, byte_pair_idx) in (0..16).enumerate() {
-            let hi_pos = byte_pair_idx * 2;
+        for (i, out_byte) in out.iter_mut().enumerate() {
+            let hi_pos = i * 2;
             let lo_pos = hi_pos + 1;
             let hi = decode_nibble(bytes[hi_pos], hi_pos)?;
             let lo = decode_nibble(bytes[lo_pos], lo_pos)?;
-            out[i] = (hi << 4) | lo;
+            *out_byte = (hi << 4) | lo;
         }
 
         Ok(Distinction::from_bytes_unchecked(out))
@@ -143,7 +143,7 @@ pub mod serde_adapter {
     /// # Errors
     ///
     /// Propagates any error from the serializer.
-    #[allow(clippy::type_complexity)] // serde adapter signature is canonical, not factorable
+    #[allow(clippy::type_complexity)] // canonical serde adapter signature
     pub fn serialize<S>(d: &Distinction, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

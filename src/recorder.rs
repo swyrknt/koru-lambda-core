@@ -69,11 +69,9 @@ impl SynthesisRecorder {
     /// Synthesize `a` ⊗ `b` through `engine`, recording the result in
     /// the log if it has not been seen by this recorder before.
     ///
-    /// Deduplication is via a `HashSet<Distinction, IdentityBuildHasher>`
-    /// shadow — O(1) per call in expectation. (Previously O(N) via
-    /// `log.contains`; Round 2 review qa-sentinel Y3.) The shadow uses
-    /// the substrate's `IdentityBuildHasher` so dedup is cheap even on
-    /// dense workloads.
+    /// Deduplication via a `HashSet<Distinction, IdentityBuildHasher>`
+    /// shadow — O(1) per call. The shadow shares the substrate's
+    /// `IdentityBuildHasher` so dedup is cheap on dense workloads.
     ///
     /// **Single-thread only** — `!Send + !Sync` enforced at compile
     /// time.
@@ -94,8 +92,7 @@ impl SynthesisRecorder {
 
     /// Borrow the recorded log in chronological order.
     ///
-    /// Each entry appears at most once (deduplicated on
-    /// `log.contains`).
+    /// Each entry appears at most once.
     #[must_use]
     pub fn log(&self) -> &[Distinction] {
         &self.log

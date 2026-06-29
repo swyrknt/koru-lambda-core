@@ -16,12 +16,10 @@
 //!
 //! ## Lint floor
 //!
-//! `clippy::unwrap_used` is **warned** at the source level and **escalated
-//! to deny in CI** via `cargo clippy -- -D warnings`. The same applies to
-//! `clippy::must_use_candidate`, `clippy::missing_const_for_fn`, and
-//! `missing_docs`. `.expect()` is permitted in production paths ONLY with
-//! a message ending in `"(invariant)"` identifying the load-bearing
-//! precondition; the Step 5 hygiene grep verifies this on non-test code.
+//! `.expect()` is permitted in production paths ONLY with a message
+//! ending `"(invariant)"`; CI escalates `clippy::unwrap_used` to deny.
+//! Rationale: panics in invariant-violation paths are preferable to
+//! silent corruption of the append-only graph.
 
 #![warn(clippy::unwrap_used)]
 #![warn(clippy::must_use_candidate)]

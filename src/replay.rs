@@ -39,13 +39,10 @@ use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum ReplayError {
-    /// The input parentage cannot bootstrap from d₀/d₁ — no entry has
-    /// both parents already registered in a fresh engine (which starts
-    /// with only the primordials). Distinct from
-    /// [`Unreachable`](ReplayError::Unreachable) because it indicates
-    /// the input never had a root edge into the primordials, whereas
-    /// `Unreachable` means some progress was made but a downstream
-    /// cycle or missing intermediate prevented completion.
+    /// No input entry can bootstrap from d₀/d₁ — the parentage never
+    /// roots in the primordials. (Contrast
+    /// [`Unreachable`](ReplayError::Unreachable): some progress was
+    /// made, but a cycle or missing intermediate stalled completion.)
     #[error("no parentage entry roots in primordials: input cannot bootstrap from d₀/d₁")]
     MissingPrimordial,
 
@@ -57,17 +54,14 @@ pub enum ReplayError {
     #[error("corrupted parentage: {0} entries unresolved (cycle or missing intermediate)")]
     Unreachable(usize),
 
-    /// Content-address mismatch: an input entry claims `child` has
-    /// parents `(a, b)`, but `synthesize(a, b)` on a fresh engine
-    /// produced different bytes. Indicates the input parentage has
-    /// been tampered with or corrupted in transit.
-    ///
-    /// Release-safe — does NOT depend on `debug_assert`.
+    /// Input claims `child = synthesize(a, b)` but replay produced
+    /// different bytes. Parentage was tampered or corrupted in transit.
+    /// Checked in release (not debug-only).
     #[error("content-address mismatch: expected {expected:?}, got {actual:?}")]
     Mismatch {
-        /// The child distinction the input claims this synthesis produced.
+        /// The claimed child.
         child: Distinction,
-        /// Same as `child` — what the input claimed.
+        /// Same as `child` (the input's claim).
         expected: Distinction,
         /// What `synthesize(a, b)` actually produced.
         actual: Distinction,
@@ -182,12 +176,10 @@ pub fn replay_topological(
 ///
 /// # Why this isn't in the engine
 ///
-/// The engine itself doesn't carry this index — `degree_counts` is the
-/// canonical O(1) projection of the Coding Law primitive (degree =
-/// total participations). This helper materializes the dual enumeration
-/// on demand for consumers that need to iterate children (e.g.,
-/// diagnostic dumps, custom graph algorithms). Build it once at a
-/// quiescent moment; query in O(1) thereafter.
+/// The engine doesn't carry this index — `degree` is the canonical
+/// O(1) Coding Law projection. This helper materializes the dual
+/// (children-iteration) on demand. Build once at a quiescent moment;
+/// query O(1) thereafter.
 ///
 /// O(N) build, where N is `parentage.len()`. Each parent gets entries
 /// proportional to its child count.

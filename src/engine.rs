@@ -17,25 +17,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// A distinction is identified solely by its 16-byte content-addressed
 /// identity. There is no internal structure beyond these bytes.
 ///
-/// Constructed exclusively by [`DistinctionEngine`]: either by retrieving
-/// a primordial (`engine.d0()`, `engine.d1()`), by synthesis
-/// (`engine.synthesize(a, b)`), or by parsing bytes that happen to match
-/// an already-registered identity via [`Distinction::from_hex`] — the
-/// parse itself is purely syntactic and does NOT verify engine
-/// membership; the engine's foreign-byte guard catches a non-matching
-/// parse only at the next `synthesize` call.
+/// Constructed exclusively by [`DistinctionEngine`]: via a primordial
+/// (`engine.d0()`, `engine.d1()`), via [`synthesize`](DistinctionEngine::synthesize),
+/// or by parsing bytes via [`Distinction::from_hex`] — the parse is
+/// purely syntactic and does NOT verify engine membership.
 ///
-/// The field is `pub(crate)` — there is no public constructor. Foreign-byte
-/// injection is closed structurally at synthesize-time, not parse-time:
-/// external code cannot mint a `Distinction` that didn't originate from a
-/// `DistinctionEngine`, but `Distinction::from_hex` will produce a
-/// syntactically valid value from any hex string of the right length.
-/// Passing a from_hex value whose bytes aren't registered in the receiving
-/// engine triggers a debug-build panic (and a release-build `expect`
-/// panic on the post-entry parent lookup) at the next `synthesize` call.
-/// Consumers MUST register such values before use — either by calling
-/// `engine.has(d)` to check, or by trusting a known-good source
-/// (e.g. a replay log produced by the same engine).
+/// The field is `pub(crate)`: external code cannot mint a `Distinction`
+/// from nothing, but `from_hex` will parse any hex string of the right
+/// length. Foreign-byte injection is closed at synthesize-time
+/// (debug `debug_assert`, release `expect` on the post-entry parent
+/// lookup), not at parse-time. Consumers passing `from_hex` values
+/// should call `engine.has(d)` before use, or trust a known-good
+/// source (e.g. a replay log from the same engine).
 ///
 /// `#[repr(transparent)]`: layout-compatible with `[u8; 16]`, enabling
 /// zero-copy FFI/WASM transit (`*const Distinction` ↔ `*const [u8; 16]`).
@@ -97,17 +90,11 @@ impl Distinction {
 /// only to satisfy the [`Hasher`] trait, and the substrate has no
 /// business invoking them on its own keys.
 ///
-/// `write_usize` is the one exception: slice/array `Hash` impls call
-/// `state.write_usize(self.len())` before writing the actual bytes (the
-/// length prefix). For our 16-byte keys that's always 16. The hasher
-/// absorbs the length prefix as a no-op and relies entirely on the
-/// `debug_assert!` in `write()` to catch non-16-byte slices.
-///
-/// In release builds, the `debug_assert!` is compiled out; if a
-/// non-16-byte slice somehow reaches `write`, only the first 8 bytes
-/// are read, which still produces a valid `u64` — just one not derived
-/// from the expected 16-byte key. The substrate's contract is: callers
-/// must only hash 16-byte keys.
+/// `write_usize` is the one exception: slice/array `Hash` impls call it
+/// for the length prefix (always 16 for our keys); the hasher absorbs it
+/// as a no-op. Misuse detection lives entirely on the `write()`
+/// `debug_assert!`; in release a non-16-byte slice still produces *a*
+/// valid `u64`, just not the expected one.
 ///
 /// [`DashMap`]: dashmap::DashMap
 #[derive(Default)]
@@ -149,12 +136,8 @@ impl Hasher for IdentityHasher {
         unreachable!("IdentityHasher only handles 16-byte keys via write()")
     }
     fn write_usize(&mut self, _len: usize) {
-        // Slice/array Hash impls call `write_usize(len)` before writing
-        // the actual bytes (the length prefix). For our 16-byte keys
-        // that's always 16, and the hasher only consumes information
-        // from `write()`. Absorb the length prefix as a no-op; the
-        // misuse-detection responsibility falls entirely on the
-        // `write()` debug_assert.
+        // Length prefix from slice/array Hash impls — absorbed; the
+        // 16-byte contract is enforced in `write()`.
     }
     fn write_i8(&mut self, _: i8) {
         unreachable!("IdentityHasher only handles 16-byte keys via write()")
@@ -174,10 +157,9 @@ impl Hasher for IdentityHasher {
     fn write_isize(&mut self, _: isize) {
         unreachable!("IdentityHasher only handles 16-byte keys via write()")
     }
-    // `write_length_prefix` is unstable (issue #96762); intentionally
-    // omitted on stable Rust. If a future stable promotion changes the
-    // default slice/array Hash path to use it instead of `write_usize`,
-    // we'll need to add a matching no-op override.
+    // `write_length_prefix` (unstable, #96762) is intentionally omitted;
+    // add a no-op override if it stabilizes and replaces `write_usize`
+    // in the slice/array Hash default.
 }
 
 /// `BuildHasher` flavor of [`IdentityHasher`], used as the hash builder
@@ -254,7 +236,6 @@ struct EngineNode {
     degree: AtomicUsize,
 }
 
-/// Crate-internal alias for the engine's `nodes` map type.
 type NodeMap = DashMap<[u8; 16], EngineNode, IdentityBuildHasher>;
 
 /// The substrate engine — implements the four axioms in
@@ -367,12 +348,9 @@ impl DistinctionEngine {
     /// # Concurrency
     ///
     /// Safe to call concurrently from any number of threads against a
-    /// shared engine reference. The entry-gated insert into `nodes`
-    /// serializes novel insertions for a given `new_bytes` on a single
-    /// shard write-lock; concurrent reads through the saturation
-    /// fast-path don't block writes for *different* `new_bytes`. See
-    /// the implementation comments below for the full happens-before
-    /// contract.
+    /// shared engine reference. The entry-gated insert serializes novel
+    /// inserts per `new_bytes`; the saturation fast-path is read-only.
+    /// Full happens-before contract below.
     ///
     /// # Happens-before contract
     ///
@@ -536,9 +514,7 @@ impl DistinctionEngine {
     /// directly get a happens-before edge to writes.
     #[must_use]
     pub fn degree(&self, d: Distinction) -> usize {
-        // Primordials: registered at construction with `degree` pre-seeded
-        // to 0. The `map_or(0, ...)` is defensive — the node should always
-        // exist for d0/d1 in a valid engine.
+        // Primordials are pre-seeded in `new()`; `map_or(0, ...)` is defensive.
         if d == self.d0 || d == self.d1 {
             return self
                 .nodes
@@ -686,9 +662,7 @@ impl Default for DistinctionEngine {
 }
 
 impl std::fmt::Debug for DistinctionEngine {
-    /// Summary-only Debug — prints distinction and relationship counts.
-    /// Full state dump would be O(N) and not useful in panic messages
-    /// where `Debug` is typically invoked.
+    /// Summary-only Debug — O(1) counts, not a full dump.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DistinctionEngine")
             .field("distinction_count", &self.distinction_count())
@@ -916,13 +890,11 @@ mod engine_tests {
 
     #[test]
     fn synthesize_on_cold_engine_does_not_panic() {
-        // Smoke test for qa-sentinel round-2 concern: the synthesize hot
-        // path's `nodes.get(&parent).expect("(invariant)")` MUST succeed
-        // for d0/d1 on a fresh engine. If new() forgets to pre-seed
-        // primordial node entries, this panics.
-        //
-        // Strengthened beyond just "doesn't panic": verify the child has
-        // the expected shape and parent degrees update correctly.
+        // Regression guard for the pre-seed contract:
+        // `nodes.get(&parent).expect()` in synthesize() MUST succeed for
+        // d0/d1 on a fresh engine. If new() forgets to pre-seed primordial
+        // node entries, this panics. Also verifies child shape and parent
+        // degree bumps.
         let e = DistinctionEngine::new();
         let d0_before = e.degree(e.d0());
         let d1_before = e.degree(e.d1());
@@ -1158,11 +1130,9 @@ mod engine_tests {
 
     #[test]
     fn degree_of_unregistered_distinction_is_zero() {
-        // A foreign distinction has no edges in this engine's graph,
-        // so degree() returns 0 — not the +2 parent-edge addend that
-        // would apply to a registered non-primordial. (qa-sentinel
-        // round-2 fix: previously the formula leaked the addend even
-        // for foreign queries, returning 2 misleadingly.)
+        // Regression guard: degree() of a foreign Distinction must be 0,
+        // not the +2 parent-edge addend. Previously the formula leaked
+        // the addend on foreign queries, returning 2 misleadingly.
         let e = DistinctionEngine::new();
         let foreign = Distinction::from_bytes_unchecked([0xCC; 16]);
         assert_eq!(e.degree(foreign), 0);
@@ -1227,22 +1197,14 @@ mod engine_tests {
 
     #[test]
     fn relaxed_happens_before_post_join_consistent() {
-        // qa-sentinel round-3 demand: the merged-map design releases
-        // the new_bytes shard write-lock BEFORE the parent degree
-        // fetch_adds (the B1 deadlock mitigation). This shifts the
-        // ordering contract: a racing reader who observes new_d via
-        // saturation may transiently see parent degrees not yet bumped.
-        //
-        // This test exercises that window with 32 threads and
-        // independent chains (so the engine grows novel distinctions
-        // continuously) and asserts that the POST-JOIN state is
-        // consistent — the eventual consistency claim holds even
-        // though the intermediate states may be loose.
-        //
-        // Falsification target: if the parent fetch_adds were ever
-        // dropped (e.g., a future refactor that lost the `if inserted_new`
-        // gate or the post-entry fetch_add block), this would catch it
-        // because degree_sum would diverge from 2 * non_primordial_count.
+        // The merged-map design (B1 deadlock mitigation) releases the
+        // new_bytes shard write-lock BEFORE the parent degree fetch_adds,
+        // so a racing reader may transiently see new_d via saturation
+        // before parent degrees are bumped. This test asserts the
+        // POST-JOIN sum invariant holds despite that window. Falsifier:
+        // if the parent fetch_adds were ever dropped (lost `inserted_new`
+        // gate or the post-entry block), degree_sum would diverge from
+        // 2 * non_primordial_count.
         let e = Arc::new(DistinctionEngine::new());
         let n_threads = 32;
         let synth_per_thread = 50;
@@ -1292,12 +1254,11 @@ mod engine_tests {
 
     #[test]
     fn or_insert_with_closure_runs_exactly_once() {
-        // qa-sentinel round-2 fix: the bug being guarded is "fetch_add
-        // ran N times outside the closure," which inflates PARENT
-        // degrees by N, not the child's. The test asserts parent degrees
-        // increment by exactly 1 (not N), since all N threads race the
-        // SAME novel synthesize(d0, x); only one closure invocation
-        // wins and performs the fetch_add.
+        // The bug being guarded is "fetch_add ran N times outside the
+        // closure," which inflates PARENT degrees by N, not the child's.
+        // All N threads race the SAME novel synthesize(d0, x); only one
+        // Vacant arm wins and runs the fetch_add. Parent degrees must
+        // increment by exactly 1, not N.
         let e = Arc::new(DistinctionEngine::new());
         let x = e.synthesize(e.d0(), e.d1()); // pre-bind x
 
@@ -1431,7 +1392,7 @@ mod engine_tests {
 
     // ----- qa-sentinel round-3 follow-through: B1 + in-flight probes ----
 
-    /// QA-SENTINEL: stress the merged-map B1 mitigation by synthesizing
+    /// Stress the merged-map B1 mitigation by synthesizing
     /// thousands of distinct novel children whose parents necessarily
     /// span the same shards as their children. If the Entry write-guard
     /// for `new_bytes` were still held when the post-block `nodes.get(parent)`
@@ -1483,16 +1444,10 @@ mod engine_tests {
         e.check_structural_invariant().expect("post-stress invariant (invariant)");
     }
 
-    /// QA-SENTINEL: actively race a reader against a writer to probe
-    /// whether the in-flight window — observe child via `has()`, then
-    /// query parent `degree()` before the fetch_add lands — is
-    /// observable. If it IS observable, the relaxation docstring is
-    /// accurate. If it ISN'T, either the window is too narrow to hit
-    /// or the doc is wrong. Either way this is information, not failure
-    /// (we record the count, not assert on it).
-    ///
-    /// The strong post-assertion: once writer joins, sum invariant must
-    /// hold. That part IS load-bearing.
+    /// Race a reader against a writer to probe the in-flight relaxation
+    /// window. Diagnostic only on `torn_observations` (recorded, not
+    /// asserted). The load-bearing assertion: post-join,
+    /// `degree_sum == 2 * non_primordial_count`.
     #[test]
     fn relaxed_window_postjoin_sum_invariant_holds() {
         use std::sync::atomic::{AtomicBool, AtomicUsize as AU};
@@ -1543,14 +1498,10 @@ mod engine_tests {
                         break;
                     }
                     for (i, &b) in bases.iter().enumerate() {
-                        // Reconstruct what the child id would be — but
-                        // we don't have hashing exposed; use the
-                        // observable proxy: query has() against the
-                        // result of synthesize on a *separate* read-only
-                        // engine? No — easier: ask "did the writer get
-                        // past base[i]?" Approximation: writer goes in
-                        // order, so once base[i+1]'s degree has bumped,
-                        // base[i] should also have bumped.
+                        // Proxy for "did writer reach base[i]?": writer
+                        // iterates in order, so base[i]'s post-bump degree
+                        // is pre_degrees[i] + 1. Anything else is a torn
+                        // read.
                         let cur = e.degree(b);
                         if cur != pre_degrees[i] && cur != pre_degrees[i] + 1 {
                             // Saw something weird — degree jumped by
@@ -1578,7 +1529,7 @@ mod engine_tests {
         let _torn = torn_observations.load(Ordering::Relaxed);
     }
 
-    /// QA-SENTINEL: race two writers on the SAME novel child. Verifies
+    /// Race two writers on the SAME novel child. Verifies
     /// that even when winners and losers alternate at scale, each
     /// novel synth contributes exactly two bumps (one per parent) to
     /// the parent_degree sum. Uses parent pairs that are NOT already

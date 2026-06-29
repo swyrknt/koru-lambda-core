@@ -18,19 +18,12 @@
 //!
 //! # Not the only legal pattern
 //!
-//! The four axioms constrain what `synthesize` does, not how consumers
-//! structure their use of it. Consumers with different shapes
-//! (multi-perspective agents, non-root-anchored consumers, perspective-
-//! less event recorders) can use the substrate directly and still get
-//! its correctness guarantees. The LCA pattern is the **reference**
-//! consumption pattern because:
-//!
-//! - It's how every consumer we've built (ALIS, koru-protocol, the
-//!   reference subsystems) uses the substrate.
-//! - It cleanly captures "time is what consumers do" — the substrate
-//!   stays timeless, the LCA carries the causal chain.
-//! - The trait makes the pattern composable, so multi-consumer systems
-//!   can interoperate without re-inventing perspective discipline.
+//! The axioms constrain `synthesize`, not consumer shape —
+//! multi-perspective and non-root-anchored consumers can use the
+//! substrate directly. LCA is the **reference** because every consumer
+//! we've shipped (ALIS, koru-protocol, the reference subsystems) uses
+//! it, and it captures "time is what consumers do" as a composable
+//! trait.
 
 use crate::primitives::Canonicalizable;
 use crate::{Distinction, DistinctionEngine};
@@ -52,14 +45,12 @@ pub trait LocalCausalAgent {
     /// two registers on x86-64/ARM64).
     fn get_current_root(&self) -> Distinction;
 
-    /// Process an action: lift it via [`Canonicalizable`], synthesize
-    /// it with the current local root, advance the local root forward
-    /// to the new distinction, and return that distinction.
-    ///
-    /// Implementations should call [`synthesize_causal_action`] and
-    /// [`update_local_root`](LocalCausalAgent::update_local_root) to
-    /// satisfy the LCA contract. The default `synthesize_action`
-    /// implementation does exactly that.
+    /// Lift `action` via [`Canonicalizable`], synthesize with the
+    /// current local root, advance the root forward, and return the
+    /// new distinction. The default impl does exactly this via
+    /// [`synthesize_causal_action`] +
+    /// [`update_local_root`](LocalCausalAgent::update_local_root);
+    /// override only for finer control.
     #[must_use]
     fn synthesize_action(
         &mut self,
@@ -71,12 +62,10 @@ pub trait LocalCausalAgent {
         new_root
     }
 
-    /// Advance the local root forward to `new_root`. Conventionally,
-    /// `new_root` is a distinction produced by `synthesize` against the
-    /// current root + action data — i.e., the current root is one of
-    /// `new_root`'s parents. Consumers using the LCA pattern monotonically
-    /// (the recommended discipline) only ever pass forward-going
-    /// distinctions; the trait itself can't enforce that.
+    /// Advance the local root forward to `new_root`. Convention (not
+    /// trait-enforced): `new_root` is a distinction whose parents
+    /// include the current root — i.e., the LCA stays monotonically
+    /// forward in the synthesis graph.
     fn update_local_root(&mut self, new_root: Distinction);
 }
 

@@ -99,8 +99,6 @@ pub trait Canonicalizable {
 /// identity into the acc earlier. 512 vs typical-leaf degree 2 = 256×
 /// dominance ratio, which is the structural origin of d₀/d₁ as
 /// topological mega-hubs (Law 11, Fold Law).
-///
-/// Empty struct — namespace only.
 pub struct ByteMapping;
 
 impl ByteMapping {
