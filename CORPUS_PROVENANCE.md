@@ -7,12 +7,9 @@ cannot distinguish a legitimate, gate-amendment-approved regeneration
 from a silent corpus replacement. This file is the trail that survives
 either case.
 
-Per Round 2 of the Step 1 pre-merge review (qa-sentinel Y2,
-theory-guardian conceded, rust-craftsman agreed): the SHA-256 + rand
-workspace pin together close the "two contributors silently bump
-incompatible things" hazard. This file closes the "one contributor
-coordinated-bumps both" hazard by requiring the regeneration to leave a
-visible audit trail.
+This file closes the "one contributor coordinated-bumps SHA-256 + `rand`
+together" hazard by requiring regeneration to leave a visible audit
+trail. (Step 1 pre-merge Round 2; see commit log.)
 
 ## Authoritative pin (current)
 
@@ -47,23 +44,17 @@ binary (above target vs below); ρ here is provenance.
 
 ## Regeneration policy
 
-The corpus and the digests above are **not** to be regenerated as part
-of routine development. Regeneration is a deliberate process requiring:
+The corpus is **not** to be regenerated as part of routine development.
+Regeneration requires ALL of:
 
-1. **A written rationale** explaining why the corpus must change. Valid
-   reasons include: substrate semantics change that affects degree
-   participation, gate-tier change with engineering justification, or
-   reproducibility-bug fix in the generator. Invalid reasons include:
-   "the test failed and I want it to pass" or "I bumped `rand` for an
-   unrelated feature."
-2. **A `BUDGET_LOG.md` amendment row** if the ρ gate target or floor
-   changes as a result.
-3. **Sign-offs** from theory-guardian (on the workload's continued
-   theoretical interpretation) and qa-sentinel (on the regeneration
-   process's integrity).
-4. **An update to THIS file** with the new generator commit, the new
-   digests, the new measured ρ, and a one-paragraph note in the
-   "History" section below explaining the change.
+1. **Written rationale** — substrate-semantics change, gate-tier change
+   with measurement, or generator-bug fix. NOT: "test failed and I want
+   it to pass" or unrelated `rand` bumps.
+2. **`BUDGET_LOG.md` amendment row** if the ρ gate target or floor changes.
+3. **Sign-offs**: theory-guardian (workload interpretation) + qa-sentinel
+   (process integrity).
+4. **Update this file**: new generator commit, new digests, new ρ,
+   History row.
 
 CI verifies the SHA-256 gates on every push. A digest mismatch fails
 the build BEFORE running ρ — the contributor's first signal is "your

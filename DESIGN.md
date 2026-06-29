@@ -17,18 +17,11 @@ v2.0 attempt on `research/warroom-experiments` becomes an exploration archive
 
 ## Revision log
 
-This document was revised after four rounds of warroom team scrutiny:
+This document was revised after four rounds of warroom team scrutiny.
 
-**Round 1** (5 agents): caught a critical race in `synthesize`, a bug in the
-`degree()` formula, an unrealistic memory budget, an IdentityHasher
-simplification, LOC underestimates, missing test categories, and the call to
-type `previous_root` as `Distinction` not `String`.
-
-**Round 2** (theory-guardian + engine-architect on the log question): both
-agents independently rejected the "rename log → observation channel" reframe
-as incoherent. Resolution: drop the engine log entirely. Persistence and
-chronological recording become consumer-side concerns implemented atop
-`parents_of`.
+**Rounds 1-2** settled the synthesize hot-path race fix and dropped the
+engine log entirely (persistence is a consumer concern atop `parents_of`).
+See git history for the resolved bugs.
 
 **Round 3** (4 agents verifying the revised doc): caught a write-order bug
 in the round-1 race fix (writes happened after `all_distinctions` became
@@ -46,31 +39,20 @@ ReplayError>`; `#[must_use]` added crate-wide; `synthesize` `debug_assert`s
 parent existence; structural invariant restated; LRU cap derivation pinned
 arithmetically; `bytemuck::Pod + Zeroable` derives added.
 
-**Round 4** (theory-guardian + engine-architect + research-lead on a deeper
-question: is the `children_of` field actually theory-aligned, or were we
-calling a query convenience "structurally non-aligned" and shrugging?).
-theory-guardian reversed their round-2 sign-off: `parents_of` and
-`children_of` are dual projections of the symmetric parent-child relation
-that content addressing induces; neither is "primary." Research-lead
-grepped the entire codebase + probe suite and found that every consumer
-of children information (Coding Law, Fold Law, compactor, robustness)
-uses `degree(d)` — a *count*, not an enumeration. Engine-architect
-recommended replacing `children_of: DashMap<[u8;16], Vec<Distinction>>`
-with `degree_counts: DashMap<[u8;16], AtomicUsize, IdentityBuildHasher>`:
-strictly cheaper hot path (`AtomicUsize::fetch_add` vs `Vec::push` under
-shard write-lock, no realloc churn on d₀/d₁ mega-hubs), ~70 LOC saved,
-zero capability lost — and every engine field becomes a canonical O(1)
-projection of a theory-required operation. Resolution: drop `children_of`,
-add `degree_counts`. The engine now has three fully-canonical indexed
-structures; the "non-axiom index" footnote is removed. If a future
-consumer needs children iteration, `replay::build_children_index` (~10
-LOC helper) materializes the inverse from `parents_of` in O(N) once.
+**Round 4** (theory-guardian + engine-architect + research-lead on the
+`children_of` question). Resolution: drop `children_of`, add three
+derived-from-relationships projections — `all_distinctions` (saturation,
+Law 7), `parents_of` (binary parentage, Law 5), `degree_counts`
+(Coding Law / Fold Law, Law 11/12). No new fields beyond these three;
+each is the canonical O(1) projection of a theory-required operation,
+not a convenience cache. Consumers that need children iteration call
+`replay::build_children_index` (~10 LOC helper) to materialize the
+inverse from `parents_of` in O(N) once.
 
-The revisions strengthen theory alignment, fix demonstrated bugs in the
-proposed hot path, and bring the LOC and memory targets back to honest
-numbers. Net structural change vs round 3: the engine is now 100%
-theory-aligned at the structural level — every field is a canonical O(1)
-projection of a theory operation, with nothing left to footnote.
+(Step 1e subsequently merged the three side-by-side maps into one
+`nodes: DashMap<id, EngineNode { parents, degree }>`. The three
+projections survive as per-node fields; the theoretical claim is
+unchanged. See `BUDGET_LOG.md` row 1.)
 
 ---
 
@@ -162,14 +144,12 @@ list is the derived structure (see "What this collapses" below). The
 substrate enforces the four axioms; the graph IS the canonical
 history; time lives in LCAs.
 
-**Step 1e merge.** This document originally described three side-by-
-side `DashMap`s (`all_distinctions`, `parents_of`, `degree_counts`).
-Step 1e merged them into one map of `EngineNode` because identity-IS-
-process: each distinction is one node. The merge produced
-single-thread +20%, 8-thread +46% on M3 Pro, and resolved a B1
-deadlock risk by changing the lock-hold discipline in the synthesize
-hot path (the parent `fetch_add`s now run AFTER the entry shard
-write-lock releases). See `BUDGET_LOG.md` row 1 and commit `fd9c2b1`.
+**Step 1e merge.** The three side-by-side `DashMap`s in the round-3
+plan collapsed into one `EngineNode` map: identity-IS-process means
+each distinction is one node. +20% single-thread / +46% 8-thread on
+M3 Pro; closed deadlock risk B1 — the entry shard-lock is now
+released before parent `fetch_add`s run. See `BUDGET_LOG.md` row 1,
+commit `fd9c2b1`.
 
 **The three canonical O(1) projections live as per-node fields:**
 
@@ -1436,18 +1416,10 @@ structurally unreachable on M3 Pro under any axiom-preserving layout:
    consumer ecosystems. The serial-per-call floor is a load-bearing
    theory constraint, not a budget choice.
 
-The ratio target is therefore hardware-named: 3.4× on the primary
-asymmetric test rig (M3 Pro), 3.0× floor below which the substrate is
-not delivering. On **symmetric hardware** (8+ uniform cores, e.g.
-GitHub Ubuntu runners, server `c7i.2xlarge` or equivalent), the
-substrate is expected to clear ≥ 4× single-thread — this is a
-regression watch, not a gate, until a Gate 12 amendment specifies a
-formal per-platform target.
-
-Reproducibility: gate 12 is checked by `cargo bench --bench substrate`
-on commits at clean rebench state (5-minute thermal idle, no
-charging). Cite the criterion median of 100 iters as the measurement.
-See `BUDGET_LOG.md` for the amendment history.
+Symmetric hardware (≥ 8 uniform cores) is expected to clear ≥ 4× as
+a regression watch until a future amendment formalizes it. Reproduce:
+`cargo bench --bench substrate` at clean thermal idle (criterion median
+of 100 iters). See `BUDGET_LOG.md` for amendment history.
 
 **Secondary platform** (regression watch, not gate): Linux x86_64
 (GitHub-hosted Ubuntu runners are 4 vCPU; expect ~5–7 M ops/sec at 8 threads
@@ -1582,19 +1554,11 @@ single_thread_throughput        = 4_440_000    # 8.9× warroom (498K → 4.44M)
 ratio                           = 3.43         # warroom was 30.6× — see note
 ```
 
-The warroom single-thread number (500K) is anomalously low — almost
-certainly a methodology artifact (warroom benched single-thread with
-allocation-heavy `Vec::push` on `children_of`; Step 1's merged engine
-uses `AtomicUsize::fetch_add` with zero per-call allocation). The
-8-thread numbers match between warroom and Step 1, which is the
-load-bearing comparison.
-
-The warroom 30.6× ratio is therefore not a comparable target; it
-reflects warroom's slow single-thread denominator, not a substrate
-property reachable on this hardware. See `BUDGET_LOG.md` for the
-amendment that converted the ratio gate from "≥ 4× non-negotiable"
-to platform-named numbers (3.4× target / 3.0× floor on M3 Pro,
-≥ 4× watch-only on symmetric hardware).
+Note: the warroom 500K single-thread is an allocation artifact
+(`Vec::push` on `children_of`); the merged engine uses
+`AtomicUsize::fetch_add`. The 8-thread numbers match — that's the
+load-bearing comparison. The warroom 30.6× ratio is therefore not a
+comparable target; see `BUDGET_LOG.md` row 1 for the amendment.
 
 **For Step 1 amendment PRs:** cite measured value against the
 v2.0 absolute target + hard-cap floor (primary constraint), and against

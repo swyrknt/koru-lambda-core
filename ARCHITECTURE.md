@@ -101,15 +101,11 @@ pub struct DistinctionEngine {
 | Parent lookup | `nodes.get(id).parents` | Binary parentage (Law 5). Canonical child→parents projection used by replay, invariant checks, and parent walks. |
 | Degree query | `nodes.get(id).degree.load(Acquire)` + addend | Coding Law (Law 12) and Fold Law (Law 11) — both stated as degree properties. The theory's central observability claim. |
 
-Pre-Step-1e the engine carried three side-by-side `DashMap`s
-(`all_distinctions`, `parents_of`, `degree_counts`); Step 1e merged
-them into one map because identity-IS-process: each distinction is
-one node. The merge produced single-thread +20%, 8-thread +46% on
-M3 Pro and resolved a B1 deadlock risk by changing the lock-hold
-discipline in the synthesize hot path (see below). The `children_of`
-enumeration is *not* in the engine — `node.degree` carries the count
-the theory names, and consumers that need to iterate children call
-`replay::build_children_index` to materialize the dual O(N) once.
+Identity-IS-process: each distinction is one `EngineNode`. The
+`children_of` enumeration is *not* in the engine — `node.degree`
+carries the count the theory names; consumers that need to iterate
+children call `replay::build_children_index` (O(N) once, O(1)
+thereafter).
 
 `IdentityHasher` is the engine's internal `DashMap` hasher. SHA-256
 prefixes are uniformly distributed; the hasher returns the leading 8
@@ -165,25 +161,12 @@ The fast-path `nodes.contains_key(&new_bytes)` return is **saturation**
 (Law 7). Repeats short-circuit before any shard write-lock is taken —
 degree is never bumped for an already-existing synthesis.
 
-**Happens-before contract** (load-bearing — see `synthesize`'s
-docstring for the full statement):
-
-1. **New-child observation → parents:** synchronized by the entry
-   shard lock. A reader that observes `new_d` via `has()` /
-   `parents_of()` is guaranteed to see the new node's `parents` field.
-2. **Parent degree bumps — eventually consistent.** Parent
-   `fetch_add(1, Release)` runs AFTER the entry lock releases. A
-   racing reader observing the new child and immediately querying
-   `degree(parent)` may transiently see the pre-bump value. Post-join
-   state is consistent (the `Release`/`Acquire` pair on `degree`
-   ensures the bump becomes visible to subsequent loads) and the
-   per-parent sum invariant `sum_of_degrees == 2 * non_primordial_count`
-   holds at every quiescent point.
-
-LCAs drive synthesis sequentially within a single LCA, so the relaxed
-in-flight ordering is invisible to the documented consumer contract.
-Traversal probes should read `degree` at quiescent points (post-join
-barrier or consumer-driven epoch boundary), not mid-flight.
+**Happens-before contract.** Documented in full on `synthesize`'s
+rustdoc — two guarantees: (1) new-child observation synchronizes-with
+parents (entry shard lock); (2) parent `degree` bumps are eventually
+consistent (Release/Acquire pair; B1 mitigation drops the lock before
+the bumps). Consumers driving sequential LCAs never see the in-flight
+window; quiescent reads are always consistent.
 
 The `expect("…invariant")` panic messages encode the proof obligation
 in source — a contributor who breaks the pre-seed invariant gets a

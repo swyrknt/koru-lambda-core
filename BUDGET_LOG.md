@@ -21,9 +21,17 @@ Format: `date | gate | old target | new target | absolute delta | floor delta | 
 | **Absolute delta** | Target unchanged (12M). Floor raised: 8M → 10M (+25%). |
 | **Floor delta** | Ratio floor lowered: 4× → 3.0× (on M3 Pro only). Symmetric-hardware 4× expectation preserved as regression watch. |
 | **Author** | swyrknt (with Claude Opus 4.7 assistance) |
-| **Signers** | theory-guardian (conditional GREEN, round 2 pre-merge: requires Y1 loom mutant kernel landing pre-merge — see below), qa-sentinel (GREEN, round 3 + round 2 sharpening: Y1 deferred to Step 2 IF sign-off language reflects "conditional on Y1"; CORPUS_PROVENANCE.md required pre-merge), engine-architect (Round 1 unconditional GREEN withdrawn after panel pushback; Round 2 verdict: YELLOW with merge blockers Y1, rust-craftsman item 5, Y3; Linux 4× watch deferred to Step 4) |
 | **Branch** | `step/01-substrate` |
-| **Round 2 panel resolution** | Step 1 merge proceeds with the 8-item fix-up commits (CHECKLIST sync, lib.rs lint floor reconcile, recorder #[must_use] + HashSet shadow, engine.rs from_hex doc, rand workspace hoist, CORPUS_PROVENANCE.md, loom kernel 3 reframe + mutant variant). Once those land, Gate 12 amendment is fully ratified by all three signers. |
+
+**Signers** (engine-architect's R1 unconditional GREEN was withdrawn after panel pushback; R2 verdicts shown):
+
+| Signer | Verdict | Conditions |
+|---|---|---|
+| theory-guardian | GREEN (R2) | Y1 loom mutant kernel landing pre-merge |
+| qa-sentinel | GREEN (R3) | Y1 deferred to Step 2 with conditional sign-off language; `CORPUS_PROVENANCE.md` pre-merge |
+| engine-architect | YELLOW (R2) | Merge blockers Y1, rust-craftsman item 5, Y3; Linux 4× watch deferred to Step 4 |
+
+**Round 2 panel resolution.** Merge proceeds after the 8-item fix-up commits land (see CHECKLIST.md §Step 1e). Gate 12 amendment ratified by all three signers once those land.
 
 ### Measurement provenance
 
