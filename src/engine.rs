@@ -342,9 +342,9 @@ impl DistinctionEngine {
     /// 4. **Content addressing** — child identity IS the SHA-256 prefix
     ///    of the canonical parent-pair bytes.
     ///
-    /// Plus Law 7 (saturation) via the `all_distinctions.get(...)`
-    /// fast-path return BEFORE the entry-gated insert closure runs —
-    /// repeated syntheses bump nothing, allocate nothing.
+    /// Plus Law 7 (saturation) via the `nodes.contains_key(...)`
+    /// fast-path return BEFORE the entry-gated insert runs — repeated
+    /// syntheses bump nothing, allocate nothing.
     ///
     /// # Contract
     ///
@@ -353,8 +353,8 @@ impl DistinctionEngine {
     /// [`d1`](DistinctionEngine::d1), or a prior `synthesize` call on
     /// this engine, or returned by [`replay_topological`] driving this
     /// engine. The foreign-byte `debug_assert!` enforces this in debug
-    /// builds; in release builds, the entry closure's
-    /// `degree_counts.get(...).expect("(invariant)")` panics if a foreign
+    /// builds; in release builds, the post-entry
+    /// `nodes.get(&parent).expect("(invariant)")` panics if a foreign
     /// byte slips through. Either way: foreign-byte injection is closed.
     ///
     /// # Concurrency
@@ -910,9 +910,9 @@ mod engine_tests {
     #[test]
     fn synthesize_on_cold_engine_does_not_panic() {
         // Smoke test for qa-sentinel round-2 concern: the synthesize hot
-        // path's degree_counts.get(...).expect("(invariant)") on parents
-        // MUST succeed for d0/d1 on a fresh engine. If new() forgets to
-        // pre-seed primordial degree_counts entries, this panics.
+        // path's `nodes.get(&parent).expect("(invariant)")` MUST succeed
+        // for d0/d1 on a fresh engine. If new() forgets to pre-seed
+        // primordial node entries, this panics.
         //
         // Strengthened beyond just "doesn't panic": verify the child has
         // the expected shape and parent degrees update correctly.
@@ -937,9 +937,9 @@ mod engine_tests {
     fn novel_child_used_as_parent_no_expect_panic() {
         // Regression guard for the pre-seed contract: when a novel child
         // is later used as a parent in the next synthesis, the hot-path
-        // `degree_counts.get(&parent.0).expect("(invariant)")` MUST find
-        // the entry (pre-seeded by the closure that created the child).
-        // If the pre-seed line is ever moved/removed, this panics.
+        // `nodes.get(&parent.0).expect("(invariant)")` MUST find the
+        // entry (pre-seeded by the Vacant arm that created the child).
+        // If the pre-seed insertion is ever moved/removed, this panics.
         let e = DistinctionEngine::new();
         let c = e.synthesize(e.d0(), e.d1());
         let _ = e.synthesize(c, e.d0()); // c is the parent; pre-seed must hold
@@ -1167,7 +1167,7 @@ mod engine_tests {
     fn concurrent_synth_byte_equivalent_state() {
         // 8 threads independently synthesize the same logical chain.
         // The final state should be byte-identical to single-threaded
-        // execution. AND sum(degree_counts) == 2 * parents_of.len()
+        // execution. AND sum(node.degree) == 2 * non_primordial_count
         // (the round-2 unambiguous "expected participation count"
         // invariant).
         let e_concurrent = Arc::new(DistinctionEngine::new());

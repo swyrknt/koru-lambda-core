@@ -11,7 +11,7 @@
 > v2.0 is a clean rewrite from `dev` with:
 > - 4 axioms (not 5), 2 primordials, 1 operator — see [`THEORY.md`](THEORY.md)
 > - Byte-canonical `Distinction([u8; 16])` with content-addressed identity
-> - 3-field engine (`all_distinctions`, `parents_of`, `degree_counts`)
+> - Merged-map engine: one `nodes: DashMap<[u8;16], EngineNode { parents, degree }>` carrying the three canonical O(1) projections (saturation check, parent lookup, degree query) as per-node fields
 > - Tier-0 audit bugs (N5/N6/V5) designed structurally impossible
 > - Theory/budget/hygiene gate split with un-amendable axiom gates
 >

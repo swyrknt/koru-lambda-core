@@ -77,31 +77,39 @@ obtain a `Distinction` is via the engine itself (`synthesize`,
 is debug-asserted at the next `synthesize` to belong to the engine
 receiving it). Foreign-byte injection is closed structurally.
 
-`DistinctionEngine` carries three indexed maps, each a unique O(1)
-projection of a theory operation:
+`DistinctionEngine` carries one indexed `nodes` map. Each value is an
+`EngineNode` carrying both parents and degree per distinction. The
+three canonical O(1) projections (saturation check, parent lookup,
+degree query) live as per-node fields:
 
 ```rust
+struct EngineNode {
+    parents: Option<(Distinction, Distinction)>,  // None for primordials
+    degree:  AtomicUsize,                          // novel-synth participations
+}
+
 pub struct DistinctionEngine {
     d0: Distinction,
     d1: Distinction,
-    all_distinctions: DashMap<[u8;16], Distinction, IdentityBuildHasher>,
-    parents_of:       DashMap<[u8;16], (Distinction, Distinction), IdentityBuildHasher>,
-    degree_counts:    DashMap<[u8;16], AtomicUsize, IdentityBuildHasher>,
+    nodes: DashMap<[u8;16], EngineNode, IdentityBuildHasher>,
 }
 ```
 
-| Field | What it serves |
-|---|---|
-| `all_distinctions` | Saturation (Axiom-equivalent: repeats add nothing). O(1) existence check in the synthesize hot path. |
-| `parents_of` | Binary parentage (Law 5). The canonical child→parents projection used by replay, invariant checks, and parent walks. |
-| `degree_counts` | Coding Law (Law 12) and Fold Law (Law 11) — both stated as degree properties. The theory's central observability claim, tested at 5M+ scale. |
+| Projection | How it's served | What it serves |
+|---|---|---|
+| Saturation check | `nodes.contains_key(id)` | Axiom-equivalent: repeats add nothing. O(1) existence check in the synthesize hot path. |
+| Parent lookup | `nodes.get(id).parents` | Binary parentage (Law 5). Canonical child→parents projection used by replay, invariant checks, and parent walks. |
+| Degree query | `nodes.get(id).degree.load(Acquire)` + addend | Coding Law (Law 12) and Fold Law (Law 11) — both stated as degree properties. The theory's central observability claim. |
 
-Each field is needed at O(1). None is "convenience": dropping any one of
-them would either break a theory probe at scale or stall the synthesize
-hot path. The `children_of` enumeration is *not* in the engine —
-`degree_counts` carries the count the theory names, and consumers that
-need to iterate children call `replay::build_children_index` to
-materialize the dual O(N) once.
+Pre-Step-1e the engine carried three side-by-side `DashMap`s
+(`all_distinctions`, `parents_of`, `degree_counts`); Step 1e merged
+them into one map because identity-IS-process: each distinction is
+one node. The merge produced single-thread +20%, 8-thread +46% on
+M3 Pro and resolved a B1 deadlock risk by changing the lock-hold
+discipline in the synthesize hot path (see below). The `children_of`
+enumeration is *not* in the engine — `node.degree` carries the count
+the theory names, and consumers that need to iterate children call
+`replay::build_children_index` to materialize the dual O(N) once.
 
 `IdentityHasher` is the engine's internal `DashMap` hasher. SHA-256
 prefixes are uniformly distributed; the hasher returns the leading 8
@@ -109,47 +117,73 @@ bytes as a `u64` with no XOR, rotation, or diffusion. Misuse is caught
 by `debug_assert! + unreachable!()` on every method that isn't a 16-byte
 `write`.
 
-The synthesize hot path enforces all four axioms in under 40 LOC of body:
+The synthesize hot path enforces all four axioms inline (≈ 50 LOC of
+body, mostly happens-before contract bookkeeping):
 
 ```rust
 #[must_use]
 pub fn synthesize(&self, a: Distinction, b: Distinction) -> Distinction {
-    // foreign-byte guard (debug_assert)
+    // foreign-byte guard (debug_assert on nodes.contains_key)
     if a == b { return a; }                              // Axiom 3
     let (first, second) = if a.0 <= b.0 { (a, b) } else { (b, a) };  // Axiom 2
     let mut h = Sha256::new(); h.update(first.0); h.update(second.0);
     let mut new_bytes = [0u8; 16];
     new_bytes.copy_from_slice(&h.finalize()[..16]);     // Axioms 1, 4
-    if let Some(existing) = self.all_distinctions.get(&new_bytes) {
-        return *existing;                                // Saturation
+    if self.nodes.contains_key(&new_bytes) {
+        return Distinction(new_bytes);                   // Saturation
     }
     let new_d = Distinction(new_bytes);
-    self.all_distinctions.entry(new_bytes).or_insert_with(|| {
-        self.parents_of.insert(new_bytes, (first, second));
-        self.degree_counts.insert(new_bytes, AtomicUsize::new(0));
-        self.degree_counts.get(&first.0)
-            .expect("degree_counts pre-seeded at parent insertion (invariant)")
-            .fetch_add(1, Ordering::Release);
-        self.degree_counts.get(&second.0)
-            .expect("degree_counts pre-seeded at parent insertion (invariant)")
-            .fetch_add(1, Ordering::Release);
-        new_d
-    });
+    // Vacant/Occupied match captures whether THIS thread won the
+    // novel insert. The Entry's shard write-lock drops at end of
+    // block, BEFORE the parent fetch_adds — B1 deadlock mitigation
+    // for cases where a parent shares a shard with new_bytes.
+    let inserted_new = {
+        match self.nodes.entry(new_bytes) {
+            dashmap::Entry::Vacant(slot) => {
+                slot.insert(EngineNode {
+                    parents: Some((first, second)),
+                    degree: AtomicUsize::new(0),
+                });
+                true
+            }
+            dashmap::Entry::Occupied(_) => false,
+        }
+    };
+    if inserted_new {
+        self.nodes.get(&first.0)
+            .expect("first parent registered at its insertion (invariant)")
+            .degree.fetch_add(1, Ordering::Release);
+        self.nodes.get(&second.0)
+            .expect("second parent registered at its insertion (invariant)")
+            .degree.fetch_add(1, Ordering::Release);
+    }
     new_d
 }
 ```
 
-The fast-path `if let Some(existing) = self.all_distinctions.get(&new_bytes)`
-return is **saturation** (Law 7). Repeats short-circuit before the closure
-runs — degree is never bumped for an already-existing synthesis. The
-closure runs only on novel synthesis.
+The fast-path `nodes.contains_key(&new_bytes)` return is **saturation**
+(Law 7). Repeats short-circuit before any shard write-lock is taken —
+degree is never bumped for an already-existing synthesis.
 
-The `or_insert_with` closure runs under the `all_distinctions` shard
-write-lock for `new_bytes` and completes before that lock releases. Any
-reader that later observes `new_d` in `all_distinctions` has a
-happens-before edge to the populates inside the closure. Release/Acquire
-ordering on `degree_counts` makes the contract uniform for probes that
-read `degree_counts` directly without touching another DashMap first.
+**Happens-before contract** (load-bearing — see `synthesize`'s
+docstring for the full statement):
+
+1. **New-child observation → parents:** synchronized by the entry
+   shard lock. A reader that observes `new_d` via `has()` /
+   `parents_of()` is guaranteed to see the new node's `parents` field.
+2. **Parent degree bumps — eventually consistent.** Parent
+   `fetch_add(1, Release)` runs AFTER the entry lock releases. A
+   racing reader observing the new child and immediately querying
+   `degree(parent)` may transiently see the pre-bump value. Post-join
+   state is consistent (the `Release`/`Acquire` pair on `degree`
+   ensures the bump becomes visible to subsequent loads) and the
+   per-parent sum invariant `sum_of_degrees == 2 * non_primordial_count`
+   holds at every quiescent point.
+
+LCAs drive synthesis sequentially within a single LCA, so the relaxed
+in-flight ordering is invisible to the documented consumer contract.
+Traversal probes should read `degree` at quiescent points (post-join
+barrier or consumer-driven epoch boundary), not mid-flight.
 
 The `expect("…invariant")` panic messages encode the proof obligation
 in source — a contributor who breaks the pre-seed invariant gets a
@@ -159,18 +193,24 @@ breadcrumb to the right line instead of a bare `unwrapped None`.
 
 | Method | Purpose | Complexity |
 |---|---|---|
-| `new()` | Construct engine with d₀, d₁ pre-seeded in `all_distinctions` AND `degree_counts` | O(1) |
+| `new()` | Construct engine with d₀, d₁ pre-seeded as `EngineNode { parents: None, degree: 0 }` in `nodes` | O(1) |
 | `d0()`, `d1()` | Borrow primordials (by-value Copy) | O(1) |
 | `synthesize(a, b)` | The hot path — enforces all four axioms inline | O(1) amortized |
-| `parents_of(d)` | Lookup canonical `(min, max)` parent pair | O(1) |
-| `degree(d)` | Per-distinction degree with `Acquire` load + genesis addend (returns 0 for unregistered) | O(1) |
-| `distinction_count()`, `relationship_count()` | Engine size queries | O(1) |
+| `parents_of(d)` | Lookup canonical `(min, max)` parent pair via `nodes.get(d).parents` | O(1) |
+| `degree(d)` | Per-distinction degree via `nodes.get(d).degree.load(Acquire)` + genesis/parent-edges addend (returns 0 for unregistered) | O(1) |
+| `has(d)` | Test whether `d` is registered (`nodes.contains_key`) | O(1) |
+| `distinction_count()` | `nodes.len()` | O(1) |
+| `relationship_count()` | `(nodes.len() - 2) * 2 + 1` (primordials always present) | O(1) |
+| `snapshot_parentage()` | Materialize all non-primordial `(child, parent_pair)` tuples for replay | O(N) |
 | `snapshot_distinctions()` | Materialize all distinctions as a `Vec<Distinction>` for traversal probes (Coding Law, Fold Law dominance, diagnostic dumps) | O(N) snapshot, then iter is local |
-| `check_structural_invariant()` | Quiescent-mode assertion that `all_distinctions.len() == parents_of.len() + 2` (equivalent to `r = 2d − 3`); returns `Result<(), InvariantError>` | O(1) |
+| `check_structural_invariant()` | Quiescent-mode assertion that `nodes.len() == (count of nodes with parents) + 2` (equivalent to `r = 2d − 3`); returns `Result<(), InvariantError>` | O(N) (iterates nodes to count parented entries; not on the hot path) |
 
 `InvariantError` is a public `#[non_exhaustive]` error enum with one
 variant `BinaryParentageMismatch { all_distinctions, parents_of_plus_two }`
-carrying both counts for programmatic inspection and display.
+carrying both counts for programmatic inspection and display. The
+field names are preserved from the pre-merge three-map design for
+public-API stability; their semantic mapping in the merged-map layout
+is documented on the variant itself.
 
 ### `agent.rs` — the LCA trait
 

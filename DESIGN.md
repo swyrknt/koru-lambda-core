@@ -139,38 +139,52 @@ src/
 This is what the crate's name promises. Reference subsystems and bindings
 build on top.
 
-### Engine state — three canonical indexed structures
+### Engine state — one canonical indexed structure (merged in Step 1e)
 
 ```rust
+struct EngineNode {
+    parents: Option<(Distinction, Distinction)>,  // None for primordials
+    degree:  AtomicUsize,                          // novel-synth participations
+}
+
 pub struct DistinctionEngine {
     d0: Distinction,
     d1: Distinction,
-    all_distinctions: DashMap<[u8;16], Distinction, IdentityBuildHasher>,
-    parents_of:       DashMap<[u8;16], (Distinction, Distinction), IdentityBuildHasher>,
-    degree_counts:    DashMap<[u8;16], AtomicUsize, IdentityBuildHasher>,
+    nodes: DashMap<[u8;16], EngineNode, IdentityBuildHasher>,
 }
 ```
 
-Five fields total (two primordial constants + three DashMaps). **No log.**
-No observation channel. No order-bearing state. **No children enumeration**
-— degree is the load-bearing primitive; the children list is the derived
-structure (see "What this collapses" below). The substrate enforces the
-four axioms; the graph IS the canonical history; time lives in LCAs.
+Three fields total (two primordial constants + one DashMap whose value
+carries both parents and degree per distinction). **No log.** No
+observation channel. No order-bearing state. **No children
+enumeration** — degree is the load-bearing primitive; the children
+list is the derived structure (see "What this collapses" below). The
+substrate enforces the four axioms; the graph IS the canonical
+history; time lives in LCAs.
 
-**Every field is a canonical O(1) projection of a theory-required operation:**
+**Step 1e merge.** This document originally described three side-by-
+side `DashMap`s (`all_distinctions`, `parents_of`, `degree_counts`).
+Step 1e merged them into one map of `EngineNode` because identity-IS-
+process: each distinction is one node. The merge produced
+single-thread +20%, 8-thread +46% on M3 Pro, and resolved a B1
+deadlock risk by changing the lock-hold discipline in the synthesize
+hot path (the parent `fetch_add`s now run AFTER the entry shard
+write-lock releases). See `BUDGET_LOG.md` row 1 and commit `fd9c2b1`.
 
-| Field | Theory operation it serves | Why O(1) here |
+**The three canonical O(1) projections live as per-node fields:**
+
+| Projection | How it's served | Theory operation |
 |---|---|---|
-| `all_distinctions` | Saturation (axiom: repeats add nothing) | Synthesis hot path checks existence before insert |
-| `parents_of` | Binary parentage (structural law 5) — the child↔parent pair relation | Replay, invariant check, parent walks |
-| `degree_counts` | Coding Law (degree ↔ usage frequency, ρ ≈ 0.99) and Fold Law (d₀/d₁ as mega-hubs) — both stated as degree properties in the theory | The theory's own central observability claim; tested at 5M+ scale |
+| Saturation check | `nodes.contains_key(id)` | Axiom: repeats add nothing. Hot path checks existence before entry-gated insert. |
+| Parent lookup | `nodes.get(id).parents` | Binary parentage (Law 5). Replay, invariant check, parent walks. |
+| Degree query | `nodes.get(id).degree.load(Acquire)` + addend | Coding Law (degree ↔ usage frequency, ρ ≈ 0.99) and Fold Law (d₀/d₁ as mega-hubs). The theory's central observability claim; tested at 5M+ scale. |
 
 Every other graph property derives from these three:
 
 | Property | Derived from | Complexity |
 |---|---|---|
-| `degree(d)` | `engine.degree(d)` — hides the formula behind the API. Computed as `degree_counts.get(&d.0).map_or(0, |c| c.load(Ordering::Acquire)) + genesis_addend(d)` where `genesis_addend(d) = 1` for d₀ or d₁ (the genesis d₀↔d₁ edge, the only edge in the graph not derivable from `parents_of`) and `2` otherwise (the two parent edges every non-primordial distinction has, recorded in `parents_of[d]` not in `degree_counts[d]`) | O(1) |
-| `parents_of(d)` | direct lookup | O(1) |
+| `degree(d)` | `engine.degree(d)` — hides the formula behind the API. Computed as `nodes.get(&d.0).map_or(0, |n| n.degree.load(Ordering::Acquire)) + genesis_addend(d)` where `genesis_addend(d) = 1` for d₀ or d₁ (the genesis d₀↔d₁ edge, the only edge in the graph not derivable from `parents`) and `2` otherwise (the two parent edges every non-primordial distinction has, recorded in `node.parents` not in `node.degree`) | O(1) |
+| `parents_of(d)` | `nodes.get(&d.0).and_then(|n| n.parents)` | O(1) |
 | `children_of(d)` (helper, not engine field) | `replay::build_children_index(snapshot_parentage(engine))[d]` | O(N) once, O(1) thereafter |
 | `relationship_count()` | `parents_of.len() * 2 + 1` (each child contributes 2 edges, plus genesis d0↔d1) | O(1) |
 | `distinction_count()` | `all_distinctions.len()` | O(1) |

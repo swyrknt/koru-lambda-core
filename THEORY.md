@@ -79,10 +79,10 @@ genesis state (d=2, r=1: only the d₀↔d₁ edge).
 
 **Implementation note:** the d₀↔d₁ genesis edge is a *theory-level*
 relationship. Implementations may carry it implicitly (the `+ 2` term in
-the invariant check `all_distinctions.len() == parents_of.len() + 2`) or
-materialize it explicitly. Either choice satisfies Law 6; neither
-violates Law 5 (binary parentage) because the primordials by definition
-have no parents.
+the invariant check — in v2.0's merged-map layout, `nodes.len() == (count
+of nodes with parents) + 2`) or materialize it explicitly. Either choice
+satisfies Law 6; neither violates Law 5 (binary parentage) because the
+primordials by definition have no parents.
 
 ### Law 7 — Saturation
 Repeating the same synthesis adds nothing. `synthesize(a, b)` called
@@ -139,8 +139,9 @@ chain produces a *finite* chain of distinct distinctions, one per
 recursion depth, terminated by whatever stopping condition the consumer
 chooses. The substrate doesn't enforce termination — that's the
 consumer's job — but it doesn't enable runaway recursion either.
-Every distinction synthesized goes into `parents_of` and `degree_counts`;
-no hidden stack growth.
+Every distinction synthesized goes into the engine's `nodes` map
+(with its `parents` and `degree` fields populated); no hidden stack
+growth.
 
 **Bounded by ID space, not by depth.** Distinctions are 16 bytes (128
 bits of identity), so the substrate carries at most 2^128 distinct
@@ -173,10 +174,12 @@ law has two parts that should not be conflated:
 
 **Structural part (universal, by construction):** `degree(d) = count of
 novel synthesis participations` plus the genesis addend. This is
-*definitional* — it's what `degree_counts.fetch_add(1, Release)` does
-inside the entry-gated `synthesize` closure. It holds under any workload,
-including adversarial ones, because it's how the engine is built. There
-is no workload where this fails without the engine being broken.
+*definitional* — it's what `node.degree.fetch_add(1, Release)` does
+after the entry-gated `synthesize` insert wins (in v2.0's merged-map
+layout; pre-Step-1e the field was a separate `degree_counts` map). It
+holds under any workload, including adversarial ones, because it's how
+the engine is built. There is no workload where this fails without the
+engine being broken.
 
 **Empirical part (workload-conditional):** the Spearman rank correlation
 between `degree(d)` and `frequency_of_use(d)` — where frequency counts

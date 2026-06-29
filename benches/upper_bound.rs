@@ -1,14 +1,25 @@
 //! Upper-bound mock — does the merged-map design actually hit 4× ratio?
 //!
-//! Compares two engine designs side-by-side under identical workload:
+//! **Historical artifact (Step 1e).** Preserved as the verification
+//! evidence cited by `BUDGET_LOG.md` row 1 (Gate 12 amendment). At the
+//! time of this bench, production used the three-map layout
+//! (`all_distinctions`, `parents_of`, `degree_counts`). This file
+//! compared that layout to the proposed single-map design. Result:
+//! 3-map ceiling 2.85× ratio, merged 1-map ceiling 3.59× — proving
+//! 4× was unreachable on M3 Pro before the refactor landed in
+//! `src/engine.rs` (commit `fd9c2b1`).
 //!
-//! - **CurrentEngine** — mirrors the production three-map layout (
-//!   `all_distinctions`, `parents_of`, `degree_counts`). Hot path:
-//!   one `or_insert_with` closure that does 3 inserts + 2 fetch_adds.
-//! - **MergedEngine** — proposed single-map layout (`nodes`
-//!   containing both parents and degree). Hot path: one `or_insert_with`
-//!   for the new child + 2 `get().fetch_add()` for parents (with the
-//!   write-lock released between entry and gets, fixing B1 deadlock).
+//! Side-by-side mock under identical workload:
+//!
+//! - **CurrentEngine** — mirrors the PRE-Step-1e production three-map
+//!   layout (`all_distinctions`, `parents_of`, `degree_counts`). Hot
+//!   path: one `or_insert_with` closure that does 3 inserts + 2
+//!   fetch_adds under a single shard write-lock.
+//! - **MergedEngine** — the layout that subsequently shipped (one
+//!   `nodes` map of `<id, EngineNode { parents, degree }>`). Hot
+//!   path: one `or_insert_with` for the new child + 2
+//!   `get().fetch_add()` for parents, with the write-lock released
+//!   between entry and gets (B1 deadlock mitigation).
 //!
 //! Both use identical SHA-256, identical canonical (min, max) ordering,
 //! identical IdentityHasher, identical chain workload (8 independent
@@ -16,8 +27,10 @@
 //!
 //! Run: `cargo bench --bench upper_bound`
 //!
-//! This is a verification mock for the proposed Step 1 substrate
-//! refactor; it does not affect `src/engine.rs`.
+//! Keep this file even after Step 1e — it is the cited evidence for
+//! the Gate 12 amendment in `BUDGET_LOG.md`. Removing it without a
+//! replacement provenance citation would invalidate the amendment per
+//! `DESIGN.md` Part 10.5 rule 1.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
 use dashmap::DashMap;
