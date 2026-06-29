@@ -2,6 +2,14 @@
 members = [".", "experiments/runner"]
 resolver = "2"
 
+# Workspace-shared dependencies — see CORPUS_PROVENANCE.md for the
+# rationale on pinning `rand` to "=0.8.5". Hoisting here closes the
+# silent-drift hazard where the root crate and experiments/runner could
+# carry different `rand` pins (Round 2 team review, rust-craftsman item
+# 5 + qa-sentinel Y2).
+[workspace.dependencies]
+rand = "=0.8.5"
+
 [package]
 name = "koru-lambda-core"
 version = "1.2.0"
@@ -60,7 +68,7 @@ harness = false
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.0"
-rand = "=0.8.5"          # exact-version pin for exp18 corpus reproducibility
+rand = { workspace = true } # see [workspace.dependencies] for the pin rationale
 static_assertions = "1"
 loom = "0.7"
 dhat = "0.3"

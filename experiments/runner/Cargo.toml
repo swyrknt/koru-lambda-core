@@ -15,9 +15,10 @@ path = "src/bin/gen_exp18_corpus.rs"
 
 [dependencies]
 koru-lambda-core = { path = "../.." }
-# `rand = "=0.8.5"` matches the main crate's dev-dep pin so the corpus
-# generator is reproducible across `cargo update`. Per DESIGN.md gate
-# language: corpus files are SHA-256-gated; rand version pinning closes
-# the "minor version changed Zipf draw sequence" risk.
-rand = "=0.8.5"
+# `rand` is pinned at the workspace level (see root Cargo.toml's
+# [workspace.dependencies]) so the root crate and this runner cannot
+# carry different versions. Per DESIGN.md gate language: corpus files
+# are SHA-256-gated; the workspace pin + CORPUS_PROVENANCE.md close
+# the "minor version changed Zipf draw sequence" risk together.
+rand = { workspace = true }
 sha2 = "0.10"
