@@ -84,29 +84,36 @@ impl TransactionAction {
     }
 }
 
-impl Canonicalizable for TransactionAction {
-    fn to_canonical_structure(self, engine: &DistinctionEngine) -> Distinction {
-        canonicalize_action(&self, engine)
+impl TransactionAction {
+    /// Fold this transaction into a distinction by reference.
+    ///
+    /// Reference-taking counterpart to the [`Canonicalizable`] trait's
+    /// `to_canonical_structure` (which consumes). Used by
+    /// [`ConsensusValidator::validate_batch`]'s commit loop and by
+    /// [`commitment::BatchCommitment::compute`](super::commitment)
+    /// to fold each transaction without cloning.
+    ///
+    /// Folds nonce (8 bytes LE) then data bytes into a distinction.
+    /// Every intermediate registers in `engine` via `ByteMapping`.
+    pub(crate) fn canonicalize(&self, engine: &DistinctionEngine) -> Distinction {
+        let bytes = self.nonce.to_le_bytes();
+        let mut acc = ByteMapping::map_byte_to_distinction(bytes[0], engine);
+        for &b in &bytes[1..] {
+            let d = ByteMapping::map_byte_to_distinction(b, engine);
+            acc = engine.synthesize(acc, d);
+        }
+        for &b in &self.data {
+            let d = ByteMapping::map_byte_to_distinction(b, engine);
+            acc = engine.synthesize(acc, d);
+        }
+        acc
     }
 }
 
-/// Shared canonicalization body — usable by both the `Canonicalizable`
-/// impl (consumes) and the batch commit loop (by reference).
-///
-/// Folds nonce (8 bytes LE) then data bytes into a distinction. Every
-/// intermediate registers in `engine` via `ByteMapping`.
-fn canonicalize_action(action: &TransactionAction, engine: &DistinctionEngine) -> Distinction {
-    let bytes = action.nonce.to_le_bytes();
-    let mut acc = ByteMapping::map_byte_to_distinction(bytes[0], engine);
-    for &b in &bytes[1..] {
-        let d = ByteMapping::map_byte_to_distinction(b, engine);
-        acc = engine.synthesize(acc, d);
+impl Canonicalizable for TransactionAction {
+    fn to_canonical_structure(self, engine: &DistinctionEngine) -> Distinction {
+        self.canonicalize(engine)
     }
-    for &b in &action.data {
-        let d = ByteMapping::map_byte_to_distinction(b, engine);
-        acc = engine.synthesize(acc, d);
-    }
-    acc
 }
 
 /// Raw wire form for [`TransactionAction`] serde. Used via
@@ -319,7 +326,7 @@ impl ConsensusValidator {
 
         let mut current = self.local_root;
         for tx in &batch.transactions {
-            let tx_d = canonicalize_action(tx, engine);
+            let tx_d = tx.canonicalize(engine);
             current = engine.synthesize(current, tx_d);
         }
 
