@@ -32,6 +32,7 @@ pub mod engine;
 pub mod primitives;
 pub mod recorder;
 pub mod replay;
+pub mod subsystems;
 
 pub use agent::{synthesize_causal_action, LocalCausalAgent};
 pub use distinction_hex::ParseError;
