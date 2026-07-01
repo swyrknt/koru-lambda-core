@@ -25,7 +25,7 @@
 //! - **V8 (empty-data by design)** — `TransactionAction::data` must be
 //!   non-empty. Enforced in pre-validation AND at deserialize-time.
 
-use crate::primitives::Canonicalizable;
+use crate::primitives::{ByteMapping, Canonicalizable};
 use crate::{Distinction, DistinctionEngine, LocalCausalAgent};
 use std::sync::Arc;
 
@@ -52,8 +52,8 @@ pub const MAX_TRANSACTIONS_PER_BATCH: usize = 1024;
 ///
 /// `nonce` establishes causal ordering; `data` is arbitrary bytes that
 /// get folded into a `Distinction` via [`Canonicalizable`].
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-#[serde(into = "TransactionActionRaw")]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(into = "TransactionActionRaw", try_from = "TransactionActionRaw")]
 pub struct TransactionAction {
     /// Sequential nonce.
     pub nonce: u64,
@@ -68,13 +68,14 @@ impl TransactionAction {
     ///
     /// Returns [`ValidatorError::EmptyData`] if `data` is empty (V8) or
     /// [`ValidatorError::DataTooLarge`] if `data.len() > MAX_DATA_LEN` (V3).
+    /// In both cases `at_tx` is `None` — no batch context.
     pub fn new(nonce: u64, data: Vec<u8>) -> Result<Self, ValidatorError> {
         if data.is_empty() {
-            return Err(ValidatorError::EmptyData { tx_index: 0 });
+            return Err(ValidatorError::EmptyData { at_tx: None });
         }
         if data.len() > MAX_DATA_LEN {
             return Err(ValidatorError::DataTooLarge {
-                tx_index: 0,
+                at_tx: None,
                 got: data.len(),
                 cap: MAX_DATA_LEN,
             });
@@ -96,13 +97,13 @@ impl Canonicalizable for TransactionAction {
 /// intermediate registers in `engine` via `ByteMapping`.
 fn canonicalize_action(action: &TransactionAction, engine: &DistinctionEngine) -> Distinction {
     let bytes = action.nonce.to_le_bytes();
-    let mut acc = crate::primitives::ByteMapping::map_byte_to_distinction(bytes[0], engine);
+    let mut acc = ByteMapping::map_byte_to_distinction(bytes[0], engine);
     for &b in &bytes[1..] {
-        let d = crate::primitives::ByteMapping::map_byte_to_distinction(b, engine);
+        let d = ByteMapping::map_byte_to_distinction(b, engine);
         acc = engine.synthesize(acc, d);
     }
     for &b in &action.data {
-        let d = crate::primitives::ByteMapping::map_byte_to_distinction(b, engine);
+        let d = ByteMapping::map_byte_to_distinction(b, engine);
         acc = engine.synthesize(acc, d);
     }
     acc
@@ -128,13 +129,6 @@ impl TryFrom<TransactionActionRaw> for TransactionAction {
 
     fn try_from(raw: TransactionActionRaw) -> Result<Self, Self::Error> {
         Self::new(raw.nonce, raw.data)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for TransactionAction {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let raw = TransactionActionRaw::deserialize(d)?;
-        Self::try_from(raw).map_err(serde::de::Error::custom)
     }
 }
 
@@ -165,7 +159,7 @@ pub struct TransactionBatch {
 pub enum ValidatorError {
     /// Batch's `previous_root` doesn't match the validator's current
     /// local root.
-    #[error("root mismatch: expected {expected:?}, got {got:?}")]
+    #[error("root mismatch: expected {expected}, got {got}")]
     RootMismatch {
         /// Validator's current local root.
         expected: Distinction,
@@ -194,21 +188,35 @@ pub enum ValidatorError {
         got: u64,
     },
     /// A transaction's `data` exceeds [`MAX_DATA_LEN`] (V3).
-    #[error("tx {tx_index} data too large: {got} bytes (cap {cap})")]
+    #[error("data too large: {got} bytes (cap {cap}){}", at_tx_suffix(*at_tx))]
     DataTooLarge {
-        /// Position of the offending transaction.
-        tx_index: usize,
+        /// Position of the offending transaction within a batch, or
+        /// `None` if raised by [`TransactionAction::new`] outside a
+        /// batch context.
+        at_tx: Option<usize>,
         /// Actual length.
         got: usize,
         /// The cap.
         cap: usize,
     },
     /// A transaction has empty `data` (V8: empty-data by design).
-    #[error("tx {tx_index}: empty data (empty-data disallowed by design)")]
+    #[error("empty data (empty-data disallowed by design){}", at_tx_suffix(*at_tx))]
     EmptyData {
-        /// Position of the offending transaction.
-        tx_index: usize,
+        /// Position of the offending transaction within a batch, or
+        /// `None` if raised by [`TransactionAction::new`] outside a
+        /// batch context.
+        at_tx: Option<usize>,
     },
+}
+
+/// Formatting helper for the `at_tx` suffix on data errors.
+///
+/// `Some(i)` → " at tx {i}"; `None` → "" (raised outside batch context).
+fn at_tx_suffix(at: Option<usize>) -> String {
+    match at {
+        Some(i) => format!(" at tx {i}"),
+        None => String::new(),
+    }
 }
 
 // --- Validator ---------------------------------------------------------
@@ -246,7 +254,7 @@ impl ConsensusValidator {
     /// A single non-fallible method sets both fields together. Partial
     /// restoration (updating one field but not the other) is
     /// structurally impossible.
-    pub const fn restore_state(&mut self, root: Distinction, nonce: u64) {
+    pub fn restore_state(&mut self, root: Distinction, nonce: u64) {
         self.local_root = root;
         self.expected_nonce = nonce;
     }
@@ -295,11 +303,11 @@ impl ConsensusValidator {
                 return Err(ValidatorError::NonceMismatch { tx_index: i, expected, got: tx.nonce });
             }
             if tx.data.is_empty() {
-                return Err(ValidatorError::EmptyData { tx_index: i });
+                return Err(ValidatorError::EmptyData { at_tx: Some(i) });
             }
             if tx.data.len() > MAX_DATA_LEN {
                 return Err(ValidatorError::DataTooLarge {
-                    tx_index: i,
+                    at_tx: Some(i),
                     got: tx.data.len(),
                     cap: MAX_DATA_LEN,
                 });
@@ -418,13 +426,29 @@ mod tests {
             ValidatorError::EmptyBatch,
             ValidatorError::BatchTooLarge { got: usize::MAX, cap: MAX_TRANSACTIONS_PER_BATCH },
             ValidatorError::NonceMismatch { tx_index: 0, expected: u64::MAX, got: 0 },
-            ValidatorError::DataTooLarge { tx_index: 0, got: usize::MAX, cap: MAX_DATA_LEN },
-            ValidatorError::EmptyData { tx_index: 0 },
+            ValidatorError::DataTooLarge { at_tx: Some(0), got: usize::MAX, cap: MAX_DATA_LEN },
+            ValidatorError::DataTooLarge { at_tx: None, got: usize::MAX, cap: MAX_DATA_LEN },
+            ValidatorError::EmptyData { at_tx: Some(0) },
+            ValidatorError::EmptyData { at_tx: None },
         ];
         for e in &variants {
-            // 512 chars is generous; real messages are ~50-150 chars.
-            assert!(e.to_string().len() < 512, "error msg unbounded: {e}");
+            // 256 chars is comfortable; real messages are ~40-100 chars.
+            assert!(e.to_string().len() < 256, "error msg unbounded: {e}");
         }
+    }
+
+    #[test]
+    fn v3_batch_cardinality_cap_rejects_oversized_batch() {
+        // Complements v3_data_cap_rejects_oversized_tx — that one covers
+        // per-tx data size; this covers batch count.
+        let (engine, mut v) = fresh();
+        let mut txs = Vec::with_capacity(MAX_TRANSACTIONS_PER_BATCH + 1);
+        for i in 0..=MAX_TRANSACTIONS_PER_BATCH as u64 {
+            txs.push(tx(i, b"x"));
+        }
+        let batch = TransactionBatch { previous_root: v.state_root_id(), transactions: txs };
+        let err = v.validate_batch(&engine, &batch).expect_err("oversized batch must reject");
+        assert!(matches!(err, ValidatorError::BatchTooLarge { .. }));
     }
 
     // ----- V5 regression: atomic failure ---------------------------------
@@ -539,5 +563,25 @@ mod tests {
         let err =
             serde_json::from_str::<TransactionAction>(&raw).expect_err("oversized must reject");
         assert!(err.to_string().contains("data too large"));
+    }
+
+    #[test]
+    fn action_serde_roundtrip() {
+        let original = tx(42, b"round-trip payload");
+        let json = serde_json::to_string(&original).expect("serialize");
+        let recovered: TransactionAction = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original, recovered);
+    }
+
+    #[test]
+    fn batch_serde_roundtrip() {
+        let (_engine, v) = fresh();
+        let original = TransactionBatch {
+            previous_root: v.state_root_id(),
+            transactions: vec![tx(0, b"a"), tx(1, b"b"), tx(2, b"c")],
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let recovered: TransactionBatch = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original, recovered);
     }
 }
