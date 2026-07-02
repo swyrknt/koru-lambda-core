@@ -55,7 +55,15 @@ pub const COMMITMENT_CACHE_CAP: usize = 1000;
 /// `leader_id`, and `batch_size` together via SHA-256. Any tamper —
 /// including tampering with `leader_id` alone — changes the hash.
 /// [`Self::verify_batch`] recomputes and compares.
+///
+/// # Untrusted-input hardening
+///
+/// Serde uses `try_from = "BatchCommitmentRaw"` so deserialization
+/// enforces the same [`MAX_LEADER_ID_LEN`] and non-empty invariants
+/// that [`Self::compute`] enforces. An untrusted peer cannot send
+/// a commitment with an oversized leader_id that survives parsing.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(into = "BatchCommitmentRaw", try_from = "BatchCommitmentRaw")]
 pub struct BatchCommitment {
     /// SHA-256 digest of the commitment inputs.
     pub commitment_hash: [u8; 32],
@@ -64,11 +72,66 @@ pub struct BatchCommitment {
     /// Epoch in which the batch was proposed.
     pub epoch: u64,
     /// Leader that proposed the batch. Length-prefixed into the hash
-    /// (N6). Bounded by [`MAX_LEADER_ID_LEN`].
+    /// (N6). Bounded by [`MAX_LEADER_ID_LEN`], enforced at ctor AND
+    /// deserialize-time.
     pub leader_id: String,
     /// Number of transactions in the batch (redundant with `batch` on
     /// the wire but hashed for defence-in-depth).
     pub batch_size: usize,
+}
+
+/// Raw wire form for [`BatchCommitment`] serde. Used via
+/// `#[serde(try_from = ...)]` so leader_id invariants are enforced at
+/// parse time — an untrusted `Deserialize` cannot bypass validation.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BatchCommitmentRaw {
+    commitment_hash: [u8; 32],
+    nonce: u64,
+    epoch: u64,
+    leader_id: String,
+    batch_size: usize,
+}
+
+impl From<BatchCommitment> for BatchCommitmentRaw {
+    fn from(c: BatchCommitment) -> Self {
+        Self {
+            commitment_hash: c.commitment_hash,
+            nonce: c.nonce,
+            epoch: c.epoch,
+            leader_id: c.leader_id,
+            batch_size: c.batch_size,
+        }
+    }
+}
+
+impl TryFrom<BatchCommitmentRaw> for BatchCommitment {
+    type Error = CommitmentError;
+
+    fn try_from(raw: BatchCommitmentRaw) -> Result<Self, Self::Error> {
+        validate_leader_id(&raw.leader_id)?;
+        Ok(Self {
+            commitment_hash: raw.commitment_hash,
+            nonce: raw.nonce,
+            epoch: raw.epoch,
+            leader_id: raw.leader_id,
+            batch_size: raw.batch_size,
+        })
+    }
+}
+
+/// Shared leader_id validation used by both [`BatchCommitment::compute`]
+/// and the serde `TryFrom<BatchCommitmentRaw>` path.
+const fn validate_leader_id(leader_id: &str) -> Result<(), CommitmentError> {
+    if leader_id.is_empty() {
+        return Err(CommitmentError::EmptyLeaderId);
+    }
+    if leader_id.len() > MAX_LEADER_ID_LEN {
+        return Err(CommitmentError::LeaderIdTooLong {
+            got: leader_id.len(),
+            cap: MAX_LEADER_ID_LEN,
+        });
+    }
+    Ok(())
 }
 
 impl BatchCommitment {
@@ -103,15 +166,7 @@ impl BatchCommitment {
         leader_id: String,
         engine: &Arc<DistinctionEngine>,
     ) -> Result<Self, CommitmentError> {
-        if leader_id.is_empty() {
-            return Err(CommitmentError::EmptyLeaderId);
-        }
-        if leader_id.len() > MAX_LEADER_ID_LEN {
-            return Err(CommitmentError::LeaderIdTooLong {
-                got: leader_id.len(),
-                cap: MAX_LEADER_ID_LEN,
-            });
-        }
+        validate_leader_id(&leader_id)?;
 
         let batch_root = compute_batch_root(batch, engine);
         let batch_size = batch.transactions.len();
@@ -204,13 +259,54 @@ pub enum CommitmentError {
 ///
 /// Small wire type: consumers exchange these to coordinate Stage-2
 /// batch fetching. Network transport is orthogonal (see `network.rs`).
+///
+/// # Untrusted-input hardening
+///
+/// Serde uses `try_from = "BatchDataRequestRaw"` so `requester_id`'s
+/// non-empty and [`MAX_LEADER_ID_LEN`] invariants are enforced at
+/// parse time.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(into = "BatchDataRequestRaw", try_from = "BatchDataRequestRaw")]
 pub struct BatchDataRequest {
     /// The commitment hash being requested.
     pub commitment_hash: [u8; 32],
-    /// Identifier of the requesting peer. Bounded by
-    /// [`MAX_LEADER_ID_LEN`] as a defensive shared cap.
+    /// Identifier of the requesting peer. Non-empty and bounded by
+    /// [`MAX_LEADER_ID_LEN`] (enforced at ctor and deserialize).
     pub requester_id: String,
+}
+
+impl BatchDataRequest {
+    /// Construct with `requester_id` validation.
+    ///
+    /// # Errors
+    ///
+    /// [`CommitmentError::EmptyLeaderId`] if `requester_id` is empty;
+    /// [`CommitmentError::LeaderIdTooLong`] if too long.
+    pub fn new(commitment_hash: [u8; 32], requester_id: String) -> Result<Self, CommitmentError> {
+        validate_leader_id(&requester_id)?;
+        Ok(Self { commitment_hash, requester_id })
+    }
+}
+
+/// Raw wire form for [`BatchDataRequest`] serde.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BatchDataRequestRaw {
+    commitment_hash: [u8; 32],
+    requester_id: String,
+}
+
+impl From<BatchDataRequest> for BatchDataRequestRaw {
+    fn from(r: BatchDataRequest) -> Self {
+        Self { commitment_hash: r.commitment_hash, requester_id: r.requester_id }
+    }
+}
+
+impl TryFrom<BatchDataRequestRaw> for BatchDataRequest {
+    type Error = CommitmentError;
+
+    fn try_from(raw: BatchDataRequestRaw) -> Result<Self, Self::Error> {
+        Self::new(raw.commitment_hash, raw.requester_id)
+    }
 }
 
 /// Response carrying batch data + its commitment.
@@ -296,9 +392,12 @@ impl CommitmentAgent {
 
     /// Advance the LCA by folding a commitment into the local root.
     /// Increments `commitments_processed`.
+    ///
+    /// Delegates to the [`LocalCausalAgent::synthesize_action`] default
+    /// so the canonicalize + synthesize + update_local_root sequence
+    /// stays consistent with the LCA contract.
     pub fn advance(&mut self, commitment: BatchCommitment, engine: &Arc<DistinctionEngine>) {
-        let commit_d = commitment.to_canonical_structure(engine);
-        self.local_root = engine.synthesize(self.local_root, commit_d);
+        let _new_root = self.synthesize_action(commitment, engine);
         self.commitments_processed = self.commitments_processed.wrapping_add(1);
     }
 }
@@ -535,6 +634,88 @@ mod tests {
         assert_eq!(agent.get_current_root(), new_root);
     }
 
+    // ----- Truncated / padded batch --------------------------------------
+
+    #[test]
+    fn truncated_batch_fails_verify() {
+        // Load-bearing size-mismatch test complementing
+        // f7_tampered_batch_size_fails_verify (which tampers commitment).
+        // Here we tamper the actual batch: commitment claims 2 txs but
+        // caller delivers 1. Must reject.
+        let engine = Arc::new(DistinctionEngine::new());
+        let batch = sample_batch(&engine);
+        let commit = BatchCommitment::compute(&batch, 0, 42, "l".into(), &engine)
+            .expect("valid compute (invariant)");
+        let mut truncated = batch.clone();
+        truncated.transactions.pop();
+        assert!(!commit.verify_batch(&truncated, &engine));
+    }
+
+    // ----- Untrusted-input hardening at deserialize ----------------------
+
+    #[test]
+    fn deserialize_rejects_oversized_leader_id() {
+        // JSON constructed to bypass the ctor. The try_from path in
+        // BatchCommitment's serde adapter MUST catch this.
+        let big = "x".repeat(MAX_LEADER_ID_LEN + 1);
+        let raw = serde_json::to_string(&BatchCommitmentRaw {
+            commitment_hash: [0u8; 32],
+            nonce: 0,
+            epoch: 0,
+            leader_id: big,
+            batch_size: 0,
+        })
+        .expect("raw serialize");
+        let err = serde_json::from_str::<BatchCommitment>(&raw)
+            .expect_err("oversized leader_id must reject at deserialize");
+        assert!(err.to_string().contains("too long"));
+    }
+
+    #[test]
+    fn deserialize_rejects_empty_leader_id() {
+        let raw = serde_json::to_string(&BatchCommitmentRaw {
+            commitment_hash: [0u8; 32],
+            nonce: 0,
+            epoch: 0,
+            leader_id: String::new(),
+            batch_size: 0,
+        })
+        .expect("raw serialize");
+        let err = serde_json::from_str::<BatchCommitment>(&raw)
+            .expect_err("empty leader_id must reject at deserialize");
+        assert!(err.to_string().contains("empty leader_id"));
+    }
+
+    // ----- BatchDataRequest untrusted-input hardening --------------------
+
+    #[test]
+    fn data_request_ctor_rejects_empty_requester_id() {
+        let err = BatchDataRequest::new([0u8; 32], String::new())
+            .expect_err("empty requester_id must reject");
+        assert!(matches!(err, CommitmentError::EmptyLeaderId));
+    }
+
+    #[test]
+    fn data_request_ctor_rejects_oversized_requester_id() {
+        let big = "x".repeat(MAX_LEADER_ID_LEN + 1);
+        let err =
+            BatchDataRequest::new([0u8; 32], big).expect_err("oversized requester_id must reject");
+        assert!(matches!(err, CommitmentError::LeaderIdTooLong { .. }));
+    }
+
+    #[test]
+    fn data_request_deserialize_rejects_oversized_requester_id() {
+        let big = "x".repeat(MAX_LEADER_ID_LEN + 1);
+        let raw = serde_json::to_string(&BatchDataRequestRaw {
+            commitment_hash: [0u8; 32],
+            requester_id: big,
+        })
+        .expect("raw serialize");
+        let err = serde_json::from_str::<BatchDataRequest>(&raw)
+            .expect_err("oversized requester_id must reject at deserialize");
+        assert!(err.to_string().contains("too long"));
+    }
+
     // ----- Serde round-trip ----------------------------------------------
 
     #[test]
@@ -543,6 +724,15 @@ mod tests {
         let original = sample_commitment(&engine);
         let json = serde_json::to_string(&original).expect("serialize");
         let recovered: BatchCommitment = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original, recovered);
+    }
+
+    #[test]
+    fn data_request_serde_roundtrip() {
+        let original =
+            BatchDataRequest::new([0xAB; 32], "peer-alice".into()).expect("valid ctor (invariant)");
+        let json = serde_json::to_string(&original).expect("serialize");
+        let recovered: BatchDataRequest = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original, recovered);
     }
 }
