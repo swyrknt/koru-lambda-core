@@ -164,7 +164,7 @@ impl BatchCommitment {
         nonce: u64,
         epoch: u64,
         leader_id: String,
-        engine: &Arc<DistinctionEngine>,
+        engine: &DistinctionEngine,
     ) -> Result<Self, CommitmentError> {
         validate_leader_id(&leader_id)?;
 
@@ -190,19 +190,36 @@ impl BatchCommitment {
     /// `batch_size` matches — the batch cannot have been truncated or
     /// padded.
     ///
+    /// # Panics (debug builds only)
+    ///
+    /// The ctor + serde double-gate makes it structurally unreachable
+    /// for a live [`BatchCommitment`] to hold an invalid `leader_id`.
+    /// If somehow it does, this method `debug_assert!`s. In release
+    /// it returns `false` — do not treat "verify returned false" as a
+    /// safe post-condition for downstream code that assumed the stored
+    /// invariants held; treat it as "reject."
+    ///
     /// Returns `true` iff the batch is authentic under this commitment.
     #[must_use]
-    pub fn verify_batch(&self, batch: &TransactionBatch, engine: &Arc<DistinctionEngine>) -> bool {
+    pub fn verify_batch(&self, batch: &TransactionBatch, engine: &DistinctionEngine) -> bool {
         if batch.transactions.len() != self.batch_size {
             return false;
         }
         let recomputed =
             match Self::compute(batch, self.nonce, self.epoch, self.leader_id.clone(), engine) {
                 Ok(c) => c,
-                // If the stored leader_id somehow violates the length cap,
-                // verification fails (defensive — should not happen if the
-                // BatchCommitment was constructed via compute).
-                Err(_) => return false,
+                Err(e) => {
+                    // Structurally unreachable: ctor and serde try_from
+                    // both validate leader_id. This arm firing means
+                    // a bug in the ctor pipeline let an invalid value
+                    // survive — catch it loudly in debug, reject in
+                    // release.
+                    debug_assert!(
+                        false,
+                        "verify_batch: stored leader_id violates invariant: {e:?} (invariant)"
+                    );
+                    return false;
+                },
             };
         recomputed.commitment_hash == self.commitment_hash
     }
@@ -504,6 +521,15 @@ mod tests {
         // "abc" (len=3) + "def" (len=3) MUST hash differently from
         // "abcdef" (len=6) alone. Without the length prefix, both
         // would produce the same concatenated bytes.
+        //
+        // NOTE: because leader_id is followed only by fixed-size
+        // batch_size(u64 LE) in the current hash layout, this
+        // ambiguity attack is actually impossible in practice — the
+        // trailing fixed-width field disambiguates. The length prefix
+        // is defense-in-depth for future layout changes. This test
+        // proves the prefix produces different hashes; it does NOT
+        // prove the prefix is the mechanism doing so (that's a design
+        // property, not a runtime property).
         let engine = Arc::new(DistinctionEngine::new());
         let batch = sample_batch(&engine);
         let c1 = BatchCommitment::compute(&batch, 0, 42, "abcdef".into(), &engine)
@@ -511,6 +537,26 @@ mod tests {
         let c2 = BatchCommitment::compute(&batch, 0, 42, "abc".into(), &engine)
             .expect("valid compute (invariant)");
         assert_ne!(c1.commitment_hash, c2.commitment_hash);
+    }
+
+    #[test]
+    fn n6_leader_id_bytes_are_hashed_not_just_length() {
+        // Load-bearing: two leader_ids of IDENTICAL length differing
+        // only in bytes must produce different hashes. Falsifies the
+        // specific WRONG implementation where compute hashes
+        // leader_id.len() but forgets leader_id.as_bytes() — the
+        // other N6 tests use different-length leader_ids and would
+        // still pass under that bug.
+        let engine = Arc::new(DistinctionEngine::new());
+        let batch = sample_batch(&engine);
+        let c1 = BatchCommitment::compute(&batch, 0, 0, "alice-01".into(), &engine)
+            .expect("valid compute (invariant)");
+        let c2 = BatchCommitment::compute(&batch, 0, 0, "alice-02".into(), &engine)
+            .expect("valid compute (invariant)");
+        assert_ne!(
+            c1.commitment_hash, c2.commitment_hash,
+            "N6: leader_id BYTES (not just length) must contribute to the hash"
+        );
     }
 
     // ----- F7 transitive: verify rejects both hash and metadata tampers --
@@ -554,6 +600,34 @@ mod tests {
             .expect("valid compute (invariant)");
         commit.batch_size = 999;
         assert!(!commit.verify_batch(&batch, &engine));
+    }
+
+    #[test]
+    fn f7_tampered_commitment_hash_fails_verify() {
+        // A tamper directly on the stored hash must fail verify.
+        // Trivial but load-bearing: closes the "attacker replaces the
+        // hash with one they know" attack vector.
+        let engine = Arc::new(DistinctionEngine::new());
+        let batch = sample_batch(&engine);
+        let mut commit = BatchCommitment::compute(&batch, 0, 42, "l".into(), &engine)
+            .expect("valid compute (invariant)");
+        commit.commitment_hash[0] ^= 0xFF;
+        assert!(!commit.verify_batch(&batch, &engine));
+    }
+
+    #[test]
+    fn f7_tampered_previous_root_fails_verify() {
+        // The commitment binds to a specific batch.previous_root via
+        // compute_batch_root. If the caller submits a batch with a
+        // DIFFERENT previous_root but the same transactions, the
+        // computed batch_root differs → hash differs → verify fails.
+        let engine = Arc::new(DistinctionEngine::new());
+        let batch = sample_batch(&engine);
+        let commit = BatchCommitment::compute(&batch, 0, 42, "l".into(), &engine)
+            .expect("valid compute (invariant)");
+        let mut tampered = batch.clone();
+        tampered.previous_root = engine.d1(); // was d0
+        assert!(!commit.verify_batch(&tampered, &engine));
     }
 
     // ----- leader_id validation ------------------------------------------

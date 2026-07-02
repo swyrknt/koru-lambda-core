@@ -27,7 +27,6 @@
 
 use crate::primitives::{ByteMapping, Canonicalizable};
 use crate::{Distinction, DistinctionEngine, LocalCausalAgent};
-use std::sync::Arc;
 
 // --- Constants ---------------------------------------------------------
 
@@ -283,7 +282,7 @@ impl ConsensusValidator {
     /// `NonceMismatch`, `DataTooLarge`, `EmptyBatch`, `EmptyData`.
     pub fn validate_batch(
         &mut self,
-        engine: &Arc<DistinctionEngine>,
+        engine: &DistinctionEngine,
         batch: &TransactionBatch,
     ) -> Result<Distinction, ValidatorError> {
         // ---- Pre-validation (pure, no engine mutation) --------------
@@ -360,6 +359,7 @@ impl LocalCausalAgent for ConsensusValidator {
 mod tests {
     use super::*;
     use crate::synthesize_causal_action;
+    use std::sync::Arc;
 
     fn fresh() -> (Arc<DistinctionEngine>, ConsensusValidator) {
         let engine = Arc::new(DistinctionEngine::new());
@@ -423,10 +423,15 @@ mod tests {
     // ----- V4 regression: oversized-root / bounded error messages --------
 
     #[test]
-    fn v4_error_messages_have_bounded_length() {
-        // All error variants carry only bounded diagnostic data
-        // (u64/usize/Distinction). Verify the Display output for each
-        // fits well under any reasonable message-length cap.
+    fn v4_named_error_variants_bounded() {
+        // Honest scope: this enumerates the CURRENT ValidatorError
+        // variants and asserts each has a bounded Display. A future
+        // variant like `#[error("bad data at {tampered}")]` with a
+        // String field would NOT be caught by this test — the test
+        // only sees what's listed. Compensation: a real invariant
+        // check on Display shape belongs in a hygiene test or
+        // proptest at the Step 4 audit layer. This test proves the
+        // current variants are bounded.
         let d = Distinction::from_bytes_unchecked([0xAA; 16]);
         let variants = [
             ValidatorError::RootMismatch { expected: d, got: d },
@@ -463,10 +468,17 @@ mod tests {
     #[test]
     fn v5_rejected_batch_leaves_engine_state_invariant() {
         // Load-bearing V5 test: a batch that fails pre-validation
-        // must not have called engine.synthesize at all. Distinction
-        // count is the observable proxy.
+        // must not have called engine.synthesize at all.
+        //
+        // Two-layer check: (1) distinction count unchanged, AND
+        // (2) the full set of registered distinction IDs unchanged.
+        // The set check catches a subtler regression where the commit
+        // loop runs on inputs that happen to already-exist (saturation
+        // fast-path) — a count-only check would miss it.
         let (engine, mut v) = fresh();
         let count_before = engine.distinction_count();
+        let mut ids_before: Vec<Distinction> = engine.snapshot_distinctions();
+        ids_before.sort_by_key(|d| *d.as_bytes());
         let root_before = v.state_root_id();
         let nonce_before = v.expected_nonce();
 
@@ -478,11 +490,17 @@ mod tests {
         let err = v.validate_batch(&engine, &batch).expect_err("batch must reject");
         assert!(matches!(err, ValidatorError::NonceMismatch { .. }));
 
-        // Engine state UNCHANGED.
+        // Engine state UNCHANGED — both count AND set-of-IDs.
         assert_eq!(
             engine.distinction_count(),
             count_before,
-            "V5: engine state must be invariant on rejection"
+            "V5: engine distinction_count must be invariant on rejection"
+        );
+        let mut ids_after: Vec<Distinction> = engine.snapshot_distinctions();
+        ids_after.sort_by_key(|d| *d.as_bytes());
+        assert_eq!(
+            ids_before, ids_after,
+            "V5: engine set-of-distinctions must be invariant on rejection"
         );
         // Validator state UNCHANGED.
         assert_eq!(
@@ -501,18 +519,30 @@ mod tests {
     fn v5_root_mismatch_also_atomic() {
         let (engine, mut v) = fresh();
         let count_before = engine.distinction_count();
+        let nonce_before = v.expected_nonce();
         let batch = TransactionBatch {
             previous_root: engine.d1(), // wrong root
             transactions: vec![tx(0, b"ok")],
         };
         let _ = v.validate_batch(&engine, &batch).expect_err("wrong root");
         assert_eq!(engine.distinction_count(), count_before);
+        assert_eq!(
+            v.expected_nonce(),
+            nonce_before,
+            "V5: nonce must be invariant on RootMismatch rejection"
+        );
     }
 
     // ----- V6 regression: atomic restore_state ---------------------------
 
     #[test]
-    fn v6_restore_state_is_atomic() {
+    fn v6_restore_state_sets_both_fields() {
+        // Honest scope: since restore_state is `&mut self` non-fallible
+        // synchronous, "atomicity" in the observer-safety sense is
+        // untestable without &Mutex or sync internals. What we CAN
+        // verify: both fields are set by the single call. Regression
+        // guard for a future refactor that split restore_state into
+        // two methods (which would break the "both together" property).
         let (_engine, mut v) = fresh();
         let target_root = Distinction::from_bytes_unchecked([0x42; 16]);
         v.restore_state(target_root, 999);
