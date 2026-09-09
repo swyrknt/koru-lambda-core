@@ -1,4 +1,6 @@
-//! Coding Law ρ gate test — CHECKLIST.md lines 133–134.
+//! Coding Law ρ gate test — see `docs/BENCHMARKS.md § Throughput` for
+//! scale-context; this file is the canonical source of truth for the
+//! exp18 corpus SHA-256 pin (constants at lines 30–31 below).
 //!
 //! Pins the exp18 corpus at `tests/corpora/exp18.{log,freq.bin}` via
 //! SHA-256 digest constants, then runs the canonical Coding Law
@@ -26,7 +28,7 @@ use std::path::Path;
 // Pinned digests — see `cargo run -p koru-experiments-runner --bin
 // gen_exp18_corpus --release` output for the generator side. These
 // constants change ONLY when the corpus is intentionally regenerated
-// AND a CHECKLIST line 134 / DESIGN.md amendment is filed.
+// AND a corresponding `docs/BENCHMARKS.md` update is filed.
 const EXP18_LOG_SHA256: &str = "9fd8a22b4b89e0937d09af13646af5b797e8369e46c11c3e1f94b3e7169878d9";
 const EXP18_FREQ_SHA256: &str = "93d08b2fb4e721b679c90a56b70d69de8511a4749a4ee2ff715722efc123ca46";
 

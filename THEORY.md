@@ -1,9 +1,32 @@
 # Distinction Theory
 
+`[SHIPPED: axioms + Laws 5-12 correspond to code state]`
+
 The substrate `koru-lambda-core` implements is small enough to state on one
 page. It has one operator, four axioms, two primordials, and a handful of
-structural laws that follow as consequences. The rest of this document
-elaborates each. Nothing here references code or implementation choices.
+structural laws that follow as consequences. Where a claim references
+code, an inline `[SHIPPED]` or `[TARGET]` tag records whether the
+correspondence is in-tree today or scheduled; theoretical claims carry no
+tag. Version binding lives in `DESIGN.md`.
+
+---
+
+## Downstream Discipline
+
+THEORY.md is upstream of `DESIGN.md`, `ARCHITECTURE.md`, `README.md`, and
+`docs/**`; every paraphrase is where drift lives.
+
+**Two-anchor policy.** Downstream references to concept-terms in this
+document (`synthesize`, `commutativity`, `irreflexivity`,
+`content addressing`, `Law 5`–`Law 12`, `Fold Law`, `Coding Law`, `LCA` /
+`local causal agent`, `synthesis/projection dual`) resolve to either
+`THEORY.md#section-slug` (default — section anchors survive edits) or
+`THEORY.md:LINE` (verbatim-quote-only). Matches inside `[SHIPPED]` or
+`[TARGET]` tag blocks are exempt — those anchor to code by construction.
+
+**Enforcement.** `.claude/warroom/checks/theory_anchor_check.sh` is the
+falsifier stub for this policy; the real check lands in E01-S05 execute
+(see PLAN v2.1 Step 12).
 
 ---
 
@@ -11,11 +34,21 @@ elaborates each. Nothing here references code or implementation choices.
 
 There is one operator:
 
-> **synthesize(a, b) → c**
+> **synthesize(a, b) → (c, novel?)**
 
 `a`, `b`, and `c` are *distinctions* — the only kind of thing the theory
 talks about. A distinction has no internal structure beyond its identity.
-Identity is content-addressed (see Axiom 4).
+Identity is content-addressed (see Axiom 4). The `novel?` bit
+distinguishes a first-time derivation from a saturated repeat (Law 7);
+implementations may expose or discard it, but the theory asserts its
+existence as a structural output of the operator.
+
+**Two-type discipline (Axiom-4 closure).** Bytes typed as `Distinction`
+that were not produced by the operator are structurally illegitimate.
+Implementations close this by admitting raw bytes only as
+`RawDistinctionId` and converting via `engine.verify()`, foreclosing
+foreign-byte injection at the type level. `[TARGET: two-type API
+discipline]`. Current runtime closure: `src/engine.rs:393-402` `[SHIPPED]`.
 
 ---
 
@@ -31,6 +64,13 @@ derived. Every other distinction comes from a synthesis of two
 previously-existing ones. By convention, d₀ and d₁ have a single
 "genesis" relationship between them: the edge `d₀ ↔ d₁` is part of the
 graph without being the result of any synthesis.
+
+---
+
+*The koru substrate is small enough to state on one page, and its
+consequences carry domains that normally require their own foundations.
+What follows are the four axioms and the eight structural laws they
+force.*
 
 ---
 
@@ -77,11 +117,24 @@ holds exactly at every scale. Each novel synthesis adds one new
 distinction and two new parent-child edges; the `−3` accounts for the
 genesis state (d=2, r=1: only the d₀↔d₁ edge).
 
-**Implementation note:** the d₀↔d₁ genesis edge is a *theory-level*
-relationship. Implementations may carry it implicitly (the `+ 2` in
-the invariant check) or materialize it explicitly. Either satisfies
-Law 6 without violating Law 5; primordials have no parents by
-definition.
+**Implementation note.** The d₀↔d₁ genesis edge is a *theory-level*
+relationship. Implementations may carry it implicitly (via a folklore
+`+ 1` addend) or materialize it explicitly. v2.0 uses the implicit form,
+and — because they answer *different* accounting questions — the addend
+appears in two distinct places:
+
+- `+ 1` at `src/engine.rs:523` and `src/engine.rs:554` `[SHIPPED]` — the
+  **genesis-edge addend**. In `degree()` it accounts for the d₀↔d₁ edge
+  when the queried distinction is a primordial; in `relationship_count()`
+  it accounts for the same edge at the whole-graph tally.
+- `+ 2` at `src/engine.rs:530` `[SHIPPED]` — the **parent-edge addend**
+  for non-primordial distinctions. Every non-primordial has exactly two
+  parent edges recorded in `nodes[d].parents` (not in `nodes[d].degree`);
+  the `+ 2` adds them back for the reported degree. This is a
+  parent-edge count, not a genesis-edge count.
+
+Either implicit-genesis or explicit-materialization satisfies Law 6
+without violating Law 5; primordials have no parents by definition.
 
 ### Law 7 — Saturation
 Repeating the same synthesis adds nothing. `synthesize(a, b)` called
@@ -108,11 +161,11 @@ trivial recursive loops where every node generates new structure forever
 without anchoring to anything.
 
 But `synthesize(synthesize(x, observation), x)` produces a unique
-distinction at every depth when `observation` differs at each step
-(the warroom experiments verified this for both cycling and constant
-`observation` schedules). The mediation through `observation` breaks
-the irreflexive collapse: the inner synthesis produces something that's
-no longer equal to `x`, so the outer synthesis is no longer reflexive.
+distinction at every depth when `observation` differs at each step —
+whether `observation` cycles through a finite alphabet or holds constant
+at some `obs`, the inner synthesis produces something no longer equal to
+`x`, so the outer synthesis is no longer reflexive. The mediation
+through `observation` breaks the irreflexive collapse.
 
 **Why this matters structurally.** Most computational systems that try
 to represent themselves hit one of three failure modes:
@@ -144,18 +197,20 @@ growth.
 
 **Bounded by ID space, not by depth.** Distinctions are 16 bytes (128
 bits of identity), so the substrate carries at most 2^128 distinct
-distinctions and the birthday bound kicks in at ~2^64. The probes
-verify uniqueness at depth ≥ 10K (CHECKLIST.md Step 1); above that the
-limit is hash-space exhaustion, not the self-reference loophole. "Unbounded"
-means "not bounded by the irreflexivity axiom," not literally infinite.
+distinctions and the birthday bound kicks in at ~2^64. Uniqueness at
+depth ≥ 10K is a probed property (see the mediated-self-reference
+uniqueness probe); above that the limit is hash-space exhaustion, not
+the self-reference loophole. "Unbounded" means "not bounded by the
+irreflexivity axiom," not literally infinite.
 
 ### Law 11 — Fold Law
 The two primordials become topological mega-hubs. By construction, byte
 folding through `synthesize` routes every byte through `d₀` and `d₁`
 multiple times, making them appear on every derivation path. The
-"depth ≤ 8" bound comes directly from the `ByteMapping` implementation:
-each byte folds through 8 synthesis steps (one per bit), with `d₀` and
-`d₁` participating in every step.
+"depth ≤ 8" bound is **structural**: `ByteMapping` folds each input byte
+through exactly 8 `synthesize` steps (one per bit), with `d₀` and `d₁`
+participating in every step. The bound is a direct consequence of the
+`ByteMapping` construction, not a workload artifact. `[SHIPPED]`.
 
 **Fold Law and Coding Law both operate at all depths.** They're not
 sequential — there's no "handoff" at depth 8. Fold Law dominates the
@@ -168,7 +223,7 @@ in a mature engine; the "depth" distinction is about which mechanism
 explains the most variance in degree-centrality at that depth.
 
 ### Law 12 — Coding Law
-Beyond the fold layer, degree-centrality tracks usage frequency. The
+Across the whole graph, degree-centrality tracks usage frequency. The
 law has two parts that should not be conflated:
 
 **Structural part (universal, by construction):** `degree(d) = count of
@@ -208,6 +263,46 @@ empirical systems typically produce.
 
 ---
 
+## The synthesis/projection dual
+
+The axioms describe `synthesize` directly, but they produce more than one
+object. The first is what the axioms name explicitly: the append-only,
+content-addressed graph, extended one distinction at a time by the
+operator or left unchanged under Law 7. This is the *write dual* — every
+axiom-consistent act of the operator adds structure, or none at all.
+
+The second is what the axioms produce by implication: any axiom-consistent
+read of the graph from a vantage. Walking parents from a chosen
+distinction, counting participations, asking whether one distinction is
+downstream of another, materializing children under some synthesis-count
+boundary — each is a *projection*, a coherent read from a specified root,
+at a specified boundary, in a specified direction, over a specified
+signal. The projection is not new structure; it is the graph *as viewed
+from somewhere.*
+
+The projection is theory-forced. Axioms 1 and 4 make the graph a pure
+function of its inputs; Laws 8 and 9 make it identical across engines
+with the same synthesis history; Law 7 makes it stable under repeated
+observation. Any read that respects those constraints IS a projection,
+whether the reader knows it or not.
+
+The substrate has, until now, exposed only the write dual. The read dual
+has lived in six ad-hoc reinventions across the ecosystem (ALIS `Field`,
+koru-engine `Field`, koru-spatial adjacency, koru-mesh seen-set,
+koru-delta replay-to-point, koru-wave dissolve-on-read). Naming it here
+does not add a primitive; it names what the axioms already produce.
+First-class API surface for the projection is `[TARGET: first-class API]`;
+the theoretical claim itself carries no tag.
+
+**Falsifier.** Cross-engine projection independence probe — two engines
+with identical synthesis histories, queried with the same projection
+`{ Root, boundary, Direction, Signal }` at quiescence, must produce
+byte-identical output. If not, the projection is an engine-side artifact,
+not a theory-forced object, and this section is wrong. `[TARGET]` — see
+`docs/BENCHMARKS.md`.
+
+---
+
 ## What it means to "use" the substrate
 
 The substrate by itself is timeless. It enforces the axioms; it knows
@@ -217,11 +312,11 @@ identity-of-perspective, or causality.
 The substrate's **reference consumption pattern** is the Local Causal
 Agent (LCA):
 
-13. An LCA anchors to a **local root distinction** — its perspective.
-14. State transitions are **causal syntheses** from the local root + the
-    canonical structure of the action being taken.
-15. LCAs **update their perspective forward** as their causal chain
-    advances.
+- An LCA anchors to a **local root distinction** — its perspective.
+- State transitions are **causal syntheses** from the local root + the
+  canonical structure of the action being taken.
+- LCAs **update their perspective forward** as their causal chain
+  advances.
 
 **This is a pattern, not an axiom.** The four axioms don't *require*
 consumers to be LCAs; they constrain what `synthesize` does, not how
@@ -247,6 +342,40 @@ because it formalizes the canonical *consumer contract*, not because
 it's the only legal way to consume the substrate. Future consumers
 that need different shapes are welcome; they'll just write their own
 traits and lose the interop benefits the LCA contract provides.
+
+---
+
+## Implications not yet materialized
+
+The axioms force consequences the substrate does not yet expose. Naming
+them here fixes the theoretical status; API surface is downstream.
+
+- **The novelty bit as a first-class outcome.** Law 7 makes *novel vs.
+  saturated* a structural binary the operator computes on every call;
+  the current API discards it, returning a bare `Distinction`. Exposing
+  `SynthesisOutcome { child, was_novel }` lets consumers compute
+  novelty-rate signals over projections without recomputing state.
+  Theory-forced; API `[TARGET]`.
+
+- **Intrinsic degree-frequency coupling.** Coding Law's structural part
+  makes the graph *self-attending by construction* — reframing what
+  earlier drafts called "emergent attention." The closer's bullet states
+  the consequence in its final form; cataloged here so the implication
+  is preserved rather than lost in the reframe.
+
+---
+
+## Law → downstream consequence
+
+Three-row legend for contributors carrying theory into downstream docs
+(translation, not survey — Coding Law and Fold Law's consumer
+implications belong in `DESIGN.md`):
+
+| Law | Consequence for downstream |
+|-----|---------------------------|
+| Law 8 (engine independence, at quiescence) | State agreement without consensus |
+| Projection dual (this document, § between Law 12 and LCA) | One primitive; the ecosystem currently reinvents it once per domain (cognition, physics, spatial, mesh, wave, delta) |
+| Law 10 (mediated self-reference) | Self-reference without reflection primitives |
 
 ---
 
@@ -278,8 +407,12 @@ that are difficult or impossible to obtain through other means:
   excludes it. Auditability is therefore a *design* property, enabled by
   but not forced by the theory.
 
-- **Emergent attention without orchestration.** Coding Law (Law 12) means
-  high-usage distinctions become high-degree nodes by physics, not policy.
+- **Intrinsic degree-frequency coupling.** Coding Law (Law 12) means
+  degree-centrality tracks usage frequency by construction, not by
+  overlaid learning. The graph *attends to what it uses* — usage
+  weighting is intrinsic to topology, produced by the operator rather
+  than layered on top. Same phenomenon downstream disciplines call
+  "attention," but without a trained layer.
 
 - **Self-aware systems via mediated self-reference.** Law 10 is the
   structural answer to "how do you have a distinction that refers to
@@ -298,8 +431,10 @@ path; everything else follows.
 
 ## Why the theory is small
 
-One operator. Four axioms. Two primordials. Eight structural laws as
-named consequences. One reference consumption pattern.
+One operator that produces the graph and, over it, the projection —
+the theory's read-side dual. Four axioms. Two primordials. Eight
+structural laws as named consequences. One reference consumption
+pattern.
 
 Smallness is a deliberate constraint, not an accident. Every implementation
 that claims to be `koru-lambda-core` must enforce the four axioms exactly
@@ -313,35 +448,15 @@ strong enough to carry domains that usually require their own,
 domain-specific foundations. The current evidence is two consumers
 (ALIS for cognition, koru-protocol for economic consensus) both built
 on the same engine. Whether the bet generalizes to a third domain is
-an open question; whether it holds for the two we have is what the
-warroom experiments and v2.0 release are about.
-
-The 50+ experiments in the warroom record stress-test every claim above
-at scales appropriate to each claim — axioms and small-graph invariants
-at 10K–1M, the structural laws and Coding/Fold gates at 1M–5M.
-
-**Memory ceiling at ~80M is conservative arithmetic, not extrapolation.**
-The per-distinction footprint was measured at 1M scale (~80 B in the
-warroom v2.0 attempt; predicted ~180 B in v2.0 with the dhat-honest
-gate that includes DashMap shard slack). Available RAM on a 16 GB
-laptop after OS overhead is ~12 GB. 12 GB / 180 B ≈ 70M; 12 GB / 80 B
-≈ 150M. So ~80M is a round number on the conservative side of the
-arithmetic. The math is just division; it doesn't require empirical
-validation at 80M to be reliable as a *memory* claim.
-
-**Throughput at scale is the actual untested question.** Single-thread
-~500K ops/sec and 8-thread ~12M+ ops/sec were measured at 1M-5M scale.
-Whether those numbers hold at 50M+ depends on cache effects past L3
-(~8-32 MB), DashMap shard collision rate under sustained load, allocator
-paging when the engine consumes most of system RAM, and IdentityHasher
-bucket distribution at large N — none of which we've probed. A ceiling
-probe at 50M+ is on the Step 4 backlog. Until it runs:
-
-- **Memory ceiling claim:** confident (arithmetic from measured footprint).
-- **Throughput at ceiling claim:** unknown (cache effects, allocator paging
-  could non-linearize before memory runs out).
+an open question; whether it holds for the two we have is the
+substrate's ongoing test.
 
 Zero exceptions to the axioms or structural laws have been found within
 the probed range. Claims at scales beyond what was actually probed are
-deductions from the axioms (which hold at all scales) plus extrapolation
-of empirical throughput (which doesn't).
+deductions from the axioms (which hold at all scales); throughput at
+those scales is an open question. Capacity and throughput evidence lives
+in `docs/BENCHMARKS.md`.
+
+---
+
+*Empirical evidence: `docs/BENCHMARKS.md`, `tests/coding_law.rs`.*
