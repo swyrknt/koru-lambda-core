@@ -143,9 +143,11 @@ unchanged on the second call.
 
 ### Law 8 — Engine independence
 Two engines that process the same operations produce byte-identical
-state, regardless of their independent histories. Content addressing
-means identity is the operation; distinct paths through the operation
-space converge.
+state **at quiescence**, regardless of their independent histories.
+Mid-flight the two engines may transiently disagree while writes are
+in progress; the claim is post-processing convergence, not
+instantaneous equality. Content addressing means identity is the
+operation; distinct paths through the operation space converge.
 
 ### Law 9 — Order-independent reconstruction
 Two engines synthesizing the same parent pairs converge to byte-identical
