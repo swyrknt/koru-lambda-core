@@ -1,7 +1,8 @@
 //! Coding Law workload — Spearman ρ between Zipf-drawn pair frequency
 //! and engine-observed degree delta on a fixed chain pool.
 //!
-//! Implements the workload specified at `CHECKLIST.md` line 133:
+//! Implements the pinned exp18 Coding Law workload (see `DESIGN.md`
+//! Part 10.5 / `BUDGET_LOG.md`):
 //!
 //! - Chain pool of `N` distinctions: `pool[0] = d0`, `pool[1] = d1`,
 //!   `pool[k] = synthesize(pool[k-1], pool[k-2])` for `k >= 2`.

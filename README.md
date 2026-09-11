@@ -16,9 +16,10 @@
 > - Theory/budget/hygiene gate split with un-amendable axiom gates
 >
 > Plan-of-record docs on `release/2.0.0`:
-> [`THEORY.md`](THEORY.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DESIGN.md`](DESIGN.md) · [`CHECKLIST.md`](CHECKLIST.md)
+> [`THEORY.md`](THEORY.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DESIGN.md`](DESIGN.md)
 >
-> A full README rewrite ships with v2.0 (Step 5 of the checklist).
+> A full README rewrite ships with v2.0 (tracked in the epics work
+> tracker at `.claude/warroom/epics/`, story E01-S05).
 
 A minimal axiomatic system for computation based on distinction calculus. This engine implements a timeless, self-consistent computational substrate where complex distributed system properties arise from simple synthesis operations.
 

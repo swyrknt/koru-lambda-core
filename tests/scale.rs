@@ -1,4 +1,4 @@
-//! Scale invariant probes — CHECKLIST.md line 136.
+//! Scale invariant probes — DESIGN.md gate 2 (r = 2d − 3 zero deviations at 5M synths).
 //!
 //! The substrate's structural law `r = 2d − 3` (binary parentage, every
 //! non-primordial distinction adds exactly 2 edges) must hold at every

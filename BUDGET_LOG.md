@@ -31,7 +31,7 @@ Format: `date | gate | old target | new target | absolute delta | floor delta | 
 | qa-sentinel | GREEN (R3) | Y1 deferred to Step 2 with conditional sign-off language; `CORPUS_PROVENANCE.md` pre-merge |
 | engine-architect | YELLOW (R2) | Merge blockers Y1, rust-craftsman item 5, Y3; Linux 4× watch deferred to Step 4 |
 
-**Round 2 panel resolution.** Merge proceeds after the 8-item fix-up commits land (see CHECKLIST.md §Step 1e). Gate 12 amendment ratified by all three signers once those land.
+**Round 2 panel resolution.** Merge proceeds after the 8-item Step 1e fix-up commits land (archaeological trail: `git log --oneline release/2.0.0..step/01-substrate`). Gate 12 amendment ratified by all three signers once those land.
 
 ### Measurement provenance
 

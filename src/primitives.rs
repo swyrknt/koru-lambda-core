@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn fold_law_d0_d1_hub_ratio_clears_100x_gate() {
-        // CHECKLIST.md line 135 / DESIGN.md gate 14: d0/d1 hub ratio
+        // DESIGN.md gate 14: d0/d1 hub ratio
         // ≥ 100× the maximum non-primordial degree after the full
         // 256-byte exercise. This is the Fold Law's quantitative
         // teeth: d0 and d1 aren't just slightly dominant (qa-sentinel

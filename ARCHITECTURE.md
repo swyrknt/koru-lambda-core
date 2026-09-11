@@ -54,10 +54,10 @@ src/
 
 **Total: ~890 LOC.** This is the heart of the crate.
 
-LOC sizes are targets. The `engine.rs ≤ 480 LOC` ceiling in `CHECKLIST.md`
-(and gate 23 of `DESIGN.md` Part 10) is the upper bound that triggers
-the hard gate; ~430 LOC is what we're trying to hit. Same idea applies
-to every other file size in this layout.
+LOC sizes are targets. The `engine.rs ≤ 480 LOC` ceiling (gate 23 of
+`DESIGN.md` Part 10) is the upper bound that triggers the hard gate;
+~430 LOC is what we're trying to hit. Same idea applies to every other
+file size in this layout.
 
 ### `engine.rs` — the engine itself
 

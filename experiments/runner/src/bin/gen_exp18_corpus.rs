@@ -1,6 +1,6 @@
 //! Generate the pinned exp18 corpus from the canonical workload constants.
 //!
-//! Per `CHECKLIST.md` line 134:
+//! Canonical exp18 workload constants:
 //!   alpha = 1.0, seed = 0xC0DE, N = 4096, M = 8N = 32_768.
 //!
 //! Writes:
