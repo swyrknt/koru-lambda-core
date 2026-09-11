@@ -1,12 +1,10 @@
 # Changelog
 
-Per `DESIGN.md` Part 10.5 (Budget Amendment Policy), budget-gate
-amendments are announced in `## Unreleased` so consumer teams (ALIS,
-koru-protocol) see the ratchet before they migrate.
-
-Per `DESIGN.md` gate 32, this file will be rewritten as one coherent
-v2.0 entry during Step 5 release prep. The `## Unreleased` section
-below tracks amendments that land before that rewrite.
+Budget-gate amendments and substrate changes land under `## Unreleased`
+so consumer teams (ALIS, koru-protocol) see the ratchet before they
+migrate. This file will be rewritten as one coherent v2.0 entry during
+E02 completion (per `DESIGN.md` § "Path to v2.0.0"). The `## Unreleased`
+section below tracks amendments that land before that rewrite.
 
 ## Unreleased
 
@@ -77,3 +75,27 @@ release build, ~5min thermal idle):**
   (floor ≥ 10M AND ≥ 3.0×); symmetric server hardware (8+ uniform
   cores) ≥ 4× ratio as regression watch, not gate. See
   `BUDGET_LOG.md` row 1 for measurement provenance and signers.
+
+### Docs — DESIGN.md v2 rewrite (E01-S01)
+
+**Removed sections** (drift class documented in
+`.claude/warroom/epics/E01-v2-baseline-alignment/S01-design-doc/phase-1-research/`):
+
+- Rounds 1-4 revision log (historic planning cruft).
+- Promised-file sections for `src/network.rs`, `src/compactor.rs`,
+  `src/parallel.rs`, `src/ffi.rs`, `src/wasm.rs` — none of these
+  files exist at the current commit; earlier design rounds described
+  them as shipping.
+- Empirical numbers, LOC comparisons, and throughput measurements —
+  evicted to `docs/BENCHMARKS.md` with in-crate file:line anchors.
+- Part 6 (test strategy full inventory), Part 7 (step-by-step path
+  off `dev`), Part 8 (resolved decisions), Part 10 (34 done-criteria
+  gate checklist), Part 10.5 (Budget Amendment Policy), Appendix
+  (v1.2 → v2.0 fate mapping), Notes for review — moved to warroom
+  epic body / `BUDGET_LOG.md` / `CHANGELOG.md` per per-section
+  guidance in `phase-1-research/05-coder.md` Table 3.
+
+DESIGN.md now describes only what SHIPS at commit `7549860` plus
+TARGET-tagged pointers to E02/E03/E04. Every code-referencing claim
+carries a `[SHIPPED @ …]`, `[TARGET @ …]`, or `[DEPRECATED @ …]` tag.
+Every axiom-shaped sentence anchor-links to `THEORY.md`.

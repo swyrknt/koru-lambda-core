@@ -1,1699 +1,787 @@
-# koru-lambda-core 2.0 — Design Blueprint
+[SHIPPED @ commit 7549860 (release/2.0.0-next)]
+Manifest version: 1.2.0
 
-**Status:** revised after warroom team scrutiny (4 rounds). Ready for implementation.
+# koru-lambda-core v2.0.0 — Naming the projection dual
 
-**Branch plan:** `release/2.0.0` cut from `dev`. Clean slate. The previous
-v2.0 attempt on `research/warroom-experiments` becomes an exploration archive
-— informative, not authoritative.
+The substrate has always produced two structural objects: the append-only
+graph the operator writes, and any consistent read over it — the projection.
+[`THEORY.md` names both](THEORY.md#the-synthesis-projection-dual). v2.0.0
+makes that naming operational: at E02 completion, the substrate exposes an
+API surface for the projection dual. Six independent koru projects have
+built projection-shaped wrappers under different names — Fields (alis-ai),
+Fields (koru-engine), Sessions (koru-wave), Peers (koru-mesh), Workspaces
+(koru-delta), PlayerState (game-studio consumers). What they share is what
+the axioms forced them to build. v2.0.0's contribution is that the
+substrate now provides it directly.
 
-**Targets (in priority order):**
-
-1. 100% theory-aligned. Internal representation matches the theory's claims.
-2. Minimal. Every line earns its place. No redundant data structures.
-3. Elegant. Engine reads top-to-bottom in one sitting.
-4. Powerful. Surfaces every unique capability the theory promises.
-5. High performance. Same or better than v1.2.0.
-6. Stable. Single major bump. Documented breaking changes. Consumers migrate once.
-
-## Revision log
-
-This document was revised after four rounds of warroom team scrutiny.
-
-**Rounds 1-2** settled the synthesize hot-path race fix and dropped the
-engine log entirely (persistence is a consumer concern atop `parents_of`).
-See git history for the resolved bugs.
-
-**Round 3** (4 agents verifying the revised doc): caught a write-order bug
-in the round-1 race fix (writes happened after `all_distinctions` became
-visible — readers could observe a distinction whose `parents_of` wasn't yet
-populated). Caught a TOCTOU race in the new `SynthesisRecorder`'s
-novelty-check using `distinction_count`. Caught `debug_assert_eq!` in
-`replay_topological` silently disappearing in release builds. Caught
-missing `#[must_use]` propagation. Caught cross-engine bytes-injection
-through `from_hex` round-trip. Caught tautological structural-invariant
-restatement. Caught unspecified `MAX_PENDING_COMMITMENTS` derivation.
-Resolution: writes inside `or_insert_with` closure (under the shard lock);
-`SynthesisRecorder` documented and structurally marked single-thread-only
-via `PhantomData<*const ()>`; `replay_topological` returns `Result<_,
-ReplayError>`; `#[must_use]` added crate-wide; `synthesize` `debug_assert`s
-parent existence; structural invariant restated; LRU cap derivation pinned
-arithmetically; `bytemuck::Pod + Zeroable` derives added.
-
-**Round 4** (theory-guardian + engine-architect + research-lead on the
-`children_of` question). Resolution: drop `children_of`, add three
-derived-from-relationships projections — `all_distinctions` (saturation,
-Law 7), `parents_of` (binary parentage, Law 5), `degree_counts`
-(Coding Law / Fold Law, Law 11/12). No new fields beyond these three;
-each is the canonical O(1) projection of a theory-required operation,
-not a convenience cache. Consumers that need children iteration call
-`replay::build_children_index` (~10 LOC helper) to materialize the
-inverse from `parents_of` in O(N) once.
-
-(Step 1e subsequently merged the three side-by-side maps into one
-`nodes: DashMap<id, EngineNode { parents, degree }>`. The three
-projections survive as per-node fields; the theoretical claim is
-unchanged. See `BUDGET_LOG.md` row 1.)
+Byte-identical across engines. No consensus. No handshake. Consumer
+migration to the substrate primitive is the subject of E04, sequenced
+after E02 completion.
 
 ---
 
-## Part 1 — What the theory says the substrate must do
+## How this document relates to the others
 
-The four axioms:
+Three shipping documents share the substrate's authoritative surface,
+each with a narrow charter:
 
-1. **Determinism.** `synthesize(a, b)` always produces the same `Distinction`.
-2. **Commutativity.** `synthesize(a, b) = synthesize(b, a)`.
-3. **Irreflexivity.** `synthesize(a, a) = a`.
-4. **Content addressing.** A `Distinction`'s identity *is* the canonical hash
-   of its parents' canonical pair.
+- **`THEORY.md`** — one operator, four axioms, two primordials, eight
+  structural laws. Any claim about *what the substrate is* lives here,
+  or nowhere. Downstream docs paraphrase; they do not restate.
+- **`DESIGN.md`** (this file) — the shipping story: what the substrate
+  ships today at the current commit, what E02/E03/E04 change, and the
+  anti-scope that keeps v2.0.0 honest. Version binding lives here and
+  nowhere else.
+- **`docs/BENCHMARKS.md`** — capacity and throughput measurements, with
+  every quantitative claim citing an in-crate `benches/*.rs`,
+  `tests/*.rs`, or `examples/*.rs` file at line-level. Numbers without
+  an in-crate anchor get removed, not extrapolated.
 
-The structural laws that follow:
+Every axiom-shaped sentence in this document is an anchor-link back to
+`THEORY.md`. Every code-referencing claim in this document carries a
+`[SHIPPED @ …]`, `[TARGET @ …]`, or `[DEPRECATED @ …]` tag. Any
+sentence that violates either rule is a drift report against this file.
 
-5. **Binary parentage.** Every non-primordial distinction has exactly two
-   parents.
-6. **`r = 2d − 3`.** Each novel synthesis adds 1 distinction + 2
-   relationships. Holds exactly, at any scale.
-7. **Saturation.** Repeating the same synthesis adds nothing.
-8. **Engine-independence.** Two engines processing the same operations
-   produce byte-identical state, regardless of intermediate history.
-9. **Order-independent reconstruction.** Two engines synthesizing the same
-   parent pairs converge to byte-identical state regardless of order.
-10. **Mediated self-reference → infinite novelty.** `synth(synth(x, obs), x)`
-    is unique at every depth (when `obs` cycles or is constant).
-11. **Fold Law.** Byte folds make d₀/d₁ topological mega-hubs at depth ≤ 8.
-12. **Coding Law.** Degree centrality tracks usage frequency (ρ ≈ 0.99
-    Spearman).
-
-What it means to "use" the substrate (the LCA pattern):
-
-13. Every productive consumer anchors to a **local root distinction** (its
-    perspective).
-14. State transitions are **causal syntheses** from local root + canonical
-    action data.
-15. Consumers **update their perspective forward** as their causal chain
-    advances.
-
-This is `LocalCausalAgent`. The trait IS substrate. Time is what LCAs do.
-
-**Critical implication for the engine design:** the substrate is timeless.
-Order is not a substrate concept. The engine MUST NOT carry order-bearing
-state. Chronological iteration, audit trails, and event-style replay are
-consumer concerns implemented atop the substrate's content-addressed graph.
+**Anchor slug convention.** The `THEORY.md#section-slug` links in this
+document use a simplified GitHub-style slug: heading text lowercased,
+non-alphanumeric characters (including em-dashes, equals, and minus
+signs) dropped, remaining runs of whitespace converted to single
+hyphens. This is not always identical to GitHub UI's canonical
+`github-slugger` output for headings containing spaced punctuation
+(e.g., "Law 8 — Engine independence"). The full inventory and
+convention are documented in
+`.claude/warroom/epics/E01-v2-baseline-alignment/S01-design-doc/phase-5-execute/anchor-budget.md`.
+The real enforcement tool (`theory_anchor_check.sh`) lands in E01-S05
+and will normalize slugs to whichever canonical form the trio of docs
+adopts. Between now and S05, readers may encounter dead links in the
+GitHub UI for headings with spaced punctuation; content is still
+findable by search.
 
 ---
 
-## Part 2 — What a 100%-aligned substrate looks like
+## Who this release is for
 
-### File layout
+The v2.0.0 preparation on `release/2.0.0-next` is for two audiences:
 
-```
-src/
-  lib.rs              ~40 LOC   public re-exports
-  engine.rs           ~430 LOC  Distinction, IdentityHasher, DistinctionEngine, synthesize
-  agent.rs            ~80 LOC   LocalCausalAgent trait + synthesize_causal_action helper
-  primitives.rs       ~100 LOC  Canonicalizable trait + ByteMapping (engine-registered)
-  distinction_hex.rs  ~120 LOC  to_hex / from_hex / Display / Debug / serde adapter
-  replay.rs           ~60 LOC   snapshot_parentage / replay_topological / build_children_index
-  recorder.rs         ~60 LOC   SynthesisRecorder reference impl (chronological observer)
-```
+- **Contributors** — the substrate's docs now match its code.
+  `THEORY.md` is authoritative for axioms and laws; this document is
+  authoritative for the shipping story; `docs/BENCHMARKS.md` is
+  authoritative for capacity and throughput. A new contributor can
+  read the three docs in order and produce a mental model that
+  survives contact with `src/`.
 
-**Substrate total: ~890 LOC.**
+- **Downstream consumer teams building on 1.x** — the projection dual
+  you have been reinventing is being named. v2.0.0 does not yet
+  require you to migrate; E04 will offer the migration guide when the
+  API surface (E02) is stable. Between now and then: pin to `1.2.0`,
+  read [`THEORY.md § synthesis/projection dual`](THEORY.md#the-synthesis-projection-dual)
+  for the concept, watch E02 for the API.
 
-This is what the crate's name promises. Reference subsystems and bindings
-build on top.
+This is not a "delete your wrapper" promise — that pitch belongs in E04's
+migration guide, after the API is stable enough to migrate onto. This is
+the release that *names the object* your wrapper has been implementing.
 
-### Engine state — one canonical indexed structure (merged in Step 1e)
+---
 
-```rust
-struct EngineNode {
-    parents: Option<(Distinction, Distinction)>,  // None for primordials
-    degree:  AtomicUsize,                          // novel-synth participations
-}
+## Path to v2.0.0
 
-pub struct DistinctionEngine {
-    d0: Distinction,
-    d1: Distinction,
-    nodes: DashMap<[u8;16], EngineNode, IdentityBuildHasher>,
-}
-```
+Current state: `release/2.0.0-next` at commit `7549860`. Manifest version
+1.2.0 on the branch (bump lands in E02 completion). What ships at E02
+completion: projection primitive API surface, `Cargo.toml` version bump
+1.2.0 → 2.0.0, no C ABI added.
 
-Three fields total (two primordial constants + one DashMap whose value
-carries both parents and degree per distinction). **No log.** No
-observation channel. No order-bearing state. **No children
-enumeration** — degree is the load-bearing primitive; the children
-list is the derived structure (see "What this collapses" below). The
-substrate enforces the four axioms; the graph IS the canonical
-history; time lives in LCAs.
+Six preconditions for the version bump:
 
-**Step 1e merge.** The three side-by-side `DashMap`s in the round-3
-plan collapsed into one `EngineNode` map: identity-IS-process means
-each distinction is one node. +20% single-thread / +46% 8-thread on
-M3 Pro; closed deadlock risk B1 — the entry shard-lock is now
-released before parent `fetch_add`s run. See `BUDGET_LOG.md` row 1,
-commit `fd9c2b1`.
+1. E02 primitive API surface lands.
+2. `clippy.toml:1` `forma-core` string corrected.
+3. `Cargo.lock` policy affirmed (currently checked in for the library —
+   retained; policy note added to the release commit).
+4. All E01 stories closed (S01 + S03 + S04 + S05).
+5. E03 BLOCKING closed (`TransactionBatch` deserialize cardinality cap).
+6. `theory_anchor_check.sh` real implementation lands (E01-S05).
 
-**The three canonical O(1) projections live as per-node fields:**
+*This section describes preconditions for a version bump; nothing here
+is a shipping commitment.*
 
-| Projection | How it's served | Theory operation |
-|---|---|---|
-| Saturation check | `nodes.contains_key(id)` | Axiom: repeats add nothing. Hot path checks existence before entry-gated insert. |
-| Parent lookup | `nodes.get(id).parents` | Binary parentage (Law 5). Replay, invariant check, parent walks. |
-| Degree query | `nodes.get(id).degree.load(Acquire)` + addend | Coding Law (degree ↔ usage frequency, ρ ≈ 0.99) and Fold Law (d₀/d₁ as mega-hubs). The theory's central observability claim; tested at 5M+ scale. |
+Release mechanics — dates, coordination, tag sequencing, rollback
+plan — live in
+[`RELEASE_PLAN.md`](.claude/warroom/epics/E01-v2-baseline-alignment/RELEASE_PLAN.md).
 
-Every other graph property derives from these three:
+---
 
-| Property | Derived from | Complexity |
-|---|---|---|
-| `degree(d)` | `engine.degree(d)` — hides the formula behind the API. Computed as `nodes.get(&d.0).map_or(0, |n| n.degree.load(Ordering::Acquire)) + genesis_addend(d)` where `genesis_addend(d) = 1` for d₀ or d₁ (the genesis d₀↔d₁ edge, the only edge in the graph not derivable from `parents`) and `2` otherwise (the two parent edges every non-primordial distinction has, recorded in `node.parents` not in `node.degree`) | O(1) |
-| `parents_of(d)` | `nodes.get(&d.0).and_then(|n| n.parents)` | O(1) |
-| `children_of(d)` (helper, not engine field) | `replay::build_children_index(snapshot_parentage(engine))[d]` | O(N) once, O(1) thereafter |
-| `relationship_count()` | `parents_of.len() * 2 + 1` (each child contributes 2 edges, plus genesis d0↔d1) | O(1) |
-| `distinction_count()` | `all_distinctions.len()` | O(1) |
-| `r = 2d − 3` invariant | `all_distinctions.len() == parents_of.len() + 2` (every non-primordial has parents recorded once; this directly tests the binary-parentage law) | O(1) check |
-| `get_relationships_snapshot()` | iterate `parents_of`, emit canonical edges | O(N) |
-| `snapshot_distinctions()` | iterate `all_distinctions`, materialize `Vec<Distinction>` for traversal probes (Coding Law, Fold Law dominance, diagnostic dumps) — snapshot not live iter, so callers don't hold shard locks | O(N) |
-| State reconstruction | `replay_topological(snapshot_parentage(source))` | O(N) typical, O(N²) worst case on pathological linear chains |
-| Chronological observation | consumer-side `SynthesisRecorder` (see Part 5) | consumer-defined |
+## The substrate
 
-**Errors:** `InvariantError` (public, `#[non_exhaustive]`, `thiserror`)
-— one variant `BinaryParentageMismatch { all_distinctions, parents_of_plus_two }`
-returned by `check_structural_invariant()` when the engine's binary-parentage
-invariant fails. Carries both counts for programmatic inspection and Display.
-A failure is a *theory event*, not a budget event — the engine no longer
-satisfies Law 6 and must be redesigned, not amended.
+`koru-lambda-core` implements one operator, four axioms, two primordials,
+and eight structural laws that follow as consequences. Theory content
+below is anchor-linked to [`THEORY.md`](THEORY.md), which is authoritative;
+this section describes what the code ships today plus the anchor-tagged
+targets that land in E02/E03.
 
-**Engine construction:** `DistinctionEngine::new()` inserts d₀ and d₁ into
-`all_distinctions` and seeds `degree_counts[d0] = 0`, `degree_counts[d1] = 0`.
-The `r = 2d − 3` invariant `all_distinctions.len() == parents_of.len() + 2`
-holds at construction (d=2, parents_of empty); the +2 accounts for the
-primordials, which by definition have no parents.
+### The operator
 
-### Distinction type
+The substrate exposes one write-side entry point:
+[`synthesize(a, b)`](THEORY.md#the-operator) — two distinctions in, one
+distinction out, with a structural `novel?` bit distinguishing a
+first-time derivation from a Law 7 saturated repeat. The runtime path
+enforces [the four axioms](THEORY.md#the-four-axioms) directly:
 
-```rust
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Pod, bytemuck::Zeroable)]
-#[repr(transparent)]
-pub struct Distinction(pub(crate) [u8; 16]);
-```
+- Foreign-byte guard on both parents (Axiom 4 boundary enforcement)
+- Irreflexivity: `a == b` returns `a` directly
+- Commutativity: canonical `(min, max)` ordering on raw bytes before hashing
+- Content addressing: 16-byte SHA-256 prefix of the canonical pair
+- Saturation: `contains_key` fast path before entry lock
 
-Newtype around `[u8; 16]`. `#[repr(transparent)]` enables zero-copy FFI/WASM
-treatment (`*const Distinction` and `*const [u8; 16]` are layout-compatible).
-`Copy + Clone + Eq + Hash`: passed by value, no allocations. `Pod + Zeroable`
-(via `bytemuck`): zero-copy `&[Distinction] ↔ &[u8]` conversions for
-persistence and wire-format code; free because the layout is just 16 bytes
-of plain data. `PartialOrd + Ord` via the derived lexicographic byte
-comparison: matches the canonical `(min, max)` ordering already used in
-`synthesize` and makes `BTreeMap<Distinction, _>` / `slice.sort()` work
-without consumer boilerplate.
+`pub fn synthesize` `[SHIPPED @ src/engine.rs:386-484]`. The current API
+returns a bare `Distinction`, discarding the novelty bit; exposure of
+`SynthesisOutcome { child, was_novel }` is `[TARGET @ E02]` — see the
+"What v2.0.0 changes" section.
 
-- `#[must_use] fn as_bytes(&self) -> &[u8; 16]` — canonical byte accessor.
-- `#[must_use] fn from_hex(s: &str) -> Result<Self, ParseError>` — parse
-  from display form. Validates length (32 chars) and charset.
-- `fn to_hex(&self) -> String` — emit 32-char lowercase hex.
-- `impl Display for Distinction` via `to_hex`.
-- `impl Debug for Distinction` via `to_hex`.
-- `pub(crate)` field: no public constructor. Foreign-ID poisoning closed
-  structurally at compile time.
-- Primordials: `d0 = Distinction([0; 16])`, `d1 = Distinction([1, 0, ..., 0])`.
+**Two-type discipline (Axiom-4 closure).** Bytes typed as `Distinction`
+that were not produced by the operator are structurally illegitimate.
+[`THEORY.md § The operator`](THEORY.md#the-operator) names the API-level
+convention: raw bytes admitted only as `RawDistinctionId`, converted to
+`Distinction` via `engine.verify()`, foreclosing foreign-byte injection at
+the type level. That API surface is `[TARGET @ E02]`. The current runtime
+closure is the debug-mode `debug_assert!` foreign-byte guard at
+`[SHIPPED @ src/engine.rs:393-402]`; release builds trust the contract.
 
-**`from_hex` contract:** parses bytes; does not validate that those bytes
-correspond to a registered distinction in any engine. Consumers must only
-pass `Distinction` values obtained from the engine they intend to use
-(via `engine.synthesize` or `engine.get_distinction_by_id`). Passing a
-`from_hex`-parsed distinction from engine A to engine B's `synthesize`
-triggers a debug-build panic via the parent-existence assertion in
-`synthesize`.
+### The Distinction type
 
-### IdentityHasher
+`pub struct Distinction(pub(crate) [u8; 16])` `[SHIPPED @ src/engine.rs:53]`
+— a 16-byte newtype with:
 
-SHA-256 prefixes are uniformly distributed. The hash function for byte-keyed
-DashMaps is "take the leading 8 bytes as a u64." No XOR. No rotation. No
-diffusion math.
+- `#[repr(transparent)]` — zero-copy FFI / persistence layout.
+  `*const Distinction` and `*const [u8; 16]` are layout-compatible.
+- `Copy + Clone + Eq + Hash + Ord` — by-value passage across threads,
+  no allocations. `Ord` via derived lexicographic byte comparison
+  matches the canonical `(min, max)` ordering used inside `synthesize`
+  so consumers get `BTreeMap<Distinction, _>` and `slice.sort()`
+  without boilerplate.
+- `bytemuck::Pod + Zeroable` derives — zero-copy `&[Distinction] ↔ &[u8]`
+  conversions without `unsafe` on the consumer side. Free because the
+  layout is just 16 bytes of plain data.
+- `pub(crate)` field — no public constructor. Foreign-ID poisoning
+  closed structurally at compile time.
+- Primordials: `d0 = Distinction([0; 16])`, `d1 = Distinction([1, 0, …, 0])`.
 
-```rust
-#[derive(Default)]
-pub struct IdentityHasher { state: u64 }
+Hex round-trip via `to_hex` / `from_hex` / `Display` / `Debug` at
+`[SHIPPED @ src/distinction_hex.rs]`, with typed `ParseError` returned
+from `from_hex` (length + charset validation). `from_hex` parses bytes
+but does not verify engine registration — callers must obtain
+`Distinction` values from the engine they intend to use. Cross-engine
+byte injection is caught by the two-type discipline above.
 
-impl Hasher for IdentityHasher {
-    fn finish(&self) -> u64 { self.state }
-
-    fn write(&mut self, bytes: &[u8]) {
-        debug_assert_eq!(bytes.len(), 16, "IdentityHasher only handles 16-byte keys");
-        self.state = u64::from_le_bytes(
-            bytes[..8].try_into().expect("IdentityHasher invariant: 16-byte key"),
-        );
-    }
-
-    fn write_u8(&mut self, _: u8)             { unreachable!() }
-    fn write_u16(&mut self, _: u16)           { unreachable!() }
-    fn write_u32(&mut self, _: u32)           { unreachable!() }
-    fn write_u64(&mut self, _: u64)           { unreachable!() }
-    fn write_usize(&mut self, _: usize)       { unreachable!() }
-    fn write_length_prefix(&mut self, _: usize) { unreachable!() }
-}
-```
-
-The structural guards (`debug_assert!` + `unreachable!()` on other write
-methods) catch misuse — anyone hashing a slice or non-16-byte key triggers
-an immediate panic instead of silently corrupting state.
-
-v2.0 has no tuple keys (no `relationships: DashMap<([u8;16], [u8;16]), ()>`
-map — `parents_of` subsumes it), so the hasher only ever sees single 16-byte
-writes. Per Exp 14: 6–13× hash speedup vs SipHash on SHA-256 keys. Per
-Exp 10: 8-thread throughput 2.6M → 15.3M ops/sec.
-
-### The synthesize hot path
-
-```rust
-#[must_use]
-pub fn synthesize(&self, a: Distinction, b: Distinction) -> Distinction {
-    // Caller contract: a and b must be distinctions registered in this
-    // engine. The `pub(crate)` constructor + this debug_assert catch
-    // foreign-byte injection (e.g., a `Distinction::from_hex` round-trip
-    // from a different engine).
-    debug_assert!(
-        self.all_distinctions.contains_key(&a.0) || a == self.d0 || a == self.d1,
-        "synthesize: parent `a` not registered in this engine"
-    );
-    debug_assert!(
-        self.all_distinctions.contains_key(&b.0) || b == self.d0 || b == self.d1,
-        "synthesize: parent `b` not registered in this engine"
-    );
-
-    // Irreflexivity
-    if a == b { return a; }
-
-    // Symmetry — canonical (min, max) ordering on raw bytes
-    let (first, second) = if a.0 <= b.0 { (a, b) } else { (b, a) };
-
-    // Content addressing — 16-byte SHA-256 prefix
-    let mut h = Sha256::new();
-    h.update(first.0);
-    h.update(second.0);
-    let mut new_bytes = [0u8; 16];
-    new_bytes.copy_from_slice(&h.finalize()[..16]);
-
-    // Fast saturation check — avoids the closure invocation in the
-    // already-synthesized case.
-    if let Some(existing) = self.all_distinctions.get(&new_bytes) {
-        return *existing;
-    }
-
-    let new_d = Distinction(new_bytes);
-
-    // Gate: `or_insert_with` runs the closure under the DashMap shard
-    // write-lock for `new_bytes`. Populate `parents_of` and bump
-    // `degree_counts` INSIDE the closure so that the closure body
-    // completes BEFORE `or_insert_with` returns (the shard-lock release
-    // is the happens-before edge readers acquire when they later observe
-    // `new_d` in `all_distinctions`). Any racing reader who observes
-    // `new_d` in `all_distinctions` is guaranteed to find its parents
-    // and is already counted in its parents' degree.
-    //
-    // Lock-holding discipline: each inner `degree_counts.get(parent)` /
-    // `entry(...)` guard drops before the next call — at no point does
-    // this thread hold two `degree_counts` shard locks simultaneously.
-    // DashMap takes shard-level locks; the `all_distinctions` shard lock
-    // and `degree_counts` shard locks are on different maps and can
-    // never deadlock against each other.
-    //
-    // Hot-path optimization: pre-seed `degree_counts[new_bytes] = 0`
-    // when inserting a novel child, so when this child later becomes a
-    // parent of some other synthesis, the bump can use the read-locked
-    // `get()` fast path instead of the write-locked `entry().or_default()`.
-    // For the two parents of THIS synthesis (`first`, `second`), the
-    // entry was already pre-seeded when they themselves were inserted
-    // (or, for d₀/d₁, at engine construction) — so `get()` works.
-    //
-    // Memory ordering: `fetch_add(1, Release)` pairs with `Acquire` loads
-    // in `engine.degree()` so probes reading `degree_counts` directly
-    // (without first reading another DashMap field) still get a
-    // happens-before edge to the writing synthesis. The shard-lock
-    // release on `all_distinctions` provides the same edge for probes
-    // that touch `all_distinctions` or `parents_of` first; Release/Acquire
-    // makes the contract uniform.
-    self.all_distinctions.entry(new_bytes).or_insert_with(|| {
-        self.parents_of.insert(new_bytes, (first, second));
-        self.degree_counts.insert(new_bytes, AtomicUsize::new(0));  // pre-seed
-        // Both parents already have a degree_counts entry (pre-seeded at
-        // their own insertion, or at construction for d₀/d₁), so get() is
-        // sufficient — no write-lock needed.
-        self.degree_counts.get(&first.0)
-            .expect("degree_counts pre-seeded at parent insertion (invariant)")
-            .fetch_add(1, Ordering::Release);
-        self.degree_counts.get(&second.0)
-            .expect("degree_counts pre-seeded at parent insertion (invariant)")
-            .fetch_add(1, Ordering::Release);
-        new_d
-    });
-
-    new_d
-}
-```
-
-~35 LOC including the foreign-byte guard. All four axioms enforced. The
-`or_insert_with` closure serializes on the DashMap shard lock for
-`new_bytes`, so only the winning thread executes the populate — no
-double-count race. The writes inside the closure happen *before* the
-distinction becomes visible in `all_distinctions`, so the engine's
-state is consistent from any reader's perspective.
-
-**Why `fetch_add` not `Vec::push`:** d₀ and d₁ accumulate millions of
-children via the Fold Law. A `Vec<Distinction>` reallocates O(log N)
-times on the way up to that scale — ~22 reallocations per million
-entries, each one happening under the shard write-lock and stalling
-every other thread trying to synthesize against d₀ or d₁. `AtomicUsize`
-fetch_add is constant-cost, lock-free, and the count itself is the only
-thing any consumer ever asked for.
-
-Takes `Distinction` by value, not by reference — `Copy` makes this one
-register pair on x86-64/ARM64, cheaper than a pointer dereference.
-
-`#[must_use]`: dropping a synthesis result is always a bug.
-
-### ByteMapping (engine-registered)
-
-The static cache is gone. `ByteMapping::map_byte_to_distinction(byte, engine)`
-folds the byte through `engine` itself, registering every intermediate
-distinction in the calling engine. Subsequent calls for the same byte hit
-saturation (DashMap lookup) and return without re-synthesizing.
-
-This eliminates the phantom-node observability hole. The engine genuinely
-knows about every distinction that's been used.
-
-### LocalCausalAgent (substrate-level trait)
-
-```rust
-pub trait LocalCausalAgent {
-    type ActionData: Canonicalizable;
-
-    #[must_use]
-    fn get_current_root(&self) -> Distinction;  // by value — Distinction is Copy
-
-    /// Default impl: calls `synthesize_causal_action` then
-    /// `update_local_root` on the result. Override for finer control.
-    #[must_use]
-    fn synthesize_action(
-        &mut self,
-        action: Self::ActionData,
-        engine: &Arc<DistinctionEngine>,
-    ) -> Distinction {
-        let new_root = synthesize_causal_action(self.get_current_root(), action, engine);
-        self.update_local_root(new_root);
-        new_root
-    }
-
-    fn update_local_root(&mut self, new_root: Distinction);
-}
-
-#[must_use]
-pub fn synthesize_causal_action<A: Canonicalizable>(
-    local_root: Distinction,
-    action: A,
-    engine: &Arc<DistinctionEngine>,
-) -> Distinction {
-    let action_d = action.to_canonical_structure(engine);
-    engine.synthesize(local_root, action_d)
-}
-```
-
-**Substrate-wide `#[must_use]` policy:** every function that produces a
+**Substrate-wide `#[must_use]` policy.** Every function that produces a
 `Distinction` is `#[must_use]`. Dropping a synthesis result is always a
 bug (you computed a distinction and threw it away). Applies to
-`engine.synthesize`, `engine.parents_of`, `engine.degree`,
-`engine.d0`, `engine.d1`, `Distinction::as_bytes`,
-`Distinction::from_hex`, `Distinction::to_hex`, `LocalCausalAgent::get_current_root`,
+`engine.synthesize`, `engine.parents_of`, `engine.degree`, `engine.d0`,
+`engine.d1`, `Distinction::as_bytes`, `Distinction::from_hex`,
+`Distinction::to_hex`, `LocalCausalAgent::get_current_root`,
 `LocalCausalAgent::synthesize_action`, `synthesize_causal_action`,
 `snapshot_parentage`, `replay_topological`, `build_children_index`,
 `SynthesisRecorder::new`, `SynthesisRecorder::log`.
 
-**Lives at `src/agent.rs`, not `src/subsystems/local_agent.rs`.** The trait
-IS substrate. Subsystems are *implementers* of the trait.
+### Engine state
 
-### Replay and observation helpers (consumer-side, not engine state)
+One `DashMap<[u8; 16], EngineNode { parents, degree }>` plus two
+primordial constants:
 
-`src/replay.rs`:
+- `pub struct DistinctionEngine` `[SHIPPED @ src/engine.rs:275]`
+- `struct EngineNode` `[SHIPPED @ src/engine.rs:234]`
+- `pub struct IdentityHasher` `[SHIPPED @ src/engine.rs:101]`
 
-```rust
-pub fn snapshot_parentage(engine: &DistinctionEngine)
-    -> Vec<(Distinction, (Distinction, Distinction))>
-{
-    engine.parents_of.iter()
-        .map(|e| (Distinction(*e.key()), *e.value()))
-        .collect()
-}
+`EngineNode`'s two fields serve the three canonical O(1) projections
+the theory names:
 
-/// Errors that can occur during topological replay.
-#[derive(Debug, thiserror::Error)]
-pub enum ReplayError {
-    #[error("corrupted parentage: cycle or missing parent at remaining entries: {0}")]
-    Unreachable(usize),
-    #[error("content-address mismatch at child {child:?}: expected {expected:?}, got {actual:?}")]
-    Mismatch { child: Distinction, expected: Distinction, actual: Distinction },
-    #[error("no parentage entry roots in primordials: input cannot bootstrap from d₀/d₁")]
-    MissingPrimordial,
-}
-
-#[must_use = "replay_topological returns a Result; handle the corrupted-parentage case"]
-pub fn replay_topological(
-    parentage: impl IntoIterator<Item = (Distinction, (Distinction, Distinction))>,
-) -> Result<Arc<DistinctionEngine>, ReplayError> {
-    let engine = Arc::new(DistinctionEngine::new());
-    let mut pending: Vec<_> = parentage.into_iter().collect();
-    let initial_len = pending.len();
-    while !pending.is_empty() {
-        let before = pending.len();
-        let mut err = None;
-        pending.retain(|(child, (a, b))| {
-            if engine.has(a) && engine.has(b) {
-                let result = engine.synthesize(*a, *b);
-                // Release-safe content-addressing check. A debug_assert!
-                // would silently disappear in release builds, allowing
-                // tampered parentage to silently reconstruct wrong state.
-                if result != *child {
-                    err = Some(ReplayError::Mismatch {
-                        child: *child, expected: *child, actual: result,
-                    });
-                }
-                false
-            } else {
-                true
-            }
-        });
-        if let Some(e) = err { return Err(e); }
-        if pending.len() == before {
-            // No entry's parents were both registered this pass. If this
-            // happens on the FIRST iteration with a non-empty input,
-            // the input couldn't root in d₀/d₁ — distinguish that from
-            // a downstream cycle for clearer diagnostics.
-            return Err(if pending.len() == initial_len {
-                ReplayError::MissingPrimordial
-            } else {
-                ReplayError::Unreachable(pending.len())
-            });
-        }
-    }
-    Ok(engine)
-}
-```
-
-`src/recorder.rs`:
-
-```rust
-use std::marker::PhantomData;
-
-/// Chronological observer of novel syntheses through a single engine.
-///
-/// **Single-threaded only.** The recorder is `!Sync` by design: under
-/// concurrent synthesis from other threads, the count-delta novelty
-/// check would race (another thread's novel synthesis can bump
-/// `distinction_count` between this thread's pre- and post-reads).
-/// Route all `recorder.synthesize` calls from one thread, or wrap the
-/// recorder in your own `Mutex` and accept the lock cost.
-///
-/// This is NOT an LCA. LCAs anchor to a local_root and evolve via
-/// causal synthesis from that perspective. This recorder is a passive
-/// observer with no perspective of its own — it records what passed
-/// through it. Consumers wanting LCA-pattern chronology should build
-/// their own LCA implementation.
-pub struct SynthesisRecorder {
-    log: Vec<Distinction>,
-    /// Marker: `PhantomData<*const ()>` makes this `!Send + !Sync`.
-    /// Prevents accidental concurrent use.
-    _not_thread_safe: PhantomData<*const ()>,
-}
-
-impl SynthesisRecorder {
-    #[must_use]
-    pub fn new() -> Self {
-        Self { log: Vec::new(), _not_thread_safe: PhantomData }
-    }
-
-    /// Synthesize a ⊕ b through `engine`. If the result is a novel
-    /// distinction (not previously in the engine), record it.
-    ///
-    /// Race-free under the single-threaded contract: we check
-    /// `parents_of` after synthesize, which is an exact "did THIS
-    /// synthesis register parentage" probe rather than the racy
-    /// count-delta heuristic.
-    pub fn synthesize(
-        &mut self,
-        engine: &DistinctionEngine,
-        a: Distinction,
-        b: Distinction,
-    ) -> Distinction {
-        let child = engine.synthesize(a, b);
-        // If `synthesize` actually performed the novel insertion,
-        // `child` will be in `parents_of`. If it was saturated (already
-        // existed), `parents_of` ALSO contains it — but it would have
-        // been recorded by whoever first synthesized it. To avoid
-        // double-recording, only push if this is the first time WE see
-        // this child.
-        if !self.log.contains(&child) {
-            self.log.push(child);
-        }
-        child
-    }
-
-    #[must_use]
-    pub fn log(&self) -> &[Distinction] { &self.log }
-}
-```
-
-**`src/replay.rs` (continued):**
-
-```rust
-/// Materialize the inverse of `parents_of`: for each distinction, the
-/// set of distinctions that have it as a parent. Built in O(N) over the
-/// parentage snapshot.
-///
-/// **Snapshot-in-time semantics.** The returned index reflects only the
-/// parentage entries passed in. Concurrent syntheses against the live
-/// engine after the snapshot was taken do NOT appear in this index.
-/// Build it from a fresh `snapshot_parentage(&engine)` call at a quiescent
-/// moment, or accept that the view is consistent with the snapshot, not
-/// with the engine's current state.
-///
-/// The engine itself doesn't carry this index — `degree_counts` is the
-/// canonical O(1) projection of the Coding Law primitive (degree = total
-/// participations). This helper materializes the dual enumeration on
-/// demand for consumers that need to iterate children (e.g., diagnostic
-/// dumps, custom graph algorithms). Build it once at a quiescent moment;
-/// query it in O(1) thereafter.
-#[must_use]
-pub fn build_children_index(
-    parentage: &[(Distinction, (Distinction, Distinction))],
-) -> HashMap<Distinction, Vec<Distinction>> {
-    let mut index: HashMap<Distinction, Vec<Distinction>> = HashMap::new();
-    for (child, (a, b)) in parentage {
-        index.entry(*a).or_default().push(*child);
-        index.entry(*b).or_default().push(*child);
-    }
-    index
-}
-```
-
-~10 LOC. Pure function. Stateless. Engine is unaware. (The engine
-carries `degree_counts` because Coding Law and Fold Law name *degree*
-explicitly; the children enumeration is the derived form.)
-
-All three helpers (snapshot, replay, build_children_index) are pure
-functions / small structs that USE the substrate. They add no state to
-the engine. Consumers wanting persistence call `snapshot_parentage` to
-dump and `replay_topological` to restore. Consumers wanting chronological
-observation use `SynthesisRecorder`. Consumers wanting children iteration
-use `build_children_index`. Consumers wanting none of these pay nothing.
-
-**Note on `SynthesisRecorder::log.contains(&child)`:** the membership check
-is O(log) in the log size; for very long-running recorders this would
-become O(N) per call. If that matters for a consumer, they should maintain
-a `HashSet<Distinction>` alongside the `Vec`. The reference impl prioritizes
-clarity over the micro-optimization.
-
-### What this collapses vs the first v2.0 attempt
-
-| First attempt | This design | Why |
+| Projection | Theory anchor | Field access |
 |---|---|---|
-| `relationships: DashMap<([u8;16], [u8;16]), ()>` | dropped | Subsumed by `parents_of`. Pure redundancy. |
-| `parents_of: DashMap<[u8;16], (Distinction, Distinction)>` | kept | Canonical child↔parents projection. Load-bearing for replay, invariant check, and the binary-parentage law. |
-| `children_of: DashMap<[u8;16], Vec<Distinction>>` | **dropped** (replaced by `degree_counts`) | The first v2.0 attempt kept this and dropped `degree_cache` as "derivable." Round-4 review reversed that: **the theory's central law (Coding Law: degree = total participations) is a *count*, not an *enumeration*.** A grep of every probe + subsystem + test in the tree found zero load-bearing consumers of children iteration; every caller uses `degree(d)`. Vec growth on d₀/d₁ also stalls the synthesis hot path. |
-| `degree_cache` / `degree_counts: DashMap<[u8;16], AtomicUsize>` | **kept** (as `degree_counts`) | The canonical O(1) projection of the structural law "degree = total participations." Strictly cheaper than Vec push under shard write-lock. |
-| `log: Option<SegQueue<(Distinction, Distinction)>>` | dropped | Order is not a substrate concern. Topological replay from `parents_of` is correct and bounded. |
+| Saturation check | [Law 7](THEORY.md#law-7-saturation) | `nodes.contains_key(id)` |
+| Parent lookup | [Law 5](THEORY.md#law-5-binary-parentage) | `nodes.get(id).parents` |
+| Degree query | [Law 11](THEORY.md#law-11-fold-law) + [Law 12](THEORY.md#law-12-coding-law) | `nodes.get(id).degree.load(Acquire)` + genesis addend |
 
-Engine state shrinks from 5 → 3 indexed structures, with **every remaining
-field serving a unique theory-required O(1) operation**. Net engine.rs LOC
-drop estimated at ~170 LOC vs the first v2.0 attempt; estimated ~70 LOC
-saved vs the round-3 plan that retained `children_of`.
+Three side-by-side maps from an earlier design (`all_distinctions` /
+`parents_of` / `degree_counts`) collapsed into this single map at
+Step 1e (public API signatures unchanged; single-thread +20%,
+8-thread +46% on M3 Pro). See `CHANGELOG.md § Step 1e merged-map
+refactor` for the provenance.
 
-**On consumer-side children iteration:** the rare consumer that genuinely
-needs to walk children (none in the current tree) can call
-`replay::build_children_index(snapshot_parentage(engine))` to materialize
-the inverse map in O(N) once and query in O(1) thereafter. Engine state
-stays minimal; consumers pay for what they use.
+### IdentityHasher
 
----
+DashMap uses a specialized hasher `[SHIPPED @ src/engine.rs:101]` that
+takes the leading 8 bytes of the 16-byte SHA-256 prefix directly as the
+u64 hash — no XOR, no rotation, no diffusion math. SHA-256 prefixes are
+already uniformly distributed; a general-purpose hasher would waste
+cycles re-mixing entropy. Speedup numbers live in `docs/BENCHMARKS.md § Throughput`.
 
-## Part 3 — Reference subsystems (LCA implementations)
+The hasher carries structural guards: `debug_assert!` on 16-byte keys
+plus `unreachable!()` on every non-`write` `Hasher` method (write_u8,
+write_u16, …, write_length_prefix). Misuse — hashing a slice, a
+non-16-byte key, or a typed integer — triggers an immediate panic
+instead of silently corrupting state. v2.0.0 has no tuple keys, so the
+hasher only ever sees single 16-byte writes.
 
-These exist to demonstrate the LCA pattern with running consensus code.
-They are NOT the substrate. They are the worked example.
+`pub type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>`
+`[SHIPPED @ src/engine.rs:169]` is what the `DashMap` field type
+parameterizes on.
 
-### File layout
+### Synthesize hot path — concurrency contract
 
-```
-src/subsystems/
-  mod.rs              ~20 LOC   declarations + re-exports
-  validator.rs        ~300 LOC  ConsensusValidator
-  commitment.rs       ~250 LOC  CommitmentAgent + BatchCommitment
-  network.rs          ~550 LOC  NetworkAgent + PeerIdentity + NetworkAction
-  compactor.rs        ~250 LOC  StructuralCompactor + CompactionAction
-```
+`pub fn synthesize` `[SHIPPED @ src/engine.rs:386-484]` is race-free
+under concurrent synthesis. Shape:
 
-**Subsystems total: ~1,370 LOC.**
+1. **Foreign-byte guard** on both parents (`debug_assert!` on
+   `nodes.contains_key(&parent.0)`). Debug-only enforcement of the
+   two-type discipline described above; release builds trust the
+   contract.
+2. **Irreflexivity check** — `a == b` returns `a` directly, before any
+   hashing (Axiom 3).
+3. **Canonical ordering** — `(first, second) = if a.0 <= b.0 { (a, b) } else { (b, a) }`
+   (Axiom 2).
+4. **Content addressing** — SHA-256 over the canonical pair, leading
+   16 bytes as the child's identity (Axioms 1 + 4).
+5. **Saturation fast path** — `contains_key(&new_bytes)` check before
+   the entry lock (Law 7). Hot-path optimization: avoids any shard
+   write-lock traffic on repeat calls.
+6. **Entry-gated insert** — `nodes.entry(new_bytes)` on `Vacant` runs
+   the closure that inserts the new `EngineNode`. Exactly one thread
+   wins the entry-vacant dispatch per novel child.
+7. **Parent degree bumps** — after the child's shard write-lock
+   releases, both parents' `degree.fetch_add(1, Ordering::Release)`
+   fire (B1 mitigation — parent and child may hash to the same shard;
+   holding the child-shard lock across a parent-shard operation could
+   deadlock if a peer thread races the mirror pair).
 
-### Design principles
+**Memory ordering contract.** `fetch_add(1, Release)` on parent degree
+pairs with `Ordering::Acquire` loads in `pub fn degree` so probes
+reading `node.degree` directly (without first observing the new child)
+still get a happens-before edge to the writing synthesis. The
+Release/Acquire kernel is
+`[SHIPPED @ tests/loom_kernel.rs]` — loom verifies the abstract
+memory-model interleavings; TSan on the concurrent-write
+byte-equivalence test verifies the DashMap-shard side. Neither alone
+covers both; both are required.
 
-1. **Each subsystem IS an LCA.** Implements the trait. The trait's
-   semantics are the only contract.
+**Law 8 quiescence qualifier.** Two engines processing the same
+operations produce byte-identical state
+[at quiescence](THEORY.md#law-8-engine-independence); mid-flight
+transient divergence is permitted while writes are in progress. The
+claim is post-processing convergence, not instantaneous equality.
+LCAs drive synthesis sequentially per LCA, so the relaxation is
+invisible to the documented consumer contract; probes reading
+`node.degree` mid-flight are responsible for their own quiescence
+boundary (post-join barrier, epoch boundary, etc.).
 
-2. **Bug-correct from the start, not bug-fixed retroactively.**
-   - **Validator:** pre-validation pass before any `synthesize` call.
-     Engine state is invariant on rejection. (V5 designed-in.)
-   - **Commitment:** `compute` hashes `leader_id`. (N6 designed-in.)
-   - **Network:** `previous_root` typed as `Distinction`. No string
-     parsing, no truncation, no sentinel. (N5 doesn't exist.)
-   - **PeerIdentity::new** returns `Result<Self, PeerIdentityError>` with a
-     typed error. Bounded id length, non-empty. (N1/N2 designed-in.)
-   - **NetworkAgent::join_peer** dedupes on joint `(id, distinction)`. (N7
-     designed-in.)
-   - **Compactor:** explicit `(hot, warm)` thresholds at construction. No
-     magic defaults. `compact()` is dry-run; `synthesize_action`
-     advances the count. No self-archive. (Sub-branch #9's fixes
-     designed-in.)
-   - **`TransactionBatch::previous_root: Distinction`**, not `String`. JSON
-     serialization uses `#[serde(with = "distinction_hex")]` for
-     human-readable wire format. The N5 bug literally cannot exist
-     because there's no string to truncate.
+**Why `AtomicUsize::fetch_add` not `Vec::push`.** Earlier design rounds
+kept a `children_of: DashMap<[u8;16], Vec<Distinction>>` for
+enumerating a distinction's children. d₀ and d₁ accumulate millions of
+children via the Fold Law; a `Vec<Distinction>` reallocates O(log N)
+times under the shard write-lock and stalls every other thread trying
+to synthesize against d₀ or d₁. `AtomicUsize::fetch_add` is
+constant-cost, lock-free, and the count itself is what
+[Coding Law](THEORY.md#law-12-coding-law) actually names. Consumers
+wanting children iteration call `build_children_index` on a snapshot
+(see below).
 
-3. **`pending_commitments: LruCache<[u8; 32], BatchCommitment>` with
-   `cap = MAX_PENDING_COMMITMENTS = 256`.** Derivation pinned in the
-   `const`'s docstring: `64 peers × 2 in-flight epochs × 2 safety margin
-   = 256`. The 64-peer figure is the Section 1.6 N1 `MAX_PEER_ID_LEN`
-   cap (the protocol won't accept more peer-id bytes than that, and one
-   peer per id is the dedupe key). Two in-flight epochs is the
-   maximum a peer can be a leader in before commitment finalization;
-   the 2× safety margin absorbs network reordering. Cleared on epoch
-   advance because commitments bind `epoch` in their hash and are
-   unfinalizable across boundaries.
+### Structural invariants surfaced
 
-4. **Typed errors throughout.** No `Result<T, String>` on public surfaces.
+`pub fn check_structural_invariant` `[SHIPPED @ src/engine.rs:643]`
+returns `Result<(), InvariantError>`
+`[SHIPPED @ src/engine.rs:195]`. The check tests
+[Law 5 binary parentage](THEORY.md#law-5-binary-parentage) via the
+[Law 6 r = 2d − 3](THEORY.md#law-6-r--2d--3) accounting:
+`nodes.len() == parents_of_count + 2` (every non-primordial has parents
+recorded once; +2 accounts for the primordials, which by definition have
+no parents). A failure is a theory event — the engine no longer
+satisfies Law 6 and must be redesigned, not amended.
 
-5. **No magic constants.** Every threshold is a named `const` with a
+### LocalCausalAgent (substrate-level trait)
+
+`pub trait LocalCausalAgent` `[SHIPPED @ src/agent.rs]` captures the
+substrate's reference consumption pattern:
+
+- an LCA anchors to a **local root distinction** — its perspective;
+- state transitions are **causal syntheses** from local root + the
+  canonical structure of the action being taken;
+- LCAs **update their perspective forward** as their causal chain
+  advances.
+
+The trait exposes `get_current_root` and `update_local_root` as the
+core surface, plus a default `synthesize_action` method that composes
+them via the helper `pub fn synthesize_causal_action`
+`[SHIPPED @ src/agent.rs]`. The helper canonicalizes the action's data
+through the engine (via `Canonicalizable`) and synthesizes the result
+with the local root, returning a new root.
+
+See
+[`THEORY.md § what it means to use the substrate`](THEORY.md#what-it-means-to-use-the-substrate)
+for the pattern's theoretical status — reference, not axiom. Consumers
+with different shapes (multi-perspective, non-root, no-perspective) can
+exist and still receive the substrate's axiom-level correctness
+guarantees; the trait exists so LCA-shape consumers interoperate.
+
+The trait lives at `[SHIPPED @ src/agent.rs]` (substrate level, not
+under `subsystems/`) because it formalizes what it means to *use* the
+substrate. Subsystems are *implementers* of the trait, not the trait's
+home.
+
+### Reference observers (consumer-side, not engine state)
+
+Three reference implementations ship in-crate demonstrating consumer
+patterns; none extend engine state. Consumers wanting none of these
+pay nothing.
+
+- **`SynthesisRecorder`** `[SHIPPED @ src/recorder.rs]` — chronological
+  record of novel syntheses through a single engine. Consumer
+  constructs one, routes `synthesize` calls through it; the recorder
+  pushes to its internal `Vec` only on novel results (deduped via
+  membership check). `!Send + !Sync` by construction via
+  `PhantomData<*const ()>` marker — single-thread use enforced at
+  compile time. This is NOT an LCA (LCAs anchor to a local_root and
+  evolve; the recorder is a passive observer with no perspective of
+  its own).
+
+- **`snapshot_parentage` + `replay_topological`**
+  `[SHIPPED @ src/replay.rs]` — engine persistence + round-trip
+  reconstruction. `snapshot_parentage(engine)` dumps the parent map;
+  `replay_topological(snapshot)` rebuilds a fresh engine by repeatedly
+  calling `synthesize` on entries whose parents are already
+  registered, until quiescent. Returns `Result<_, ReplayError>` with
+  release-safe content-address mismatch detection: the release build
+  checks that each `synthesize` result matches the recorded child
+  bytes and returns `ReplayError::Mismatch` on tampered parentage,
+  `ReplayError::Unreachable` on cycles or missing parents, and
+  `ReplayError::MissingPrimordial` when the input cannot root in d₀
+  or d₁. The round-trip identity is
+  [Law 9 order-independent reconstruction](THEORY.md#law-9-order-independent-reconstruction):
+  replaying a shuffled parentage snapshot produces byte-identical state.
+
+- **`build_children_index`** `[SHIPPED @ src/replay.rs]` — materializes
+  the inverse of `parents_of` in O(N) once for consumers that need to
+  iterate children rather than just count them. Takes a parentage
+  snapshot, returns `HashMap<Distinction, Vec<Distinction>>`.
+  Snapshot-in-time semantics — concurrent syntheses against the live
+  engine after the snapshot was taken do not appear.
+
+These aren't substrate. They're worked examples of how to use it. All
+three are pure functions or small structs that consume the substrate;
+the engine is unaware of them.
+
+### Reference subsystems
+
+Two reference LCA implementations demonstrate the pattern with running
+consensus code at the current commit:
+
+- `[SHIPPED @ src/subsystems/validator.rs]` — `ConsensusValidator`
+  with V3 (data cap), V4 (oversized-root clipping), V5 (atomic-failure
+  pre-validation), V6 (atomic `restore_state`), V8 (empty-data
+  by-design) designed-in as non-existent bugs. Pre-validation pass
+  before any `synthesize` call — engine state is invariant on
+  rejection. Typed errors on the public surface; explicit thresholds;
+  no magic constants.
+
+- `[SHIPPED @ src/subsystems/commitment.rs]` — `CommitmentAgent` +
+  `BatchCommitment`. `BatchCommitment::compute` hashes `leader_id` (N6
+  designed-in); `TransactionBatch::previous_root` typed as
+  `Distinction` — the N5 String-truncation bug literally cannot exist
+  because there is no string to truncate. `pending_commitments` LRU
+  cache with documented cap derivation
+  (`COMMITMENT_CACHE_CAP` pinned in-file). `TransactionBatch`
+  deserialize cardinality cap is `[TARGET @ E03]` (BLOCKING for tag).
+
+Common design principles across subsystems:
+
+1. **Each subsystem IS an LCA.** Implements
+   [the reference consumption pattern](THEORY.md#what-it-means-to-use-the-substrate)
+   directly; the trait's semantics are the only contract.
+2. **Bug-correct from the start.** Audit-discovered bugs from earlier
+   design rounds are designed-in as non-existent (typed fields,
+   pre-validation, atomic restore, hashed inputs) rather than fixed
+   retroactively.
+3. **Typed errors throughout.** No `Result<T, String>` on public
+   surfaces. `#[non_exhaustive]` on public error enums.
+4. **No magic constants.** Every threshold is a named `const` with a
    docstring explaining its source.
+5. **`#[serde(try_from = "Raw")]`** on any type with construction
+   invariants — deserialization can't bypass the constructor.
 
-6. **Each subsystem fits in budget.** If a subsystem is growing past
-   budget, either (a) it's accreting bugs that should be fixed at the
-   design level, or (b) it's accreting features that belong in the
-   consumer's own LCA implementation. The reference impl shouldn't be
-   infinitely featureful.
-
-7. **`Deserialize` invariants enforced.** Any subsystem with constructor
-   invariants (e.g., `Compactor::new(hot, warm)` requires `warm <= hot`)
-   uses `#[serde(try_from = "RawForm")]` so deserialization can't bypass
-   the constructor.
-
-### What subsystems are NOT for
-
-- Production consensus. Use `koru-protocol` (which can fork these as a
-  starting point if it wants).
-- Configuration knobs. Every parameter that varies between deployments is
-  the consumer's choice, not a subsystem feature.
-- Optimal performance under every workload. They optimize for clarity.
-
----
-
-## Part 4 — Bindings
-
-```
-src/
-  ffi.rs              ~650 LOC  C ABI
-  wasm.rs             ~450 LOC  WASM (feature-gated)
-```
-
-**Bindings total: ~1,100 LOC.**
-
-### FFI design
-
-- Opaque types: `#[repr(C)] pub struct KoruEngine { _private: [u8; 0] }`,
-  same for `KoruAgent`, `KoruValidator`. Distinct typedefs in `target/koru.h`.
-- Handle wrapping: `Box<parking_lot::Mutex<NetworkAgent>>`,
-  `Box<parking_lot::Mutex<ConsensusValidator>>`. `parking_lot::Mutex` is
-  ~5× faster uncontended than `std::sync::Mutex` and avoids poisoning
-  semantics that don't apply to FFI.
-- Engine borrows: `ManuallyDrop<Arc<DistinctionEngine>>` via one
-  `borrow_engine` helper. No `Arc::from_raw` + `into_raw` re-leak dance.
-- `panic = "abort"` on release profile. No unwinding across `extern "C"`.
-- Length guards: `batch_len > isize::MAX` rejected before
-  `slice::from_raw_parts`.
-- `koru_agent_check_commitment` takes `leader_id` + `batch_size` as real
-  inputs. No Frankenstein commitments.
-- cbindgen: no `include` allowlist (export everything); no `prefix`
-  (manual `koru_` on each `#[no_mangle]` name); clean type names in the
-  header.
-
-### WASM design
-
-- Bytes-canonical end to end. Every distinction ID crossing the JS
-  boundary is `Uint8Array` of length 16.
-- No `id_to_bytes` heuristic. Primordials use the same byte path as
-  synthesized IDs.
-- `WasmEngine::synthesize(&[u8], &[u8]) -> Result<Vec<u8>, JsValue>`.
-  Length-validated.
-- `idToHex(arr) -> string`, `idFromHex(s) -> Uint8Array` as freestanding
-  helpers for display boundaries.
-- `checkCommitment(hash, nonce, epoch, leader_id, batch_size)`. Empty
-  `leader_id` rejected.
-- `#[wasm_bindgen(start)] fn _wasm_start()` wires up
-  `console_error_panic_hook` unconditionally under the `wasm` feature.
-- Tests: `#[wasm_bindgen_test]` for everything. `wasm-pack test --node
-  --features wasm` is the canonical test driver.
-
----
-
-## Part 5 — Total target
-
-| Layer | LOC (estimate, non-test) |
-|---|---|
-| Substrate | ~890 |
-| Subsystems (reference LCA impls) | ~1,370 |
-| Bindings (FFI + WASM) | ~1,100 |
-| **Total non-test src/** | **~3,360** |
-
-**Apples-to-apples comparison (non-test code only, measured via `wc -l`
-minus inline `#[cfg(test)]` modules):**
-
-| Tree | Non-test LOC | Total LOC (with inline tests) |
-|---|---|---|
-| `dev` (current crates.io 1.2.0 baseline) | 2,810 | 4,489 |
-| First v2.0 attempt (at `research/warroom-experiments` commit `691e9ad`) | 4,562 | 6,094 |
-| **v2.0 plan (this document)** | **~3,360** | (TBD; inline-test growth typical) |
-
-**This v2.0 is *larger* than dev's non-test code by ~550 LOC (+~20%).**
-It is *smaller* than the first v2.0 attempt by ~1,200 LOC (−~26%).
-
-The growth vs dev concentrates in:
-
-| Source of growth vs dev | LOC delta |
-|---|---|
-| Engine: byte Distinction layout + IdentityHasher + traversal indices + structural invariant + entry-gated synthesize | +237 (193 → ~430) |
-| New file: `src/agent.rs` (LCA trait moved from `subsystems/local_agent.rs`) | net 0 (move) |
-| New file: `src/distinction_hex.rs` (to_hex / from_hex / Display / Debug / serde adapter) | +120 |
-| New file: `src/replay.rs` (snapshot_parentage + replay_topological + build_children_index + ReplayError) | +60 |
-| New file: `src/recorder.rs` (SynthesisRecorder reference observer) | +60 |
-| Subsystem hardening adds (network LRU + dedupe + atomic restore; validator pre-validation + V3/V4/V6) | +~240 |
-| FFI hardening (Mutex wrap + ManuallyDrop + opaque types + length guards) | +~80 |
-| Subsystem reductions (compactor simplified; parallel.rs slimmed; commitment.rs slimmed) | −~250 |
-| **Net** | **+~550** |
-
-**The growth earns its keep on three explicit goals from Part 1:**
-
-- *Powerful* — degree API + traversal (+~50 LOC in engine) lets ALIS delete
-  `tracker.rs` (~600 LOC) externally. Net across the ALIS+koru-lambda-core
-  surface, this is reductive.
-- *High performance* — byte layout + IdentityHasher (+60 LOC) gives ~8×
-  memory density and 5.9× 8-thread throughput on the first attempt's
-  measurements. These additions cost code but pay throughput.
-- *Stable* — typed errors, `#[must_use]` annotations, `bytemuck::Pod`
-  derives, structural invariant check. These cost LOC but harden the
-  public API for v2.0's "single major bump, consumers migrate once"
-  commitment.
-
-The savings vs the first v2.0 attempt come from:
-
-1. Collapsing redundant engine state (5 fields → 3; dropped log, dropped
-   `children_of` Vec, dropped `relationships` map).
-2. Lean reference subsystems (300–550 LOC each, not 600+).
-3. No accreted features beyond what the theory + audit demand.
-4. No engine-side observation infrastructure.
-5. Choosing `degree_counts` (the count the theory actually names in Coding
-   Law) over `children_of` (an enumeration no probe walks). The first
-   v2.0 attempt had this exactly backwards.
-
-**Honest summary: this is not "smaller than dev." It is *bigger* than
-dev because dev does not expose the substrate APIs consumers actually
-need (degree, persistence, observation, hex display). It is
-*substantially smaller* than the first v2.0 attempt because we removed
-dead code, collapsed redundant indices (including dropping `children_of`
-in round 4), and stopped accreting features.
-For the user's stated priority order ("100% theory-aligned, minimal,
-elegant, powerful, high performance, stable"), the +550 LOC vs dev is
-the cost of "powerful" and "high performance"; the savings vs the
-first attempt is the cost of "minimal" applied consistently.**
+**Subsystems are NOT** production consensus (use `koru-protocol`),
+configuration knobs (parameters are consumer choices), or optimal
+under every workload (they optimize for clarity). If a subsystem is
+growing past budget, either it's accreting bugs (fix at design level)
+or accreting features (belong in the consumer's own LCA implementation).
 
 ### Direct dependencies
 
-Beyond what dev already pulls (dashmap, sha2, serde, lru, rayon, hex):
+Beyond what dev already pulls (`dashmap`, `sha2`, `serde`, `lru`,
+`rayon`, `hex`):
 
 - `bytemuck = { version = "1", features = ["derive"] }` — `Pod` +
-  `Zeroable` derives on `Distinction` enable zero-copy slice views
-  without `unsafe`. **The `derive` feature is NOT default; pinning it
-  is mandatory or the `#[derive(bytemuck::Pod, Zeroable)]` macros will
-  not be available and the substrate will not compile.**
+  `Zeroable` derives on `Distinction` for zero-copy slice views
+  without `unsafe`. `derive` feature is NOT default; pinning is
+  mandatory or the derive macros are unavailable and the substrate
+  will not compile.
 - `thiserror = "1"` (already in dev) — typed errors (`ParseError`,
-  `ReplayError`, `PeerIdentityError`).
-- `parking_lot = "0.12"` — FFI-internal `Mutex` (5× faster uncontended,
-  no poisoning). Lives entirely behind opaque FFI handles; the
-  `cdylib` and any Rust caller are built from the same `Cargo.lock` so
-  cross-version ABI is not a concern.
-- `console_error_panic_hook = "0.1"` (optional, under `wasm` feature) —
-  surfaces Rust panics as readable JS console errors. No-op when the
-  `wasm` feature is off.
+  `ReplayError`, `PeerIdentityError`, `InvariantError`).
 - `static_assertions = "1"` (dev-dep) — compile-time trait assertions
-  for `Distinction: Copy + Send + Sync + Pod` and `SynthesisRecorder:
-  !Send + !Sync`.
+  for `Distinction: Copy + Send + Sync + Pod` and
+  `SynthesisRecorder: !Send + !Sync`.
 - `loom = "0.7"` (dev-dep) — memory-ordering model checker for the
-  Release/Acquire kernel (see Part 6 for scope honesty).
-- `dhat = "0.3"` (dev-dep) — per-distinction memory probe.
-- `blake3 = "1"` (dev-dep) — alternative hash for differential test
-  reference (see Part 6 for what it actually catches).
+  Release/Acquire kernel in `synthesize` + `degree`.
+- `dhat = "0.3"` (dev-dep) — per-distinction memory probe. See
+  [`docs/BENCHMARKS.md § Capacity`](docs/BENCHMARKS.md).
+- `blake3 = "1"` (dev-dep) — alternative hash for differential-test
+  reference against SHA-256; the substrate ships SHA-256 (Axiom 4
+  content-addressing contract) but the differential test catches
+  bytes-injection regressions.
+
+FFI / WASM heavyweight dependencies (`parking_lot`, `console_error_panic_hook`,
+`wasm-bindgen`, `wasm-bindgen-test`) are NOT pulled at this commit — see
+anti-scope. The `wasm` feature flag remains declared in `Cargo.toml` for
+future E-series work; no `src/` code is currently gated on it.
 
 No new heavyweight deps. Every addition serves a specific design goal.
 
-### Edition and MSRV
+### Edition, MSRV, workspace
 
-- **Edition:** Rust 2021. v2.0 does not bump to 2024 — the patterns the
-  substrate uses are stable on 2021, and bumping the edition is an
-  orthogonal concern that would expand the migration surface for
-  consumers without delivering substrate value.
+- **Edition:** Rust 2021. v2.0.0 does not bump to 2024 — an orthogonal
+  concern that would expand the migration surface for consumers
+  without delivering substrate value.
 - **MSRV:** `rust-version = "1.80"` in `Cargo.toml`. Pinned because
   `DashMap 6` requires 1.71 and `bytemuck::Pod` derive is stable on
-  1.74; 1.80 leaves headroom for `LazyLock` and `OnceLock` usage in
-  the substrate without surprising consumers. Bumping MSRV is a
-  breaking change for consumers and requires its own minor-version
-  release after v2.0. ALIS / koru-protocol pin `1.80` in their
-  `rust-toolchain.toml` upon migrating to v2.0.
+  1.74; 1.80 leaves headroom for `LazyLock`/`OnceLock` usage without
+  surprising consumers. Bumping MSRV is a breaking change requiring
+  its own minor-version release after v2.0.0.
+- **Workspace:** single-crate, not a workspace member. `experiments/`
+  has its own `Cargo.toml` and does not ship in the published crate.
+  The published `koru-lambda-core` is one `Cargo.toml`, one crate,
+  one published artifact.
 
-### Workspace structure
+### Test strategy — one-paragraph reference
 
-- **Single-crate, not a workspace member.** `experiments/` is referenced
-  as a "separate workspace" only in the sense that it has its own
-  `Cargo.toml` and doesn't ship in the published crate. The published
-  `koru-lambda-core` is one `Cargo.toml`, one crate, one published
-  artifact.
+The substrate ships with axiom-verification tests (isolated
+determinism / commutativity / irreflexivity / content-addressing),
+scale probes ([`r = 2d − 3`](THEORY.md#law-6-r--2d--3) at 5 M synths
+with zero deviations, saturation at 1 M repeats), concurrency probes
+(8-thread byte-equivalence, loom kernel for Release/Acquire, TSan on
+the FFI concurrent test in E03), and misuse-detection tests
+(cross-engine foreign-byte injection debug panic, `SynthesisRecorder`
+`!Send + !Sync` compile-time assertion, `replay_topological`
+release-safe mismatch/unreachable/missing-primordial errors). Full
+test inventory lives in `src/**/tests` inline modules and in
+`tests/`. Coding Law ρ ≥ 0.985 is asserted at
+`[SHIPPED @ tests/coding_law.rs:82-125]` against a pinned exp18
+corpus.
 
----
+### Why the code looks the way it does — grounded decisions
 
-## Part 6 — Test strategy
+Four structural decisions shape the current substrate. Each is
+recorded so a new contributor can distinguish "the code is like this
+because the theory forces it" from "the code is like this because an
+earlier alternative was rejected." Only the second class is amendable
+without a theory change.
 
-### Substrate tests
+1. **No engine-side synthesis log.** The engine carries no ordered
+   history of syntheses. Rationale:
+   [the substrate is timeless](THEORY.md#what-it-means-to-use-the-substrate);
+   order is what consumers do. Chronological observation is a
+   consumer concern — `SynthesisRecorder` is the reference
+   implementation, not engine state. This decision is theory-forced
+   (Laws 8 + 9); reversing it would require a theory amendment.
 
-**Axiom verification (each in isolation):**
-- Determinism
-- Commutativity (and proptest fuzz over 10K random pairs)
-- Irreflexivity
-- Content addressing — same chain on different engines → byte-identical state
-- Saturation — 1M repeats of one synth call → distinction_count delta = 0
+2. **`degree_counts` over `children_of`.** The engine records a
+   per-node `AtomicUsize` participation count instead of a per-node
+   `Vec<Distinction>` children list. Rationale:
+   [Coding Law](THEORY.md#law-12-coding-law) names *degree* — the
+   count — explicitly; children enumeration is the derived form.
+   Every audit-verified caller (probes, subsystems, tests) uses
+   `degree(d)`; zero use children iteration. `Vec::push` under the
+   d₀/d₁ shard write-lock reallocs O(log N) times up to Fold-Law
+   scale, stalling every peer thread. `AtomicUsize::fetch_add` is
+   constant-cost and lock-free. Reversing this decision means
+   accepting the reallocation stall for a use case no consumer has;
+   theoretically legal, engineeringly wrong.
 
-**Structural laws (at scale):**
-- `r = 2d − 3` after 5M synths with zero deviations
-- Binary parentage — `parents_of.len() == all_distinctions.len() − 2`
-- ByteMapping registration — phantom count = 0 after 256-byte exercise
+3. **`LocalCausalAgent` at substrate level, not under `subsystems/`.**
+   The trait IS substrate — it formalizes what it means to use the
+   substrate. Filing it under `subsystems/` misnames its role.
+   `[SHIPPED @ src/agent.rs]` is the correct home.
 
-**Engine internals:**
-- IdentityHasher — 1M random SHA-256 prefixes produce 1M distinct buckets
-- `Send + Sync` compile-time assertion for `DistinctionEngine`, `Distinction`,
-  and the LCA trait implementers (one-line `fn assert_send_sync<T: Send + Sync>(){}`)
-- **Concurrent-write byte-equivalence** — 8 threads independently synthesizing
-  the same logical chain → byte-identical final state, with two checkable
-  invariants on the resulting engine:
-    1. `parents_of.len() == all_distinctions.len() − 2` (no duplicate
-       child entries despite the race; structural law 5 holds).
-    2. `sum(degree_counts[d].load() for d in all_distinctions) == 2 * parents_of.len()`
-       (every novel synthesis contributes exactly two `fetch_add(1)` calls;
-       this is the unambiguous "expected participation count" invariant
-       that doesn't depend on which thread won which race).
-  This is the regression test for the round-1 race and round-4
-  Release-ordering decision.
-- **`r = 2d − 3` at 5M scale** — synthesize 5M distinctions, assert
-  `relationship_count() == 2 * distinction_count() − 3` with zero
-  deviations. The structural law's correctness at scale, not just at small
-  N (Exp 2 carried forward).
-- **`degree_counts` Release/Acquire correctness** — `loom` model checker
-  test over a **minimal abstract kernel** (writer thread `fetch_add(Release)`,
-  reader thread `load(Acquire)`, assert reader observes the increment).
-  Loom enumerates the abstract memory-model interleavings — catches a
-  missing `Acquire` deterministically regardless of host architecture.
-  TSan on x86-TSO would silently pass even with `Relaxed` (the architecture
-  provides Acquire for free), so loom is the load-bearing verifier for
-  the **ordering contract**, not for the shipped code.
-  **Scope honesty:** loom cannot model DashMap's internal locking
-  (`parking_lot`, hazard pointers, shard masking are not loom-aware).
-  What we verify is "the abstract Release/Acquire contract holds when
-  separated from DashMap"; DashMap's own correctness is trusted via its
-  upstream tests + TSan. The combined contract — "if loom passes AND
-  DashMap is correct, then our hot path is correct" — is the
-  load-bearing claim. The TSan run on the concurrent-write byte-equivalence
-  test catches DashMap-specific issues; loom catches our atomic ordering;
-  neither alone covers both.
-- **Primordial invariants on a fresh engine** — `let e = DistinctionEngine::new();`
-  then assert: `e.distinction_count() == 2`, `e.parents_of(d0).is_none()`,
-  `e.parents_of(d1).is_none()`, `e.degree(d0) == 1`, `e.degree(d1) == 1`
-  (the genesis d₀↔d₁ edge), `e.check_structural_invariant().is_ok()`
-  (r=2d−3 with d=2 → r=1). Smoke test catching construction regressions.
-- **`or_insert_with` closure runs exactly once per novel synth** — pre-bind
-  `x` as a known distinction (e.g., `let x = engine.synthesize(d0, d1);`
-  on the main thread). Snapshot baseline parent degrees:
-  `let d0_before = engine.degree(d0); let x_before = engine.degree(x);`.
-  Spawn N threads, each racing `engine.synthesize(d0, x)` once (all on
-  the same pre-bound `x`, by-value Copy into each closure). Join.
-  Assert `engine.degree(d0) == d0_before + 1` AND
-  `engine.degree(x) == x_before + 1` (each parent gets exactly one
-  fetch_add, not N). The child's degree alone wouldn't catch the bug —
-  the bug being guarded is "fetch_add ran N times outside the closure,"
-  which inflates **parent** degrees, not the new child's. Falsifies any
-  refactor that moves `fetch_add` outside the closure or breaks the
-  entry-gate.
-- **Fold Law byte coverage exact bound** — after running the 256-byte
-  exercise (every byte 0..=255 folded through the engine via
-  `ByteMapping::map_byte_to_distinction`), assert `engine.degree(d0) == 512`
-  AND `engine.degree(d1) == 512`. Derivation: at bit-step `i+1`, only
-  `2^(i+1)` unique accumulator values exist across all 256 bytes (one
-  per bit-prefix). Each unique acc spawns one novel `synth(acc, d_X)`
-  and one novel `synth(intermediate, d_Y)` (the bit value determines
-  which primordial is which). Cumulative novel bumps per primordial:
-  `2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 = 510`. Plus 1 from the
-  initial `synth(d0, d1)` saturated after byte 0. Plus 1 from the
-  genesis addend in `degree()`. Total: 512 exactly — this is the
-  topological maximum for the 8-bit fold shape under content-addressing
-  saturation. Catches both (a) regression below 512 (fewer novel
-  intermediates than predicted; broken saturation or skipped bytes) and
-  (b) regression above 512 (extra synth calls; Fold redesign).
-  (The earlier `>= 256 * 8 = 2048` gate ignored saturation entirely;
-  it would have flagged a correct implementation as broken.)
-- Mediated self-reference uniqueness at depth ≥ 10K (iterative, not recursive)
-- Fold Law — d₀/d₁ degree ratio ≥ 100× after byte folds
-- `replay_topological(snapshot_parentage(e))` produces a byte-identical engine
-- Replay correctness on shuffled parentage (Exp 12 carried forward)
+4. **`previous_root: Distinction` on `TransactionBatch`.** The N5
+   String-truncation bug from v1.2.x cannot exist because there is no
+   string to truncate. Content addressing (Axiom 4) says identity is
+   bytes; string typing an identity field is a category error.
+   Reversing this decision reintroduces N5 by construction; it is
+   not on any table.
 
-**Property-based (proptest, ~30 LOC):**
-- For random `(a, b)`: `synthesize(a, b) == synthesize(b, a)`
-- For random `a`: `synthesize(a, a) == a`
-- For random `(a, b)` twice: `synthesize(a, b)` is idempotent on engine state
+Non-decisions worth naming (things the theory permits but the
+engine does not currently expose):
 
-**Misuse-detection:**
-- `IdentityHasher` panics on non-16-byte `write`
-- `Distinction::from_hex` rejects empty / wrong length / non-hex / uppercase / non-ASCII
-- Deserialize<Compactor> respects `warm <= hot` via `try_from`
-- **Cross-engine foreign-byte injection** — debug-build panic when
-  `engine_b.synthesize(d_from_engine_a, x)` is called with a
-  `Distinction` whose bytes aren't registered in `engine_b`. Release
-  behaviour documented (no panic; substrate trusts the contract).
-- **`SynthesisRecorder` is `!Send + !Sync`** — compile-time assertion
-  via `fn assert_not_sync<T: ?Sized>() where T: ?Sized {}; ... // a static_assertions::assert_not_impl_any!(SynthesisRecorder: Send, Sync)`. The
-  marker exists to prevent accidental concurrent use; this test confirms
-  the marker actually works.
-- **`replay_topological` returns `Err(ReplayError::Mismatch)`** on
-  tampered parentage (child bytes don't match `synthesize(parents)`).
-  Release-mode behaviour; not gated on `debug_assert`.
-- **`replay_topological` returns `Err(ReplayError::Unreachable)`** on
-  cyclic / missing-parent parentage. Release-mode behaviour.
-- **`SynthesisRecorder` deduplication** — recording the same child
-  twice from the same recorder doesn't append twice; the `log.contains`
-  check prevents it. Test verifies the property holds.
+- The engine does not expose `remove_distinction`, `clear`, or any
+  non-monotone mutation. Append-only is a *design choice* enabling
+  Laws 8 + 9 to hold cleanly; the axioms
+  [don't forbid removal](THEORY.md#what-follows-from-the-theory).
+  Garbage collection by partial-reroot replay is theoretically
+  permissible; v2.0.0 deliberately excludes it.
+- The engine does not expose `SynthesisOutcome`; the novelty bit is
+  discarded at the current commit. E02 changes this.
+- The engine does not accept `RawDistinctionId` at the API surface;
+  foreign-byte injection is caught by debug-mode `debug_assert!`
+  today. E02 promotes this to type-level.
 
-**Compile-time assertions:**
-- `Distinction: Copy + Send + Sync` (use case: passed by value across threads)
-- `Distinction: bytemuck::Pod + bytemuck::Zeroable` (use case: zero-copy
-  byte slices for persistence)
-- `#[repr(transparent)]` on `Distinction` (load-bearing for FFI and
-  `bytemuck::Pod`)
-- `SynthesisRecorder: !Send + !Sync` (load-bearing for single-thread
-  contract)
+### API surface at the current commit
 
-### Subsystem tests
-- **Validator:** atomic-failure (V5 regression), data cap (V3), oversized-root
-  clipping (V4), atomic restore_state (V6), empty-data by-design (V8).
-- **Commitment:** `compute` hashes leader_id (N6 regression),
-  `verify_batch` rejects tampered leader_id (F7 transitive).
-- **Network:** N5 cannot exist (typed previous_root), N1/N2 peer-id bounds,
-  N7 joint dedupe, N11 LRU cap + epoch clear.
-- **Compactor:** explicit thresholds, no double-count, no self-archive,
-  no archived_ids field, Deserialize respects `warm <= hot`.
+Public entry points a v1.x consumer would touch. Every method carries
+a `[SHIPPED]` tag by construction (release/2.0.0-next commit
+`7549860`); items added at E02 or later carry a `[TARGET]` tag on the
+E02 line-item.
 
-### Binding tests
-- **FFI:** 8-thread concurrent join (F2/F8 regression), `batch_len > isize::MAX`
-  rejected (F9 regression), fabricated root rejected via restore_state.
-- **WASM (`wasm-pack test --node --features wasm`):** bytes-canonical
-  round-trip, axioms preserved across FFI boundary, idToHex/idFromHex
-  round-trip, empty leader_id rejected (W10 regression).
+- `DistinctionEngine::new()` / `Default::default()` — bootstrap;
+  inserts d₀, d₁; asserts `distinction_count() == 2`,
+  `relationship_count() == 1`.
+- `engine.synthesize(a, b) -> Distinction` — the write path.
+- `engine.parents_of(d) -> Option<(Distinction, Distinction)>` — O(1)
+  parent lookup; `None` for primordials and unregistered bytes.
+- `engine.degree(d) -> usize` — [Law 12](THEORY.md#law-12-coding-law)
+  degree query; participation count + genesis addend.
+- `engine.distinction_count() -> usize` — O(1) size.
+- `engine.relationship_count() -> usize` —
+  `(nodes.len() - 2) * 2 + 1`; direct
+  [Law 6](THEORY.md#law-6-r--2d--3) accounting.
+- `engine.check_structural_invariant() -> Result<(), InvariantError>` —
+  release-safe theory-event probe.
+- `engine.d0()` / `engine.d1()` — primordial accessors.
+- `engine.has(d) -> bool` — registration probe; drives
+  `replay_topological`'s topological pass.
+- `Distinction::as_bytes(&self) -> &[u8; 16]` — canonical bytes.
+- `Distinction::from_hex(s: &str) -> Result<Self, ParseError>` — hex
+  round-trip parse. Does not verify engine registration.
+- `Distinction::to_hex(&self) -> String` — 32-char lowercase hex.
+- `snapshot_parentage(&engine) -> Vec<(Distinction, ParentPair)>` —
+  persistence snapshot.
+- `replay_topological(snapshot) -> Result<Arc<DistinctionEngine>, ReplayError>` —
+  round-trip reconstruction.
+- `build_children_index(&snapshot) -> HashMap<Distinction, Vec<Distinction>>` —
+  inverse projection for children-iteration consumers.
+- `SynthesisRecorder::new()` / `SynthesisRecorder::synthesize(&mut self, &engine, a, b)` /
+  `SynthesisRecorder::log(&self) -> &[Distinction]` — chronological
+  observer.
+- `LocalCausalAgent` trait — reference consumer pattern.
+- `synthesize_causal_action(root, action, &engine) -> Distinction` —
+  LCA helper.
 
-### Sanitizers and fuzzing
-
-Add to CI:
-- `cargo +nightly miri test --lib` — substrate is `unsafe`-free; Miri is cheap
-  insurance against future `unsafe` creep.
-- `RUSTFLAGS=-Zsanitizer=thread cargo +nightly test --release` on the 8-thread
-  concurrent FFI test. TSan is the canonical answer to "sanitizer-clean."
-- `cargo +nightly fuzz run from_hex` — one harness file targeting
-  `Distinction::from_hex`. Not a CI gate (fuzz runs are long); a stretch
-  goal run periodically.
-
-### Memory-bounded regression test
-
-- A dhat-instrumented test that builds a 1M-distinction engine and asserts
-  resident heap per distinction is within budget. Specifies the harness
-  (dhat live-heap, steady-state, exact engine construction). Replaces
-  one-time manual measurement that would drift.
-
-### CI gates
-- `cargo fmt --check`
-- `cargo clippy --all-targets -- -D warnings`
-- `cargo clippy --all-targets --features wasm -- -D warnings`
-- `cargo test --release`
-- `cargo bench --no-run` (verify benches compile, don't run)
-- `cargo +nightly miri test --lib` (substrate only — Miri is slow)
-- *(stretch goal)* `wasm-pack test --node --features wasm`
-- *(stretch goal)* `RUSTFLAGS=-Zsanitizer=thread cargo +nightly test` on the
-  FFI concurrent test
+Every entry above resolves to a `[SHIPPED @ src/…]` file path per the
+substrate description sections above. `SynthesisOutcome` and the
+`RawDistinctionId → engine.verify() → Distinction` type-level API
+extend this surface at E02.
 
 ---
 
-## Part 7 — Step-by-step path off `dev`
+## What v2.0.0 changes (TARGET-tagged forward-pointers)
 
-Each step is a sub-branch off `release/2.0.0`. Each merges back green
-before the next starts. No interleaving.
+This section names the deltas from the current shipping state to v2.0.0.
+Each item points to the epic that lands it. Tags follow the
+`[TARGET @ Enn]` convention on any code-referencing claim.
 
-### Step 1 — Substrate foundation
-**Branch:** `step/01-substrate`
-- `Distinction(pub(crate) [u8; 16])` newtype with `#[repr(transparent)]`
-- `distinction_hex.rs` (to_hex / from_hex / Display / Debug / serde adapter / typed `ParseError`)
-- `IdentityHasher` (leading 8 bytes, guards on misuse)
-- Engine state: `all_distinctions`, `parents_of`, `degree_counts`. No log. No children_of.
-- `synthesize` hot path: entry-gated, race-free, all axioms enforced, `AtomicUsize::fetch_add` instead of Vec push
-- `parents_of`, `degree`, `relationship_count`, `check_structural_invariant`
-- `agent.rs` at substrate level (LCA trait + helper)
-- `primitives.rs` rewrite — ByteMapping engine-registered
-- `replay.rs` — `snapshot_parentage`, `replay_topological`, `build_children_index`
-- `recorder.rs` — `SynthesisRecorder` reference impl
-- Substrate axiom test suite + proptest + Send+Sync assertion
-- Step-1 measurements: 8-thread throughput, memory/distinction at 1M, single-thread throughput
+### E02 — projection primitive API surface
 
-**Gate (hard checkpoint, no soft hatch):** all substrate tests pass;
-engine is one screen of code; measurements hit Part 10 performance and
-memory budgets. If a measurement misses budget, **stop** — open a
-gate-decision PR that either (a) revises the substrate code until budget
-is met, or (b) explicitly amends Part 10's budget in this design doc with
-fresh reasoning. Do not proceed to Step 2 with an unresolved budget miss.
-"Doc-flagged for revisit" is not an acceptable resolution.
+The substrate has, until now, exposed only the write dual
+(`synthesize`). The read dual has lived in six ad-hoc reinventions
+across the ecosystem (see the headline). E02 exposes the projection
+API surface directly, respecting
+[the projection dual as theory-forced](THEORY.md#the-synthesis-projection-dual):
+a projection is not new structure; it is the graph as viewed from
+somewhere. Cross-engine projection independence is the falsifier —
+two engines with the same synthesis history queried with the same
+projection `{ Root, boundary, Direction, Signal }` at quiescence must
+produce byte-identical output. `[TARGET @ E02]`.
 
-### Step 2 — Reference subsystems
-**Branch:** `step/02-subsystems`
+**Novelty bit home.** The operator produces `(child, novel?)` per
+[`THEORY.md § The operator`](THEORY.md#the-operator); the API
+currently returns `Distinction`, discarding the novelty bit. v2.0.0
+exposes `SynthesisOutcome { child, was_novel }` at E02 completion.
+`[TARGET @ E02]`. This is one paragraph in one place — not a section
+header — matching Logic Enforcer's T13 placement discipline: the
+theory-side status of the novelty bit is already fixed in
+[`THEORY.md § Implications not yet materialized`](THEORY.md#implications-not-yet-materialized);
+DESIGN.md merely names the API surface that materializes it.
 
-Each subsystem rewritten from dev as a clean LCA implementation with the
-audit-discovered bugs designed-in as non-existent:
+**Two-type API surface.** `RawDistinctionId → engine.verify() →
+Distinction`. The runtime closure is `[SHIPPED @ src/engine.rs:393-402]`;
+lifting it to a type-level API is `[TARGET @ E02]` — see substrate
+description above.
 
-- `validator.rs` — pre-validation pass; data cap; clipped messages;
-  atomic restore_state.
-- `commitment.rs` — leader_id hashed; LRU stays at the existing
-  ~1000-entry cache from dev.
-- `network.rs` — `previous_root: Distinction`; bounded peer-id; joint dedupe;
-  bounded pending_commitments with documented cap; epoch clear; atomic
-  restore_consensus_validator_state. `PeerIdentity::new` returns typed
-  error.
-- `compactor.rs` — explicit `(hot, warm)` thresholds; no `archived_ids`
-  field; no double-count; no self-archive; Deserialize respects invariant.
-- `parallel.rs` — `BatchSynthesizer` only. No `ParallelBatchProcessor`,
-  no `ParallelAction`. Returns `Vec<Option<Distinction>>`.
+**Signal axis forward-compat.** The projection dual carries a `Signal`
+axis (see [`THEORY.md § synthesis/projection dual`](THEORY.md#the-synthesis-projection-dual)).
+E02's initial API surface will expose a bounded set of signals
+sufficient for the flagship consumers named above (adjacency, degree,
+hop-distance). Future signals — novelty rate, saturation-boundary
+probes, cross-vantage intersection, structural attention — are
+exploration land, not shipping targets. Naming them here prevents
+v2.0.0 from hard-closing the read dual and forcing a v3.0.0 bump when
+the next novel signal lands.
 
-**Gate:** every subsystem fits in budget; regression tests pass.
+### E03 — subsystems hardening
 
-### Step 3 — Bindings
-**Branch:** `step/03-bindings`
-- FFI rewrite with opaque structs, internal `parking_lot::Mutex`,
-  ManuallyDrop helper, panic=abort.
-- WASM rewrite with bytes-on-wire, idToHex/idFromHex, panic hook,
-  #[wasm_bindgen_test].
-- cbindgen.toml cleaned (no include, no prefix).
-- `tests/falsification/wasm_consistency.rs` is `#[wasm_bindgen_test]`
-  and `#![cfg(feature = "wasm")]`-gated.
+Two hardening deliverables land at E03; both are BLOCKING for the
+v2.0.0 tag:
 
-**Gate:** FFI passes 8-thread concurrent test (TSan-clean); WASM compiles
-under `--features wasm`; `wasm-pack test --node --features wasm` passes
-if toolchain available.
+- **`TransactionBatch` deserialize cardinality cap** `[TARGET @ E03]` —
+  the current `TransactionBatch::previous_root: Distinction` typing
+  closes the N5 String-truncation class at the type level, but a
+  hostile-input `Vec<Transaction>` field can still allocate
+  unbounded memory during deserialization. E03 adds a
+  `#[serde(try_from = "Raw")]` wrapper with a documented cardinality
+  cap so `Deserialize` can't produce an outsized batch. The cap value
+  is derived from the same `MAX_LEADER_ID_LEN`-anchored arithmetic
+  the LRU cache uses.
+- **Concurrent-read visibility contract doc** `[TARGET @ E03]` — the
+  Release/Acquire kernel described above ships today; formalizing the
+  "read `node.degree` at quiescent points" contract in an in-crate
+  ADR (`docs/adr/`) lets consumers reason about traversal probe
+  correctness without re-reading the substrate source.
 
-### Step 4 — Probes + scale validation
-**Branch:** `step/04-validation`
+Validator + commitment paths get a hardened review pass at the same
+time — no new features, only bug-class closures a pre-tag audit
+surfaces.
 
-Carry forward (or rewrite from scratch) the empirical experiments that
-verify the theory's claims at scale. The set is curated to focus on
-direct probes of axioms and load-bearing structural laws:
+### E04 — consumer migration
 
-**Essential** (each falsifies a load-bearing claim if it fails):
-- Cross-engine determinism (5 phases — Exp 21 carried forward)
-- `r = 2d − 3` at scale (5M synths, zero deviations)
-- Saturation at scale (1M identical synths, distinction_count delta = 0)
-- Phantom-node count = 0 over the full 256-byte exercise
-- Mediated self-reference uniqueness at depth ≥ 10K
-- `replay_topological(snapshot_parentage(e))` round-trip byte-equivalence
-- Concurrent synthesis byte-equivalence (8 threads → byte-identical final state)
+Full migration guide from v1.x public API to v2.0.0. Includes
+per-version-pin (0.1.0 / 1.1.0 / 1.2.0) diffs, worked-example wrapper
+deletions for the six ecosystem projections named in the headline, and
+the "delete your wrapper" pitch after the API is stable enough for that
+claim to be honest. `[TARGET @ E04]`. Sequenced after E02 completion.
 
-**Validation** (theory predictions worth re-measuring on v2.0):
-- Coding Law ρ ≥ 0.985 (Spearman, frequency vs degree-delta). **Pinned
-  workload** — lifted from `experiments/runner/src/exp18_coding_law.rs`
-  on `research/warroom-experiments`, defaults unchanged:
-    1. Pool construction: synthesize a length-N chain
-       `pool = [d₀, d₁, synth(d₀,d₁), synth(synth(d₀,d₁), d₁), ...]`
-       — the same builder used by Exp 21 cross-engine determinism.
-    2. Zipf sampling: `alpha = 1.0`, `seed = 0xC0DE`. For M iterations
-       (M ≫ N), draw two distinct indices `(i, j)` from `Zipf(N, alpha)`,
-       record `freq[i] += 1; freq[j] += 1`, call
-       `engine.synthesize(pool[i], pool[j])`.
-    3. Measurement: Spearman ρ between `freq[k]` and
-       `degree_after[k] - degree_before[k]` over all `k in 0..N`.
-    4. Recommended scale for the gate: `N = 4096, M = 8 * N`. Larger
-       scales are welcome (the gate evaluates the floor, not the ceiling).
-  
-  This is the fixed-pool Zipf-sampling spec exp18 actually implements
-  — not a perspective-evolving sampler. Margin: first-attempt measurement
-  was ρ ≈ 0.99 ± 0.005; 0.985 leaves ~3σ headroom and falsifies any
-  structural regression that perturbs the degree-counting hot path.
-- Fold Law ratio ≥ 100× (d₀/d₁ as mega-hubs)
-
-**Engineering** (performance and resource budgets):
-- 8-thread throughput on primary hardware ≥ X M ops/sec (see Part 10 for X)
-- Memory per distinction at 1M scale ≤ 180 B (dhat live-heap, steady state, including DashMap shard slack — see Part 10 gate 13)
-- WASM bytes-on-wire round-trip fingerprint match (native vs wasm-pack-node)
-
-(The "100M-synth churn, no leaks" probe was considered and dropped: the
-append-only invariant + dhat budget at 1M + Miri-on-substrate + TSan on
-the concurrent test already cover the leak/UB surface. A 100M run with
-no concrete threshold is an unfalsifiable smoke test; if we add one later
-it needs a numeric RSS-delta gate, not a wave-hands "no leaks" claim.)
-
-These live in `experiments/` (separate workspace, doesn't ship in the
-crate). Their findings become evidence in `SECURITY.md` and the substrate
-docstrings.
-
-**Probes dropped vs the first v2.0 attempt** (after research-lead curation):
-- Exp 03 (log A/B/C): design choice is now "no log."
-- Exp 11 (clone cost): Distinction is Copy now.
-- Exp 06 (snapshot tearing at the original 16.5% framing): replaced with a
-  single regression note documenting the corrected ≤0.1% number.
-- Exp 05 (phantom) and Exp 20 (fold law) merged — same ByteMapping surface,
-  one probe binary.
-
-**Gate:** every essential claim has a probe demonstrating it; thresholds
-defined with pre-registered refutation conditions.
-
-### Step 5 — Documentation + release prep
-**Branch:** `step/05-release`
-- `CHANGELOG.md` written as a single coherent v2.0 entry from the start
-  (not accreted across sub-branches).
-- `SECURITY.md` with Tier-0 disclosure (N5 / N6 / V5 in v1.2.x; closed in
-  v2.0).
-- `README.md` rewritten for v2.0.
-- `CLAUDE.md` updated.
-- `Cargo.toml` bumped 1.2.0 → 2.0.0 with `profile.release.panic = "abort"`.
-- `BUDGET_LOG.md` initialized (empty if no amendments occurred; populated
-  if Steps 1-4 triggered any per the Budget Amendment Policy in Part 10.5).
-- `public-api.txt` baseline snapshot committed.
-- Verification gates: all 34 done-criteria in Part 10 — theory (1-10),
-  budget (11-15), hygiene (16-28), size (29-30), documentation (31-34).
-- PR `release/2.0.0` → `dev`.
-
-**Gate:** all 34 done-criteria green; PR ready for review.
+E04's structural role is that it is the *only* place downstream teams
+should read migration prose. This document names categories (see the
+Migration categories section below); THEORY.md names axioms and
+laws; E04 names diffs. Any migration-shaped sentence outside E04 is
+either a category summary (belongs here) or a drift-report.
 
 ---
 
-## Part 8 — Decisions (all resolved)
+## Anti-scope — what v2.0.0 does NOT ship
 
-### Decision 1 — Synthesis log location
+Enumerated. No hedging.
 
-**Resolved:** drop entirely from engine. Persistence via `snapshot_parentage`
-+ `replay_topological` helpers. Chronological observation via consumer-side
-`SynthesisRecorder` reference impl.
+### Deleted files and non-claims
 
-**Rationale:** the substrate is timeless. Order is what LCAs do. theory-guardian's
-veto was upheld after a reframe attempt failed scrutiny. No consumer has
-demonstrated a need for substrate-level synthesis chronology, and the
-performance cost of dropping is negligible (topological replay is bounded
-and fast).
+- **`network.rs`, `compactor.rs`, `parallel.rs`, `ffi.rs`, `wasm.rs`**
+  — earlier design rounds described these files as shipping. They do
+  not exist in `src/` at commit `7549860`; every prior section
+  describing them has been removed. See `CHANGELOG.md § Removed
+  sections` for the excision record.
 
-### Decision 2 — LCA promotion
+- **v2.0.0 does not add a C ABI.** The `cdylib` / `staticlib`
+  crate-types in `Cargo.toml` produce empty C-boundary artifacts at
+  this commit; they are retained for a future FFI epic but claim no
+  C API surface today.
 
-**Resolved:** `local_agent.rs` → `src/agent.rs` at substrate level.
+- **No axiom or law claims not already in `THEORY.md`.** This document
+  makes no theoretical claims of its own; every axiom-/law-shaped
+  sentence in DESIGN.md is an anchor-link to a heading in `THEORY.md`.
+  If a sentence looks like a theory claim without an anchor, treat it
+  as a drift-report against this file.
 
-**Rationale:** the trait IS substrate (defines what it means to use the
-substrate). Filing it under `subsystems/` is a misnomer.
+### Direction non-claims (Visionary Phase 1, verbatim)
 
-### Decision 3 — `previous_root` type
-
-**Resolved:** `previous_root: Distinction` in `TransactionBatch`. JSON
-serialization via `#[serde(with = "distinction_hex")]`.
-
-**Rationale:** the theory says identity is bytes. String typing an identity
-field is a category error and was the structural cause of N5. With
-`Distinction` typing, N5 cannot exist by construction.
-
-### Decision 4 — Subsystem opinionatedness
-
-**Resolved:** opinionated and small. Each reference subsystem makes defensible
-choices, documents them, and stays ~300 LOC. Consumers needing different
-choices write their own LCA implementations.
-
-**Rationale:** the trait is what the substrate exposes for consumer use.
-The reference impls are a worked example, not a configuration framework.
-
-### Decision 5 — Ship subsystems in crate
-
-**Resolved:** Yes for v2.0. The crate is the demonstration package. Extracting
-subsystems to a separate `koru-reference-spoc` crate is a v3 architectural
-question to revisit once the substrate has stabilized.
-
-### Decision 6 — Compactor WARM band
-
-**Resolved:** keep WARM. Require explicit `(hot_threshold, warm_threshold)`
-at construction. No magic defaults.
-
-**Rationale:** WARM is genuinely useful for graph health monitoring (observe
-but don't archive). The cost is one extra constructor parameter. The
-classification thresholds never leak into substrate code or substrate tests.
-
----
-
-## Part 9 — What we explicitly DON'T do
-
-- **No accreted documentation.** Docstrings explain the *why*, not the
-  *what*. Avoid the first-v2.0-attempt pattern of every method having a
-  paragraph-long history of which sub-branch fixed which bug.
-- **No backward-compatibility shims.** v2.0 breaks what should break.
-  The CHANGELOG documents migrations once, clearly.
-- **No multiple ways to do the same thing.** One canonical path per
-  operation.
-- **No premature feature additions.** If the theory or audit doesn't
-  demand it, defer to v3.
-- **No "Noah's Ark" — keeping two of every data structure for
-  performance "in case."** Collapse redundancies.
-- **No tests just to pad the count.** Each test asserts something the
-  theory or audit demands.
-- **No engine-internal order tracking.** Time is what LCAs do.
-- **No observation infrastructure inside the engine.** Observers are
-  consumer-side; `SynthesisRecorder` is a reference impl, not engine state.
+1. **No substrate-side event bus / pub-sub / reactive framework.** If
+   perspective ships an `observe` verb at all, it is a bounded
+   per-handle ring, not a global stream.
+2. **No DID / crypto identity / X3DH / DoubleRatchet.** Peer identity
+   remains a bounded byte string; cryptographic identity is
+   koru-liberation / koru-crypto-strategy.
+3. **No live `children_of` as a hot-path query.** Engine keeps degree
+   as the Coding Law count; consumers who need enumeration call
+   `replay::build_children_index` on a snapshot.
+4. **No ephemeral state (WavePool, TTL) as substrate.** If perspective
+   lands, "wave = perspective + TTL" is a consumer subsystem.
+5. **No persistence rewrite.** `snapshot_parentage` +
+   `replay_topological` are the persistence surface, unchanged.
+6. **No byte-fold / Fold Law changes.** `ByteMapping` semantics stay
+   what Step 1c shipped.
+7. **No production BFT consensus layer.**
+   `[SHIPPED @ src/subsystems/validator.rs]` and
+   `[SHIPPED @ src/subsystems/commitment.rs]` are reference LCA
+   implementations, not the pitch. `koru-protocol` remains the home
+   for production consensus.
+8. **No networking stack.** Production networking is downstream of
+   this crate.
+9. **No substrate-native cryptographic proofs.**
+   `BatchCommitment::compute` hashing `leader_id` (N6 closure) is
+   reference-subsystem behavior, not a substrate primitive. Substrate
+   primitive remains distinction synthesis.
+10. **No enumeration of dropped v1.2 APIs as "features."** Removals
+    are cleanup, not selling points.
 
 ---
 
-## Part 10 — How to know we're done
+## Migration categories
 
-`release/2.0.0` is ready to merge when every gate below passes. Gates
-are sorted into three categories with different amendment rules:
+Full migration guide lands in E04 with diffs and per-version-pin
+(0.1.0 / 1.1.0 / 1.2.0) instructions. DESIGN.md carries only the
+category-level summary of what will change; downstream consumers use
+this section to bucket their audit surface, then follow E04 for the
+per-item diff.
 
-- **Theory gates** are *un-amendable*. A failure means the implementation
-  doesn't satisfy the theory; the response is redesign, not budget
-  loosening. These gates encode the four axioms and the structural laws
-  that follow from them.
-- **Budget gates** are *amendable within hard-cap floors*. A failure
-  triggers a gate-decision PR per the Budget Amendment Policy below.
-- **Hygiene gates** are *unconditional*. They must pass; they cannot be
-  loosened or amended.
+- **v1.x → v2.0.0 breaking public-API changes.** Three categories:
+  - *Type-rename* — String-typed IDs become byte-typed
+    `Distinction`. Every construction site (`Distinction::new(String)`,
+    `String::to_distinction()`, JSON schemas serializing `id: String`)
+    changes. `#[serde(with = "distinction_hex")]` is the wire-format
+    adapter.
+  - *Method-remove* — `get_distinction_by_id`, `Distinction::id()`,
+    `Distinction::new(String)`, `ParallelBatchProcessor`,
+    `ParallelAction`. Each has a replacement documented in E04; none
+    is a silent deletion.
+  - *Field-visibility* — `Distinction`'s inner byte field becomes
+    `pub(crate)`. Consumers reaching into the field switch to
+    `as_bytes()` or `to_hex()`.
 
-### Theory gates (un-amendable)
+- **Optional adoption.** Features consumers can start using
+  immediately at v2.0.0 without changing existing code:
+  - `bytemuck::Pod`-derived zero-copy slice views on `[Distinction]`
+    for persistence and wire-format code.
+  - `snapshot_parentage` + `replay_topological` for engine
+    persistence and round-trip reconstruction.
+  - `SynthesisRecorder` for chronological observation without paying
+    for engine-side state.
+  - `build_children_index` for consumers that need children iteration
+    (rare; the theory-named primitive is `degree`).
+  - `InvariantError` from `check_structural_invariant` for downstream
+    theory-event detection.
 
-A failure here means the implementation isn't `koru-lambda-core`
-anymore — it's a different substrate. The response is rewrite the code,
-not amend the gate. These cannot be loosened, deferred, or marked
-"acceptable miss" under any circumstance.
+- **Behavior-preserved.** Nothing changes for consumers who ignore
+  the new features and adopt the type-rename cleanup — same
+  synthesize path, same axiom guarantees, same LCA pattern. Adoption
+  of optional features is opt-in.
 
-1. ✅ All four axioms verified by isolated tests (determinism, commutativity,
-   irreflexivity, content addressing).
-2. ✅ Property tests over 10K random pairs for commutativity, irreflexivity,
-   idempotency. Zero failing cases.
-3. ✅ `r = 2d − 3` at 5M synths with **zero exceptions** — not "≤ some ppm,"
-   literally zero. Binary parentage holds. Saturation produces zero state delta.
-4. ✅ Engine-independence verified by cross-engine probe (5 phases) —
-   byte-identical state on any engine processing the same operations.
-5. ✅ Phantom-node count = 0 on the 256-byte exercise.
-6. ✅ Concurrent-write byte-equivalence: 8 threads synthesizing the same
-   chain → byte-identical final engine state; `sum(degree_counts) == 2 * parents_of.len()`.
-7. ✅ **Replay byte-equivalence (Laws 8 + 9).** `replay_topological(snapshot_parentage(e))`
-   produces byte-identical state to the source engine on:
-   (a) the natural snapshot order, AND
-   (b) any random permutation of the snapshot (order-independent reconstruction,
-   Law 9 — falsifies any implicit order dependence in the engine).
-   Both probes are mandatory; failure of either is a theory event.
-8. ✅ **Append-only invariant.** The substrate exposes no path that removes,
-   clears, truncates, or otherwise non-monotonically alters a distinction
-   in `all_distinctions`, `parents_of`, or `degree_counts`. Enforced
-   structurally (no `remove_*` / `clear` / `truncate` method on the engine)
-   and by hygiene grep (Step 5).
-9. ✅ **Log-replay invariant.** Rebuilding the engine from `parents_of.iter()`
-   produces byte-identical state to the live engine. Catches the case where
-   a future contributor adds a hidden state field that isn't a pure function
-   of the synthesis log.
-10. ✅ Mediated self-reference: 10K/10K unique distinctions at depth 10K
-    (iterative, not recursive).
-
-### Budget gates (amendable within hard-cap floors)
-
-These are *empirical engineering measurements*, not theory invariants.
-Hardware varies; allocators evolve; reasonable misses can be resolved by
-the Budget Amendment Policy. But no amendment crosses a hard-cap floor —
-below the floor, redesign is required.
-
-**Primary platform:** Apple M3 Pro, 8-core. Criterion median of 100 iters.
-
-| # | Gate | Target | Hard-cap floor |
-|---|---|---|---|
-| 11 | Single-thread synthesis throughput | ≥ 450K ops/sec | ≥ 300K ops/sec |
-| 12 | 8-thread synthesis throughput (see Gate 12 platform notes below) | M3 Pro (primary): ≥ 12M ops/sec AND ≥ 3.4× single-thread | M3 Pro: ≥ 10M ops/sec AND ≥ 3.0× ratio |
-| 13 | Memory per distinction at 1M scale (dhat live-heap, steady state, *including DashMap shard capacity slack* — see arithmetic below) | ≤ 180 B | ≤ 220 B |
-| 14 | Fold Law d₀/d₁ hub ratio | ≥ 100× | ≥ 50× |
-| 15 | Coding Law ρ (against pinned exp18 corpus pair `(exp18.log, exp18.freq.bin)` at `/tests/corpora/`, where `exp18.log` is the canonical `(min, max)` synthesis pair log and `exp18.freq.bin` is the Zipf-draw frequency array `freq[k]`; both produced by Step 1 from `alpha=1.0`, `seed=0xC0DE`, `N=4096`, `M=8N`; Step 4 consumes both bit-exactly — corpus alone is insufficient because Spearman ρ correlates `freq[k]` against `degree_after[k] − degree_before[k]`, and `freq` cannot be re-derived from the saturated pair log unambiguously) | ≥ 0.985 | ≥ 0.97 |
-
-**Gate 13 memory arithmetic — including capacity slack:**
-
-Raw per-distinction footprint (post Step 1 merged-map refactor):
-16 (nodes key) + `EngineNode` value = 16 + 40 (32-byte
-`Option<(Distinction, Distinction)>` discriminant + payload, plus 8
-for `AtomicUsize`) = **~56 B** of stored data. Lower than the
-pre-refactor 104 B (which had three maps storing the 16-byte key three
-times); the merged design holds the key once.
-
-DashMap shards each hold a hashbrown SwissTable that doubles capacity
-on grow. At steady state, `len/cap` typically lands in `[0.5, 0.75]`,
-so each shard carries 25–50% slack. Across **one map** at 1M entries:
-shard overhead per entry ≈ 70–80 B (capacity-doubled empty slots still
-occupy entry-sized storage; the 50% slack costs the same per-entry
-bytes as the loaded slots).
-
-**Measured at Step 1e** (commit at branch tip, `cargo run --example
-dhat_1m`, debug build per the dhat aarch64 release-mode bug — measurement
-is allocator-level and not affected by debug vs release):
-
-- Peak live heap: 137,388,552 bytes
-- Live blocks: 66 (mostly DashMap shard backing storage)
-- **Per distinction: 137.4 B** — clears the 180 B target with 24%
-  headroom; clears the 220 B floor with 38% headroom.
-
-The earlier 80 B prediction in this section was wrong — it
-underestimated `Option<(Distinction, Distinction)>` padding (32 → 40 B
-due to the 1-byte discriminant + alignment) and SwissTable's
-per-empty-slot cost (each empty slot at 50% load is the same width as
-a full slot, not just the control byte). The measured 137 B remains
-well under the gate. A future amendment may tighten the target toward
-~150 B if measurements stay stable across allocator updates; deferred
-until Step 4 reruns at full scale with the Step 4 probe harness.
-
-The earlier 140 B gate was the *arithmetic-only* prediction; the 180 B
-gate above incorporates measured capacity slack. The 220 B floor is
-the "this is design failure" line — above 220 B implies a per-shard
-issue or an unintended allocation we haven't audited. dhat measures
-malloc-tracked allocations only (`[u8;16]` stack data passes through);
-the gate is honest about what dhat actually sees.
-
-Floors are sized to absorb measurement noise and allocator variance but
-not to absorb design regressions. A miss at the floor is a design event.
-Coding Law's floor is workload-conditional on the pinned exp18 corpus
-because ρ itself is workload-dependent (degenerate workloads can push ρ
-to either extreme without violating any axiom); the corpus pins the
-measurement so the gate is reproducible.
-
-**Gate 12 platform notes — why the ratio is hardware-named.**
-
-The original gate language was "≥ 4× single-thread, non-negotiable."
-Round-3 verification (mock at `benches/upper_bound.rs` + production
-re-measurement on the merged-engine refactor) established that 4× is
-structurally unreachable on M3 Pro under any axiom-preserving layout:
-
-1. **Hardware asymmetry.** M3 Pro is 6 performance + 6 efficiency cores.
-   The 8-thread bench schedules as ~6P + 2E, where E-cores deliver ~25%
-   the throughput of P-cores. Linear-scaling ceiling is
-   `6 + 0.25 × 2 = 6.5×`, not 8×. The merged-map ceiling on this
-   asymmetry sits at ~3.6× (mock prediction). Production measurement
-   landed at 3.43× [3.30, 3.54] with 12% CI noise.
-2. **SHA-256 serial floor.** Per-call SHA-256 is ~75% of single-thread
-   work and is **theory-protected** by axiom 4 (content addressing):
-   the hash function is part of the identity contract; substituting
-   (e.g., BLAKE3) would break content-addressing equivalence across
-   consumer ecosystems. The serial-per-call floor is a load-bearing
-   theory constraint, not a budget choice.
-
-Symmetric hardware (≥ 8 uniform cores) is expected to clear ≥ 4× as
-a regression watch until a future amendment formalizes it. Reproduce:
-`cargo bench --bench substrate` at clean thermal idle (criterion median
-of 100 iters). See `BUDGET_LOG.md` for amendment history.
-
-**Secondary platform** (regression watch, not gate): Linux x86_64
-(GitHub-hosted Ubuntu runners are 4 vCPU; expect ~5–7 M ops/sec at 8 threads
-on a fully-loaded `c7i.2xlarge` or equivalent — published per-platform).
-
-### Hygiene gates (unconditional)
-
-These must pass. No amendment process applies; if hygiene fails, fix the
-code or the configuration. They protect against drift the theory + budget
-gates can't see (API surface, lints, sanitizer findings, doc-code parity).
-
-16. ✅ `cargo test --release`: all pass; no `#[ignore]` / `#[cfg(slow)]` on essential probes.
-17. ✅ `cargo clippy --all-targets --release -- -D warnings`: clean.
-18. ✅ `cargo clippy --all-targets --features wasm --release -- -D warnings`: clean.
-19. ✅ `cargo fmt --check`: clean.
-20. ✅ `cargo bench --no-run`: compiles.
-21. ✅ `cargo +nightly miri test --lib`: clean on substrate.
-22. ✅ FFI 8-thread concurrent join test passes under TSan
-    (`RUSTFLAGS=-Zsanitizer=thread cargo +nightly test --release`).
-23. ✅ WASM tests pass under `wasm-pack test --node --features wasm`.
-24. ✅ `loom` model-checker test passes for the `degree_counts`
-    Release/Acquire memory-ordering kernel.
-25. ✅ `cargo public-api` snapshot matches the checked-in baseline at
-    `public-api.txt`. Any intentional public API change requires a
-    co-merged baseline-rebaseline commit.
-26. ✅ `cargo audit` clean (no advisories on direct deps).
-27. ✅ Hygiene greps (Step 5 sweep): no `\.children_of(` outside `replay.rs`;
-    no `fn (remove|clear|truncate|drop)_distinction` anywhere; `pub struct Distinction`
-    has the `pub(crate)` field exactly once; engine has exactly 1 DashMap field
-    (`nodes: DashMap<[u8;16], EngineNode, ...>` — merged in Step 1e).
-28. ✅ Doc-code reconciliation review: `src/engine.rs` field list and public
-    method signatures match `ARCHITECTURE.md §Substrate / engine.rs`.
-    Reviewers: theory-guardian + engine-architect.
-
-### Size gates (hygiene)
-
-29. ✅ Total `src/` LOC ≤ 3,450 measured via `tokei src/ --no-tests`.
-30. ✅ `engine.rs ≤ 480` non-test LOC (one `pub fn synthesize`, all four axioms
-    enforced in <40 LOC of body, **one** merged `nodes` field carrying both
-    parents and degree per distinction, no children_of).
-
-### Documentation gates (hygiene)
-
-31. ✅ `SECURITY.md` published with Tier-0 CVE-style disclosure for N5/N6/V5.
-32. ✅ `CHANGELOG.md` written as one coherent v2.0 entry.
-33. ✅ `Cargo.toml` at `2.0.0` with `profile.release.panic = "abort"`.
-34. ✅ `BUDGET_LOG.md` reflects every budget amendment with old → new,
-    baseline delta, signers, and justification.
-
-That's the bar. Anything less and we delay shipping.
+Per-category diffs and worked-example wrapper deletions for each of
+the six ecosystem projections named in the headline live in E04's
+migration guide. This document deliberately carries no diffs — a diff
+in DESIGN.md invites drift the moment E04 lands its authoritative
+version.
 
 ---
 
-## Part 10.5 — Budget Amendment Policy
+## Downstream drift prevention
 
-Some budget gates will miss in practice. Hardware fingerprints, allocator
-behavior, and workload shape vary. The amendment process exists to
-acknowledge engineering reality without dissolving into "we'll fix it
-later." It applies **only** to budget gates (11–15 above). Theory gates
-(1–10) and hygiene gates (16–34) are not amendable.
+Three checks close the drift class that motivated this rewrite:
 
-### When an amendment is allowed
-
-An amendment is a pull request that revises a budget gate's target. It
-is allowed only when ALL of the following hold:
-
-1. The PR cites the measured value (with full harness specification —
-   hardware, runtime, exact criterion/dhat command lines, repeatable
-   seed) AND demonstrates how the measurement compares against the
-   gate's **absolute target**, **hard-cap floor**, and (where applicable)
-   the warroom v2.0 byte-API reference numbers below.
-2. The PR appends a new row to `BUDGET_LOG.md` with:
-   `date | gate | old target | new target | absolute delta | floor delta | author | signers | justification`.
-3. The new target stays **at or above the hard-cap floor** for that
-   gate. An amendment that would cross a floor is not a budget amendment
-   — it is a redesign event.
-4. The PR is signed off by **both** `theory-guardian` AND `engine-architect`.
-   Budget *loosening* additionally requires a `research-lead`-authored
-   measurement justification explaining why the new target reflects a
-   real engineering constraint rather than implementation drift.
-5. The PR is announced in the `## Unreleased` section of `CHANGELOG.md`
-   so consumer teams (ALIS, koru-protocol) see the ratcheting before
-   they migrate.
-
-"Doc-flagged for revisit," "we'll fix it in the next sprint," and
-"reasonable miss, moving on" are NOT acceptable resolutions.
-
-### Hard-cap floors (un-crossable)
-
-The floor column in the budget-gate table is the line below which an
-amendment is no longer engineering noise — it is design failure. A
-measurement at or below the floor means the substrate is not delivering
-its capability claim. The response is rewrite or version-flag, not
-amendment.
-
-### Reference measurements (what we compare against, and why no dev baseline)
-
-A `dev`-branch baseline was originally proposed but is structurally
-incoherent: `dev` ships the v1.2 String-API (`Distinction { id: String }`,
-`synthesize(&D, &D)`, ~629 B/distinction) with no `parents_of()` or
-`degree()` traversal. Comparing v2.0's byte-API throughput / memory to
-dev's String-API throughput / memory is apples-to-oranges — the numbers
-don't measure the same thing. A regression delta against an incomparable
-baseline is rhetoric, not evidence.
-
-Instead, amendments compare against **`BASELINE_WARROOM_M3_PRO`** — the
-only prior codebase that measured this engine with the v2.0 byte-API
-surface — plus the **absolute targets and floors** in the gate table
-itself. This is apples-to-apples and falsifiable.
-
-**`BASELINE_WARROOM_M3_PRO`** — pinned from `research/warroom-experiments`
-commit `22dbbce`, which had the same byte-canonical Distinction +
-3-field engine (with `children_of` instead of `degree_counts`, but the
-synthesize hot path is comparable):
-
-```
-[BASELINE_WARROOM_M3_PRO]
-commit                          = "22dbbce"
-single_thread_throughput        = 500_000      # ops/sec (Exp 10)
-8_thread_throughput             = 15_300_000   # ops/sec (Exp 10)
-memory_per_distinction          = 80           # bytes at 1M (Exp 13-16)
-fold_law_d0_d1_ratio            = 250          # ≥ 100× gate target (Exp 20)
-coding_law_rho                  = 0.99         # ± 0.005 (Exp 18, exp18 workload)
-```
-
-**Step 1 measurement delta vs warroom (post merged-map refactor,
-commit `fd9c2b1`):**
-
-```
-single_thread_throughput        = 4_440_000    # 8.9× warroom (498K → 4.44M)
-8_thread_throughput             = 15_250_000   # matches warroom (15.25M ≈ 15.3M)
-ratio                           = 3.43         # warroom was 30.6× — see note
-```
-
-Note: the warroom 500K single-thread is an allocation artifact
-(`Vec::push` on `children_of`); the merged engine uses
-`AtomicUsize::fetch_add`. The 8-thread numbers match — that's the
-load-bearing comparison. The warroom 30.6× ratio is therefore not a
-comparable target; see `BUDGET_LOG.md` row 1 for the amendment.
-
-**For Step 1 amendment PRs:** cite measured value against the
-v2.0 absolute target + hard-cap floor (primary constraint), and against
-the warroom byte-API reference (sanity check — v2.0 hot path is a clean
-rewrite of the warroom one, so substantial regression from warroom
-suggests something specific went wrong, not "engineering reality").
-
-### What this policy buys
-
-The earlier "open a gate-decision PR" language was a soft hatch in
-principle: a sufficiently committed group could rubber-stamp amendments
-indefinitely. The policy above closes that hatch structurally by:
-
-- Removing axiom-bearing gates from the amendable set entirely.
-- Hard-capping the remaining gates at floors that reflect "below this
-  means redesign, not regression."
-- Requiring measurement provenance (no amendments from vibes).
-- Making the budget log public so consumer teams see the ratchet before
-  migrating.
+1. **`theory_anchor_check.sh`** `[TARGET @ E01-S05]` — falsifier that
+   fails CI when a downstream doc paraphrases a THEORY.md
+   concept-term without an anchor-link. Stub lives at
+   `.claude/warroom/checks/theory_anchor_check.sh`; real
+   implementation lands with E01-S05.
+2. **`cargo public-api` snapshot** — pre-tag hygiene ensuring every
+   `[SHIPPED]` claim in this document resolves to an actually-exported
+   symbol. Baseline lands with the v2.0.0 tag.
+3. **Anchor-budget review at each phase gate** — the manifest at
+   `.claude/warroom/epics/E01-.../S01-.../phase-5-execute/anchor-budget.md`
+   lists every THEORY.md anchor DESIGN.md uses; a PR that adds a
+   new anchor must extend the budget.
 
 ---
 
-## Part 11 — Reference observers (not substrate)
-
-The deliberate choice to keep no observation state inside the engine means
-consumers handle observation explicitly. Three reference implementations
-ship in the crate to demonstrate idiomatic patterns:
-
-### `SynthesisRecorder` (`src/recorder.rs`)
-
-Chronological record of novel syntheses. Consumer constructs one, routes
-`synthesize` calls through it. The recorder pushes to its internal `Vec`
-only on novel results (deduped via `log.contains`). `!Send + !Sync` via
-`PhantomData<*const ()>` enforces single-thread use at compile time.
-
-~60 LOC. Pure consumer-side. The substrate is unaware.
-
-### `snapshot_parentage` + `replay_topological` (`src/replay.rs`)
-
-State persistence. `snapshot_parentage(engine)` dumps the `parents_of` map.
-`replay_topological(snapshot)` reconstructs a fresh engine by repeatedly
-calling `synthesize` on entries whose parents are already in the engine,
-until quiescent. Returns `Result<_, ReplayError>` for release-safe
-content-address mismatch + cycle detection.
-
-~50 LOC. Pure functions. The substrate is unaware.
-
-### `build_children_index` (`src/replay.rs`)
-
-Materialize the children-of map (the inverse of `parents_of`) for the
-rare consumer that needs to iterate children rather than just count them.
-Takes a parentage snapshot, returns `HashMap<Distinction, Vec<Distinction>>`.
-O(N) build, O(1) lookup thereafter. The engine itself doesn't carry
-this — `degree_counts` is the canonical O(1) projection of the Coding
-Law primitive, and the children enumeration is the derived form.
-
-~10 LOC. Pure function. The substrate is unaware.
-
-### Why ship them in the crate
-
-These aren't part of the substrate — they're examples of how consumers
-should use the substrate. Like the reference subsystems, they make the
-"100% theory-aligned substrate + clear consumer patterns" message concrete.
-A consumer reading the crate gets:
-
-- The substrate (axioms enforced, degree exposed)
-- Three reference observer patterns (record + persist + walk-children)
-- Four reference LCA subsystems (validate + commit + network + compact)
-
-That's the demonstration package. Theory + patterns + worked examples.
-
----
-
-## Appendix — Mapping v1.2.0 dev artifacts to v2.0 fate
-
-| Artifact in dev | Fate in v2.0 |
-|---|---|
-| `engine.rs` (193 LOC) | Rewritten: ~430 LOC with byte Distinction + `degree_counts` + invariant. Same axioms, tighter representation. No log. No children_of. |
-| `primitives.rs::ByteMapping` (cached) | Rewritten: engine-registered, no static cache, no phantoms. |
-| `subsystems/local_agent.rs` | Moved to `src/agent.rs`. Identical content. |
-| `subsystems/network.rs` (603 LOC) | Rewritten: ~550 LOC. `previous_root: Distinction`. N1/N2/N5/N7/N11 designed-in. Typed `PeerIdentityError`. |
-| `subsystems/validator.rs` (350 LOC) | Rewritten: ~300 LOC. Pre-validation pass. V3/V4/V5/V6 designed-in. |
-| `subsystems/commitment.rs` (504 LOC) | Rewritten: ~250 LOC. leader_id hashed. |
-| `subsystems/compactor.rs` (503 LOC) | Rewritten: ~250 LOC. Explicit thresholds, no double-count, no self-archive, Deserialize respects invariant. |
-| `subsystems/parallel.rs` (379 LOC) | Slimmed to `BatchSynthesizer` only: ~80 LOC. ParallelBatchProcessor deleted. |
-| `ffi.rs` (899 LOC) | Rewritten: ~650 LOC. `parking_lot::Mutex` wrapping, opaque structs, ManuallyDrop, panic=abort. |
-| `wasm.rs` (741 LOC) | Rewritten: ~450 LOC. Bytes-on-wire, idToHex/idFromHex, panic hook. |
-| String-based Distinction | Gone. `Distinction(pub(crate) [u8; 16])` newtype. |
-| `relationships: DashMap` field | Gone. Subsumed by `parents_of`. |
-| `synthesis_log` (proposed in first v2.0 attempt) | Gone. Replaced by consumer-side `snapshot_parentage` + `replay_topological` + `SynthesisRecorder`. |
-| `degree_cache` (proposed in first v2.0 attempt) | **Kept and renamed `degree_counts`.** Round 4 reversed the first-attempt reasoning: degree (the count) is the load-bearing primitive Coding/Fold Law name; children iteration is the derived form. `AtomicUsize` per node, `fetch_add(1, Release)` in the synth hot path (promoted from `Relaxed` in round 4 verification for uniform happens-before contract; see Part 6 loom test). |
-| `children_of: DashMap<[u8;16], Vec<Distinction>>` (round-3 plan kept this) | **Dropped in round 4.** Grep across every probe + subsystem + test found zero load-bearing consumers of children iteration; every caller uses `degree(d)`. Vec realloc on d₀/d₁ stalls the synth hot path. Consumers needing children iteration call `replay::build_children_index` (O(N) once, O(1) thereafter). |
-| Static byte cache | Gone. ByteMapping folds through caller's engine. |
-| `get_state_snapshot` | Renamed to `get_state_snapshot_unsynchronized` per Decision 5.8 (from first attempt). |
-| `Distinction::id()` | Gone. Use `as_bytes()` or `to_hex()`. |
-| `Distinction::new(String)` | Gone. No public constructor. |
-| `ParseError` from hex parsing | Typed error (was `String` in first attempt). |
-| `PeerIdentity::new` error | Typed `PeerIdentityError` (was `String` in first attempt). |
-| `IdentityHasher` (proposed XOR-rotation) | Simplified: leading 8 bytes only. Guards on misuse. |
-| `synthesize` proposed hot path | Rewritten with entry-gated insert to eliminate the race. By-value `Distinction` args (Copy enables this). Writes to `parents_of`, pre-seeded `degree_counts.insert(new_bytes, AtomicUsize::new(0))` for the new child, and the two `degree_counts.get(parent.0).expect("…invariant").fetch_add(1, Release)` calls all happen INSIDE the `or_insert_with` closure, under the shard lock for `all_distinctions[new_bytes]`, so observable engine state is always consistent. AtomicUsize replaces Vec push for the degree update — strictly cheaper, no realloc on hubs. Pre-seed enables `get()` fast path on the parent bump (read-lock vs write-lock). |
-| `SynthesisRecorder` (round-2 introduction) | Single-thread-only contract enforced via `PhantomData<*const ()>` marker. Novelty check uses dedup against own log (not racy `distinction_count`). Documented as observer, not LCA. |
-| `replay_topological` (round-2 introduction) | Returns `Result<Arc<DistinctionEngine>, ReplayError>`. Release-safe content-address mismatch detection (no `debug_assert_eq!`). Distinguishes corrupted parentage (cycle / missing parent → `Unreachable`) from tampered (`Mismatch`). |
-| `from_hex` cross-engine injection | `synthesize` `debug_assert`s both parents are registered in this engine; debug-build panic catches misuse in tests. Release builds trust the contract documented on `from_hex`. |
-| `MAX_PENDING_COMMITMENTS` derivation | Pinned arithmetic: `64 × 2 × 2 = 256` (peers × in-flight epochs × safety margin), not symbolic. |
-| `r = 2d − 3` invariant restatement | `all_distinctions.len() == parents_of.len() + 2` — directly tests binary parentage, not tautological. |
-| `Distinction` derives | `Pod + Zeroable` via `bytemuck` added for zero-copy slice views. |
-| `#[must_use]` | Applied crate-wide to every function returning a `Distinction`. Dropping a synthesis result is always a bug. |
-
----
-
-## Notes for review
-
-Things still worth questioning:
-
-- **CLOSED in Step 1e: The 8-thread throughput floor of 12M and the 4×
-  ratio gate.** Original question: gate as both absolute ≥12M AND ratio
-  ≥4× single-thread, so portable to non-M3 hardware? Resolution: the
-  absolute 12M floor stands and is met (measured 15.25M, +27% headroom).
-  The 4× ratio was structurally unreachable on M3 Pro (6P+2E asymmetric
-  + SHA-256 serial floor — see Gate 12 platform notes). Replaced with
-  platform-named ratio gate (3.4× target / 3.0× floor on M3 Pro; ≥ 4×
-  watch on symmetric hardware). Evidence: `benches/upper_bound.rs`
-  upper-bound mock + `benches/substrate.rs` post-refactor measurement,
-  signers in `BUDGET_LOG.md` row 1.
-- **Whether topological replay's worst-case O(N²) ever bites in practice.**
-  Synthetic test: degenerate parentage where every entry depends on the
-  previous. Probably fine but worth one probe.
-- **Whether shipping `SynthesisRecorder` and `replay.rs` in the crate gives
-  the impression they're substrate.** They're carefully filed under
-  `src/` (not `src/subsystems/`) but they're consumer patterns, not
-  substrate. The docstrings need to be crystal clear about this.
-- **CLOSED in round 4: `children_of` as engine state.** Resolution:
-  dropped. `degree_counts` is the canonical O(1) projection of the
-  theory's degree primitive; `replay::build_children_index` materializes
-  the inverse for the rare consumer that needs iteration.
-
-Mark up freely. The next step after this document is cutting `release/2.0.0`
-from `dev` and starting Step 1.
+*Empirical evidence: `docs/BENCHMARKS.md`. Theory: `THEORY.md`.
+Architecture cross-reference: `ARCHITECTURE.md`.*
