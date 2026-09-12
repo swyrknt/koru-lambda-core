@@ -672,6 +672,50 @@ impl std::fmt::Debug for DistinctionEngine {
 }
 
 // ---------------------------------------------------------------------------
+// ReadOnlyEngine impl for DistinctionEngine — the projection engine surface.
+//
+// Every method is a trivial delegation to the inherent method (which
+// wins method-resolution on direct callers of `&DistinctionEngine`).
+// Cond E is closed by construction — this trait's method inventory
+// contains no mutating method.
+// ---------------------------------------------------------------------------
+
+impl crate::projection::private::Sealed for DistinctionEngine {}
+
+impl crate::projection::ReadOnlyEngine for DistinctionEngine {
+    fn d0(&self) -> Distinction {
+        Self::d0(self)
+    }
+    fn d1(&self) -> Distinction {
+        Self::d1(self)
+    }
+    fn distinction_count(&self) -> usize {
+        Self::distinction_count(self)
+    }
+    fn relationship_count(&self) -> usize {
+        Self::relationship_count(self)
+    }
+    fn parents_of(&self, d: Distinction) -> Option<ParentPair> {
+        Self::parents_of(self, d)
+    }
+    fn degree(&self, d: Distinction) -> usize {
+        Self::degree(self, d)
+    }
+    fn has(&self, d: Distinction) -> bool {
+        Self::has(self, d)
+    }
+    fn snapshot_distinctions(&self) -> Vec<Distinction> {
+        Self::snapshot_distinctions(self)
+    }
+    fn snapshot_parentage(&self) -> Vec<(Distinction, ParentPair)> {
+        Self::snapshot_parentage(self)
+    }
+    fn check_structural_invariant(&self) -> Result<(), InvariantError> {
+        Self::check_structural_invariant(self)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Compile-time assertions on Distinction
 // ---------------------------------------------------------------------------
 
@@ -690,6 +734,17 @@ mod compile_time_assertions {
 
     // bytemuck plain-old-data + zeroable — enables zero-copy slice views.
     assert_impl_all!(Distinction: bytemuck::Pod, bytemuck::Zeroable);
+
+    // Cond F — no new engine fields. Field-relative assertion
+    // (Contrarian preference) so DashMap version bumps don't
+    // spuriously break the assertion. Adding the projection API adds
+    // no field to the engine — projection state lives entirely on
+    // `Projection<'e, S>`.
+    assert_eq_size!(DistinctionEngine, (Distinction, Distinction, NodeMap));
+
+    // Practical Believer item 16 — protects against silent breakage
+    // if a future engine field is `!Send` / `!Sync`.
+    assert_impl_all!(DistinctionEngine: Send, Sync);
 
     fn _assert_send_sync<T: Send + Sync>() {}
 

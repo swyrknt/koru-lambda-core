@@ -1,0 +1,24 @@
+warning: unnecessary associated type bound for dyn-incompatible associated type
+  --> tests/trybuild/dyn_signal_unsafe.rs:12:32
+   |
+12 | fn takes_dyn(_: Box<dyn Signal<Output = usize>>) {}
+   |                                ^^^^^^^^^^^^^^ help: remove this bound
+   |
+   = note: this associated type has a `where Self: Sized` bound, and while the associated type can be specified, it cannot be used because trait objects are never `Sized`
+   = note: `#[warn(unused_associated_type_bounds)]` on by default
+
+error[E0038]: the trait `Signal` is not dyn compatible
+  --> tests/trybuild/dyn_signal_unsafe.rs:12:21
+   |
+12 | fn takes_dyn(_: Box<dyn Signal<Output = usize>>) {}
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^ `Signal` is not dyn compatible
+   |
+   = note: the trait is not dyn compatible because it requires `Self: Sized`
+   = note: for a trait to be dyn compatible it needs to allow building a vtable
+           for more information, visit <https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility>
+   = help: the following types implement `Signal`:
+             koru_lambda_core::Adjacency
+             koru_lambda_core::Degree
+             koru_lambda_core::HopDistance
+           consider defining an enum where each variant holds one of these types,
+           implementing `Signal` for this new enum and using it instead
