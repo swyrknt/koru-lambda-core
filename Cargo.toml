@@ -77,7 +77,10 @@ serde_json = "1.0"
 # `trybuild` — compile-fail harness used by `tests/trybuild.rs` to prove
 # `dyn Signal` is object-unsafe by design (PROJECTION_SPEC §3.1).
 trybuild = "1"
-# Workspace member — provides the reusable Coding Law workload module
-# consumed by `tests/coding_law.rs`. Step 4 will import the same module
-# at scale.
-koru-experiments-runner = { path = "experiments/runner" }
+# Note: koru-experiments-runner is a workspace member (see [workspace]
+# above) but NOT a dev-dependency of the root crate — that edge, combined
+# with experiments/runner → koru-lambda-core (normal dep), created a
+# crate-graph cycle that broke rust-analyzer's macro resolution. The
+# Coding Law ρ gate test that used to live at `tests/coding_law.rs` now
+# lives at `experiments/runner/tests/coding_law.rs`, where the
+# dependency direction is naturally one-way (experiments → core).
