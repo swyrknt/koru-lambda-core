@@ -33,6 +33,37 @@
 //! See the [`projection`] module for the full API. See
 //! `PROJECTION_SPEC.md` for the authoritative spec.
 //!
+//! ## Novelty bit
+//!
+//! Every synthesis is either new to this engine or a repeat. Access
+//! the bit at the operator return via `synthesize_novel`:
+//!
+//! ```
+//! use koru_lambda_core::{DistinctionEngine, SynthesisOutcome};
+//! let engine = DistinctionEngine::new();
+//! match engine.synthesize_novel(engine.d0(), engine.d1()) {
+//!     SynthesisOutcome::Novel(d) => { /* first observation */ let _ = d; },
+//!     SynthesisOutcome::Existing(d) => { /* repeat */ let _ = d; },
+//!     _ => { /* `#[non_exhaustive]` — future variants land here */ },
+//! }
+//! ```
+//!
+//! The helper methods `is_novel()` and `distinction()` provide a
+//! future-safe alternative — consumers who use them won't need to
+//! update their code when new `SynthesisOutcome` variants land:
+//!
+//! ```
+//! use koru_lambda_core::DistinctionEngine;
+//! let engine = DistinctionEngine::new();
+//! // Or use the helper methods — safe across future
+//! // `#[non_exhaustive]` additions:
+//! let outcome = engine.synthesize_novel(engine.d0(), engine.d1());
+//! if outcome.is_novel() {
+//!     // first observation
+//!     let _d = outcome.distinction();
+//! }
+//! ```
+//!
 //! ## Retires (six ad-hoc reinventions)
 //!
 //! The projection primitive replaces six domain-specific ad-hoc "field"
@@ -72,7 +103,8 @@ pub mod subsystems;
 pub use agent::{synthesize_causal_action, LocalCausalAgent};
 pub use distinction_hex::ParseError;
 pub use engine::{
-    Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher, InvariantError, ParentPair,
+    Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher, InvariantError,
+    ParentPair, SynthesisOutcome,
 };
 pub use primitives::{ByteMapping, Canonicalizable};
 // Curated re-exports at crate root (Option B — approved). The remaining

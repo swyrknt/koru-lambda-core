@@ -215,6 +215,101 @@ pub enum InvariantError {
 }
 
 // ---------------------------------------------------------------------------
+// SynthesisOutcome
+// ---------------------------------------------------------------------------
+
+/// Outcome of [`DistinctionEngine::synthesize_novel`] — the child
+/// [`Distinction`] tagged with Law 7's structural binary bit
+/// (*novel-to-this-engine* vs. *existing*).
+///
+/// Every synthesis is either **novel** — this call was the one that
+/// inserted the child into the engine's `nodes` map — or **existing** —
+/// the child was already present (an Axiom 3 self-synthesis, a
+/// saturation hit, or a lost concurrent race). Both variants carry the
+/// same [`Distinction`] shape; the discriminant is what the type
+/// contributes over the plain [`synthesize`](DistinctionEngine::synthesize)
+/// return.
+///
+/// This is the substrate's first *observer-relative* return type: the
+/// [`Distinction`] inside is engine-independent (content-addressed via
+/// Axiom 4), but the variant reflects *this* engine's momentary state
+/// at the call site. Two engines with identical synthesis history
+/// return the same [`Distinction`] for the same `(a, b)`, yet the
+/// outcome relative to each engine's state can differ.
+///
+/// Constructed exclusively by
+/// [`DistinctionEngine::synthesize_novel`]. `#[non_exhaustive]`: future
+/// variants (e.g. a race-lost / repeated-input split) can be added
+/// without a semver break. `#[must_use]`: ignoring the outcome throws
+/// away the only information this method carries over
+/// [`synthesize`](DistinctionEngine::synthesize).
+///
+/// **Design note.** Future variants may split `Existing` into
+/// cause-specific arms — `AxiomIrreflexive`, `Saturated`, `RaceLost` —
+/// under `#[non_exhaustive]` semver-additive rules. Today all three
+/// collapse into `Existing(d)`; consumers who need the distinction
+/// should compose over [`is_novel`](Self::is_novel) and re-query engine
+/// state (e.g. [`distinction_count`](DistinctionEngine::distinction_count)
+/// delta) or [`has`](DistinctionEngine::has) timing.
+#[non_exhaustive]
+#[must_use]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SynthesisOutcome {
+    /// This call inserted the child into the engine's `nodes` map — the
+    /// first observation of this `(a, b)` synthesis in this engine's
+    /// history.
+    Novel(Distinction),
+    /// The child was already present when this call ran — Axiom 3
+    /// self-synthesis, saturation (Law 7) fast-path hit, or a lost
+    /// concurrent race on a fresh pair.
+    Existing(Distinction),
+}
+
+impl SynthesisOutcome {
+    /// Borrow the child [`Distinction`] this synthesis produced.
+    ///
+    /// Same value regardless of variant —
+    /// `outcome.distinction() == engine.synthesize(a, b)` holds for
+    /// every `(a, b)` on the same engine (backward-compat contract).
+    #[must_use]
+    pub const fn distinction(&self) -> Distinction {
+        match self {
+            Self::Novel(d) | Self::Existing(d) => *d,
+        }
+    }
+
+    /// Whether this call was the one that inserted the child into the
+    /// engine.
+    ///
+    /// Returns `true` for [`Novel`](Self::Novel), `false` for
+    /// [`Existing`](Self::Existing). Under concurrent calls on a fresh
+    /// `(a, b)`, exactly one caller observes `true`; all others observe
+    /// `false`.
+    #[must_use]
+    pub const fn is_novel(&self) -> bool {
+        matches!(self, Self::Novel(_))
+    }
+
+    /// Consume the outcome and return the inner [`Distinction`].
+    ///
+    /// One-liner ergonomic wrapper for callers that don't need the
+    /// novelty bit — e.g. bridging into a codepath whose signature
+    /// took a bare [`Distinction`] before adopting `synthesize_novel`.
+    ///
+    /// Discards the novelty bit. Prefer this over
+    /// [`distinction`](Self::distinction) at the point in your control
+    /// flow where the [`Novel`](Self::Novel)/[`Existing`](Self::Existing)
+    /// distinction is no longer relevant — the ownership move makes the
+    /// discard grammatical.
+    #[must_use]
+    pub const fn into_distinction(self) -> Distinction {
+        match self {
+            Self::Novel(d) | Self::Existing(d) => d,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // DistinctionEngine
 // ---------------------------------------------------------------------------
 
@@ -384,6 +479,141 @@ impl DistinctionEngine {
     /// [`replay_topological`]: crate::replay::replay_topological
     #[must_use]
     pub fn synthesize(&self, a: Distinction, b: Distinction) -> Distinction {
+        // Thin wrapper: `synthesize_inner` centralizes the four axioms,
+        // the foreign-byte `debug_assert!` guards, and the entry-gated
+        // insert. This wrapper drops the novelty bit; consumers who
+        // want it call [`synthesize_novel`](Self::synthesize_novel).
+        self.synthesize_inner(a, b).0
+    }
+
+    /// Synthesize `(a, b)` and report whether the child was new to this engine.
+    ///
+    /// Same body of work as [`synthesize`](Self::synthesize) — returns the
+    /// same [`Distinction`] for the same `(a, b)` on this engine — but
+    /// the return type carries Law 7's structural binary
+    /// (*novel-to-this-engine* vs. *existing*) as the observer-relative
+    /// bit that `synthesize` discards. This is **the structural binary
+    /// this method exposes**: Law 7 (saturation) says every synthesis
+    /// either grows the engine by one distinction or contributes
+    /// nothing; `SynthesisOutcome` names which side of that binary the
+    /// call landed on.
+    ///
+    /// # Contract
+    ///
+    /// Both `a` and `b` must be distinctions registered in **this**
+    /// engine, obtained the same way [`synthesize`](Self::synthesize)
+    /// requires: [`d0`](Self::d0), [`d1`](Self::d1), a prior
+    /// `synthesize`/`synthesize_novel` call on this engine, or a
+    /// [`replay_topological`] driven load. The identity produced is
+    /// engine-independent (Axiom 4); the *variant* is engine-specific.
+    /// `outcome.distinction() == engine.synthesize(a, b)` holds for
+    /// every `(a, b)` — the backward-compat contract.
+    ///
+    /// # Concurrency — race semantics
+    ///
+    /// Safe to call concurrently from any number of threads against a
+    /// shared engine reference. Under concurrent calls on a fresh
+    /// `(a, b)`, **exactly one caller observes** `Novel(_)`; all others
+    /// observe `Existing(_)`. Both variants unwrap to the same
+    /// [`Distinction`] via [`SynthesisOutcome::distinction`] — content
+    /// addressing (Axiom 4) makes the identity race-independent, only
+    /// the bit varies. The entry-gated insert (the merged-map B1
+    /// mitigation) is what serializes the "novel" observation to
+    /// exactly one thread.
+    ///
+    /// The parent-degree happens-before contract from
+    /// [`synthesize`](Self::synthesize) carries over unchanged — parent
+    /// `fetch_add`s occur AFTER the entry shard lock releases, so a
+    /// racing reader that observes `new_d` and immediately queries
+    /// `degree(parent)` may transiently see the pre-bump value. Post-
+    /// join sum invariant `sum_of_degrees == 2 * non_primordial_count`
+    /// still holds.
+    ///
+    /// # Axiom 3 (irreflexivity)
+    ///
+    /// `synthesize_novel(a, a) === Existing(a)`. The self-synthesis
+    /// short-circuit is a no-op with respect to engine state — the
+    /// child is `a` itself, which is (by contract) already registered
+    /// — so the outcome is `Existing(a)`, never `Novel(a)`.
+    ///
+    /// # First observer-relative return type
+    ///
+    /// `SynthesisOutcome` is the substrate's first *observer-relative*
+    /// return type — it templates the shape of future
+    /// `observe(observer, observed)` signatures. Two engines with
+    /// identical synthesis history return the same [`Distinction`] for
+    /// the same `(a, b)`, but the outcome relative to each engine's
+    /// momentary state can differ: one engine's first-time synthesis
+    /// is another engine's repeat.
+    ///
+    /// # A new probe class — write-coupled / transactional
+    ///
+    /// `synthesize_novel` opens a new **write-coupled** probe class,
+    /// distinct from the five post-hoc projection probes — `Adjacency`,
+    /// `Degree`, `HopDistance`, [`parents_of`](Self::parents_of),
+    /// [`has`](Self::has). Those read engine state after synthesis has
+    /// already run; this method delivers the novelty bit as part of
+    /// the same atomic transaction that creates (or resolves against)
+    /// the child. The write and the read of the write-decision happen
+    /// together, not sequentially.
+    ///
+    /// # Consumer story
+    ///
+    /// Consumers that would otherwise re-query [`has`](Self::has) after
+    /// `synthesize` — for example, `koru-delta` replay-checkpoint
+    /// patterns, `koru-mesh` aggregate telemetry, `alis-ai`
+    /// event-driven memory — can match on the outcome instead:
+    ///
+    /// ```
+    /// use koru_lambda_core::{DistinctionEngine, SynthesisOutcome};
+    /// let engine = DistinctionEngine::new();
+    /// match engine.synthesize_novel(engine.d0(), engine.d1()) {
+    ///     SynthesisOutcome::Novel(d) => { /* first observation — record fold event */ let _ = d; },
+    ///     SynthesisOutcome::Existing(d) => { /* repeat — no fold event */ let _ = d; },
+    ///     _ => { /* `SynthesisOutcome` is `#[non_exhaustive]` — future variants land here */ },
+    /// }
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// Does not panic under valid inputs. Foreign-byte parents trigger
+    /// the same `debug_assert!` as [`synthesize`](Self::synthesize);
+    /// both fire in debug builds only.
+    ///
+    /// [`replay_topological`]: crate::replay::replay_topological
+    pub fn synthesize_novel(&self, a: Distinction, b: Distinction) -> SynthesisOutcome {
+        match self.synthesize_inner(a, b) {
+            (d, true) => SynthesisOutcome::Novel(d),
+            (d, false) => SynthesisOutcome::Existing(d),
+        }
+    }
+
+    /// Internal engine primitive shared by [`synthesize`](Self::synthesize)
+    /// and [`synthesize_novel`](Self::synthesize_novel).
+    ///
+    /// Returns the child [`Distinction`] plus a `bool` — `true` iff this
+    /// call was the one that inserted the child into the engine's
+    /// `nodes` map. The four control-flow endpoints map to the tuple
+    /// as:
+    ///
+    /// - **Axiom 3** (`a == b`): `(a, false)` — self-synthesis is a
+    ///   no-op with respect to engine state.
+    /// - **Saturation fast path** (`nodes.contains_key(new_bytes)`):
+    ///   `(Distinction(new_bytes), false)` — Law 7 hit; no shard write
+    ///   lock taken.
+    /// - **Entry `Vacant`** (this call inserted): `(Distinction(new_bytes), true)`
+    ///   — the child is new to this engine; parent degree bumps have
+    ///   run.
+    /// - **Entry `Occupied`** (concurrent race lost):
+    ///   `(Distinction(new_bytes), false)` — another thread inserted
+    ///   the same `new_bytes` between the fast-path check and the
+    ///   entry lock.
+    ///
+    /// Foreign-byte guards, canonical `(min, max)` ordering, SHA-256
+    /// content addressing, and the entry-gated insert with B1 lock
+    /// discipline are all centralized here. Both public entrypoints
+    /// route through this function so their semantics stay in sync.
+    pub(crate) fn synthesize_inner(&self, a: Distinction, b: Distinction) -> (Distinction, bool) {
         // Foreign-byte guard (Axiom 4 enforcement at the engine boundary).
         // The `pub(crate)` Distinction field closes mint-from-thin-air at
         // compile time, but `Distinction::from_hex` can produce a value
@@ -401,9 +631,11 @@ impl DistinctionEngine {
             b
         );
 
-        // Axiom 3 — irreflexivity.
+        // Axiom 3 — irreflexivity. Self-synthesis is `(a, false)`:
+        // `a` is (by contract) already registered, so from the engine's
+        // perspective nothing was inserted.
         if a == b {
-            return a;
+            return (a, false);
         }
 
         // Axiom 2 — commutativity via canonical (min, max) byte ordering.
@@ -424,7 +656,7 @@ impl DistinctionEngine {
         // comes from the entry's exclusive Vacant/Occupied dispatch
         // below.
         if self.nodes.contains_key(&new_bytes) {
-            return Distinction(new_bytes);
+            return (Distinction(new_bytes), false);
         }
 
         let new_d = Distinction(new_bytes);
@@ -480,7 +712,7 @@ impl DistinctionEngine {
                 .fetch_add(1, Ordering::Release);
         }
 
-        new_d
+        (new_d, inserted_new)
     }
 
     /// Look up the canonical `(min, max)` parent pair of a non-primordial
@@ -1677,5 +1909,238 @@ mod engine_tests {
             "each novel synth contributes +2; no double-bumps from racing"
         );
         e.check_structural_invariant().expect("post-race invariant");
+    }
+
+    // ----- E02-S03 — SynthesisOutcome + synthesize_novel -----------------
+
+    #[test]
+    fn synthesize_novel_returns_novel_for_fresh_pair() {
+        // Fresh engine — no synthesis has happened yet. The very first
+        // (d0, d1) call must observe `Novel(_)`.
+        let e = DistinctionEngine::new();
+        let outcome = e.synthesize_novel(e.d0(), e.d1());
+        assert!(
+            outcome.is_novel(),
+            "first synthesis on fresh (d0, d1) must be Novel, got {outcome:?}"
+        );
+        assert!(matches!(outcome, SynthesisOutcome::Novel(_)));
+    }
+
+    #[test]
+    fn synthesize_novel_returns_existing_on_repeat() {
+        // Second call on the same pair — Law 7 saturation: the child is
+        // already registered, so the outcome is `Existing(_)`.
+        let e = DistinctionEngine::new();
+        let first = e.synthesize_novel(e.d0(), e.d1());
+        let second = e.synthesize_novel(e.d0(), e.d1());
+        assert!(first.is_novel(), "first call must be Novel");
+        assert!(!second.is_novel(), "repeat call must be Existing, got {second:?}");
+        assert!(matches!(second, SynthesisOutcome::Existing(_)));
+        // Both variants unwrap to the same Distinction.
+        assert_eq!(first.distinction(), second.distinction());
+    }
+
+    #[test]
+    fn synthesize_novel_axiom_3_returns_existing() {
+        // Axiom 3 (irreflexivity): `synthesize_novel(a, a) === Existing(a)`
+        // for every registered `a` — both primordials AND any mid-graph
+        // distinction. The child IS `a`, which is already registered by
+        // contract, so the engine's state did not grow.
+        let e = DistinctionEngine::new();
+
+        // Primordials.
+        assert_eq!(e.synthesize_novel(e.d0(), e.d0()), SynthesisOutcome::Existing(e.d0()));
+        assert_eq!(e.synthesize_novel(e.d1(), e.d1()), SynthesisOutcome::Existing(e.d1()));
+
+        // Mid-graph node.
+        let c = e.synthesize(e.d0(), e.d1());
+        assert_eq!(e.synthesize_novel(c, c), SynthesisOutcome::Existing(c));
+    }
+
+    #[test]
+    fn synthesize_novel_matches_synthesize_distinction() {
+        // Backward-compat contract: `outcome.distinction() ==
+        // engine.synthesize(a, b)` for the same pair (order irrelevant,
+        // Axiom 2 canonicalization inside synthesize_inner).
+        //
+        // Use two separate engines so `synthesize` vs. `synthesize_novel`
+        // races on independent state — if the two paths ever diverged
+        // in identity computation, this test would fire.
+        let e_a = DistinctionEngine::new();
+        let e_b = DistinctionEngine::new();
+
+        // A varied set of pairs including primordials, mid-graph nodes,
+        // and Axiom 3 self-syntheses.
+        let c_a = e_a.synthesize(e_a.d0(), e_a.d1());
+        let c_b = e_b.synthesize(e_b.d0(), e_b.d1());
+        let pairs_a = vec![(e_a.d0(), e_a.d1()), (e_a.d1(), e_a.d0()), (e_a.d0(), c_a), (c_a, c_a)];
+        let pairs_b = vec![(e_b.d0(), e_b.d1()), (e_b.d1(), e_b.d0()), (e_b.d0(), c_b), (c_b, c_b)];
+        for ((a1, b1), (a2, b2)) in pairs_a.into_iter().zip(pairs_b) {
+            let outcome = e_a.synthesize_novel(a1, b1);
+            let direct = e_b.synthesize(a2, b2);
+            assert_eq!(
+                outcome.distinction(),
+                direct,
+                "synthesize_novel and synthesize disagree on child identity for ({a1:?}, {b1:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn synthesize_novel_concurrent_race_produces_single_novel() {
+        // Contrarian's race falsifier: spawn N threads all calling
+        // `synthesize_novel(a, b)` on the same fresh pair. Assert:
+        // exactly ONE thread observes `Novel(_)`, all others observe
+        // `Existing(_)`. All N unwrap to the same Distinction.
+        //
+        // Repeat 100 times with different pair choices to make the
+        // race statistically informative — a single race trial can win
+        // for the wrong reason.
+        const N_THREADS: usize = 16;
+        const N_RACES: usize = 100;
+
+        // Build a chain deep enough to give us many fresh pairs. Use
+        // non-adjacent picks (i, i+3) so no prelude synthesis has
+        // pre-warmed the child (same trick as `race_novel_child_no_double_bump`).
+        let seed = DistinctionEngine::new();
+        let mut chain = vec![seed.d0(), seed.d1()];
+        let mut prev = chain[0];
+        let mut cur = chain[1];
+        for _ in 0..(N_RACES + 4) {
+            let next = seed.synthesize(cur, prev);
+            chain.push(next);
+            prev = cur;
+            cur = next;
+        }
+
+        for i in 0..N_RACES {
+            // Fresh per-race engine so each race sees a truly fresh
+            // (a, b) — otherwise race #2 onward would hit saturation
+            // and all threads would see Existing(_).
+            let race_engine = Arc::new(DistinctionEngine::new());
+            // Reconstruct chain identities in the per-race engine so
+            // the pair is registered there (they're byte-identical
+            // across engines by Axiom 4, but the race engine's `nodes`
+            // map only holds what we synthesize into it).
+            let mut race_chain = vec![race_engine.d0(), race_engine.d1()];
+            let mut rp = race_chain[0];
+            let mut rc = race_chain[1];
+            for _ in 0..(i + 4) {
+                let next = race_engine.synthesize(rc, rp);
+                race_chain.push(next);
+                rp = rc;
+                rc = next;
+            }
+            let a = race_chain[i];
+            let b = race_chain[i + 3];
+            // Confirm the pair is fresh in the race engine.
+            let bytes = {
+                let (lo, hi) = if a.0 <= b.0 { (a.0, b.0) } else { (b.0, a.0) };
+                let mut h = Sha256::new();
+                h.update(lo);
+                h.update(hi);
+                let digest = h.finalize();
+                let mut nb = [0u8; 16];
+                nb.copy_from_slice(&digest[..16]);
+                nb
+            };
+            assert!(
+                !race_engine.has(Distinction(bytes)),
+                "race #{i} setup bug: pair already synthesized"
+            );
+
+            let mut handles = Vec::with_capacity(N_THREADS);
+            for _ in 0..N_THREADS {
+                let e_clone = Arc::clone(&race_engine);
+                handles.push(thread::spawn(move || e_clone.synthesize_novel(a, b)));
+            }
+            let outcomes: Vec<SynthesisOutcome> = handles
+                .into_iter()
+                .map(|h| h.join().expect("thread join succeeds (invariant)"))
+                .collect();
+
+            // Load-bearing #1: exactly one Novel across the N threads.
+            let novel_count = outcomes.iter().filter(|o| o.is_novel()).count();
+            assert_eq!(
+                novel_count, 1,
+                "race #{i}: expected exactly 1 Novel across {N_THREADS} threads, got {novel_count} — outcomes: {outcomes:?}"
+            );
+            // Load-bearing #2: the other N-1 are Existing.
+            let existing_count =
+                outcomes.iter().filter(|o| matches!(o, SynthesisOutcome::Existing(_))).count();
+            assert_eq!(existing_count, N_THREADS - 1, "race #{i}: expected N-1 Existing");
+            // Load-bearing #3: all N threads unwrap to the same
+            // Distinction (Axiom 1 determinism holds under contention).
+            let first_d = outcomes[0].distinction();
+            for o in &outcomes {
+                assert_eq!(
+                    o.distinction(),
+                    first_d,
+                    "race #{i}: outcome distinctions diverge under contention"
+                );
+            }
+            // Load-bearing #4: cross-engine byte-identity (Axiom 4). All
+            // threads must agree on the correct child bytes — not just
+            // any bytes — matching the SHA-256 we computed independently
+            // at line 2039. Falsifies "threads self-consistently produced
+            // the wrong byte-identity under contention."
+            assert_eq!(
+                first_d,
+                Distinction(bytes),
+                "race #{i}: outcome bytes drift from independently-computed SHA-256 (Axiom 4)"
+            );
+        }
+    }
+
+    #[cfg(test)]
+    mod novelty_proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(1_000))]
+
+            /// Novelty bit is monotonically consistent with
+            /// `distinction_count()` delta: `outcome.is_novel()` iff the
+            /// count grew by 1 across the call. Falsifier for any bug
+            /// that would set the bit without inserting, or insert
+            /// without setting the bit.
+            #[test]
+            fn synthesize_novel_novelty_aligns_with_count_delta(
+                i in 0usize..12,
+                j in 0usize..12,
+            ) {
+                // Rebuild the same 12-distinction pool used by the S02
+                // proptests so we exercise a mix of primordials, direct
+                // children, and cross-fold nodes.
+                let e = DistinctionEngine::new();
+                let mut pool = vec![e.d0(), e.d1()];
+                pool.push(e.synthesize(pool[0], pool[1]));
+                pool.push(e.synthesize(pool[2], pool[0]));
+                pool.push(e.synthesize(pool[2], pool[1]));
+                pool.push(e.synthesize(pool[3], pool[4]));
+                pool.push(e.synthesize(pool[5], pool[0]));
+                pool.push(e.synthesize(pool[5], pool[1]));
+                pool.push(e.synthesize(pool[6], pool[7]));
+                pool.push(e.synthesize(pool[8], pool[2]));
+                pool.push(e.synthesize(pool[9], pool[3]));
+                pool.push(e.synthesize(pool[10], pool[4]));
+
+                let a = pool[i];
+                let b = pool[j];
+
+                let before = e.distinction_count();
+                let outcome = e.synthesize_novel(a, b);
+                let after = e.distinction_count();
+
+                let delta = after - before;
+                // The bidirectional invariant: is_novel ⟺ delta == 1.
+                prop_assert_eq!(outcome.is_novel(), delta == 1,
+                    "novelty bit disagrees with count delta: is_novel={}, delta={}",
+                    outcome.is_novel(), delta);
+                // Delta is always 0 or 1 (single synthesis adds at most 1).
+                prop_assert!(delta <= 1);
+            }
+        }
     }
 }
