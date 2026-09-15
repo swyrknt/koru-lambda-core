@@ -17,18 +17,35 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// A distinction is identified solely by its 16-byte content-addressed
 /// identity. There is no internal structure beyond these bytes.
 ///
-/// Constructed exclusively by [`DistinctionEngine`]: via a primordial
-/// (`engine.d0()`, `engine.d1()`), via [`synthesize`](DistinctionEngine::synthesize),
-/// or by parsing bytes via [`Distinction::from_hex`] — the parse is
-/// purely syntactic and does NOT verify engine membership.
+/// # Trust boundaries
+///
+/// A `Distinction` value reaches an engine via one of three paths:
+///
+/// 1. [`synthesize`](DistinctionEngine::synthesize) — **proven by
+///    construction.** The engine produces the child; it is (by
+///    construction) registered in this engine's `nodes` map.
+/// 2. [`verify(RawDistinctionId)`](DistinctionEngine::verify) — **proven
+///    by engine witness.** The recommended trust-boundary path for
+///    external bytes (wire deserialization, hex parsing, checkpoint
+///    restoration). Foreign bytes are rejected before they reach any
+///    hot path.
+/// 3. [`Distinction::from_hex`] or a `bytemuck::Pod` cast from wire
+///    bytes — **unverified, consumer-responsibility.** The parse
+///    validates length/charset; the cast validates layout; neither
+///    validates engine membership. These paths remain public to serve
+///    intentional wire-format trust (e.g. `#[serde(with =
+///    "distinction_hex")]` field deserialization on trusted data,
+///    hex-CLI input). Consumers who take these paths assume the
+///    obligation that `verify` would otherwise discharge — call
+///    [`has`](DistinctionEngine::has) or route through `verify` before
+///    passing the value to [`synthesize`](DistinctionEngine::synthesize).
 ///
 /// The field is `pub(crate)`: external code cannot mint a `Distinction`
-/// from nothing, but `from_hex` will parse any hex string of the right
-/// length. Foreign-byte injection is closed at synthesize-time
-/// (debug `debug_assert`, release `expect` on the post-entry parent
-/// lookup), not at parse-time. Consumers passing `from_hex` values
-/// should call `engine.has(d)` before use, or trust a known-good
-/// source (e.g. a replay log from the same engine).
+/// from nothing. `from_hex` and `bytemuck::cast` are the two named
+/// hatches; both are documented above as consumer-responsibility paths.
+/// Foreign-byte injection at [`synthesize`](DistinctionEngine::synthesize)
+/// is caught by `debug_assert!` in debug builds and by the post-entry
+/// `expect` on the parent lookup in release builds.
 ///
 /// `#[repr(transparent)]`: layout-compatible with `[u8; 16]`, enabling
 /// zero-copy FFI/WASM transit (`*const Distinction` ↔ `*const [u8; 16]`).
@@ -48,6 +65,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 ///
 /// [`DistinctionEngine`]: crate::DistinctionEngine
 /// [`Distinction::from_hex`]: crate::Distinction::from_hex
+/// [`RawDistinctionId`]: crate::RawDistinctionId
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(transparent)]
 pub struct Distinction(pub(crate) [u8; 16]);
@@ -61,6 +79,93 @@ impl Distinction {
     /// External crates cannot reach this constructor.
     #[must_use]
     pub(crate) const fn from_bytes_unchecked(bytes: [u8; 16]) -> Self {
+        Self(bytes)
+    }
+
+    /// Borrow the underlying 16 bytes.
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; 16] {
+        &self.0
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RawDistinctionId — the unverified peer of Distinction
+// ---------------------------------------------------------------------------
+
+/// Unverified 16-byte payload claiming to name a [`Distinction`].
+///
+/// This is the type consumers use when they receive Distinction bytes
+/// from an external source — wire deserialization, hex parsing,
+/// checkpoint restoration, CLI input. Its existence names the ontological
+/// gap that has always existed between "bytes shaped like a distinction
+/// identity" and "bytes this engine has registered." Before
+/// `RawDistinctionId`, the gap was covered by documentation and a
+/// `debug_assert!` at synthesize-time; with `RawDistinctionId`, the gap
+/// has a type.
+///
+/// # Trust boundaries
+///
+/// A `Distinction` value reaches an engine via one of three paths:
+///
+/// 1. [`synthesize`](DistinctionEngine::synthesize) — proven by
+///    construction.
+/// 2. [`verify(RawDistinctionId)`](DistinctionEngine::verify) — proven
+///    by engine witness. **`RawDistinctionId → verify → Distinction` is
+///    the recommended trust-boundary path.**
+/// 3. [`Distinction::from_hex`] or a `bytemuck::Pod` cast — unverified,
+///    consumer-responsibility. Intentional hatches for wire-format
+///    trust and CLI parsing.
+///
+/// `RawDistinctionId` is the unverified peer of `Distinction` in the
+/// two-type discipline. Consumers write their public wire types in terms
+/// of `RawDistinctionId` and call [`verify`](DistinctionEngine::verify)
+/// at the trust boundary; internal code that has already crossed the
+/// boundary operates on `Distinction`.
+///
+/// # Consumer story
+///
+/// Nine substrate consumers exchange Distinction bytes across trust
+/// boundaries — `RawDistinctionId → verify → Distinction` is the
+/// recommended path for each:
+///
+/// - `koru-delta` wire-deserialize (replay-checkpoint restoration)
+/// - `alis-ai` state restore (checkpoint / resume)
+/// - `koru-engine` snapshot replay
+/// - `koru-spatial` adjacency-from-wire
+/// - `koru-mesh` telemetry-ingest
+/// - `koru-wave` dissolve-restart
+/// - `koru-protocol` handshake-payload
+/// - `koru-cli` hex-CLI-input
+/// - `game-studio` flagship consumer save/load
+///
+/// # Safety justification for `bytemuck::Pod` and `bytemuck::Zeroable`
+///
+/// `Pod` requires the type to have no padding bytes and all bit patterns
+/// to be valid. `[u8; 16]` has no padding (it's just 16 bytes), all 2^128
+/// bit patterns are valid (any byte sequence is a syntactically valid
+/// unverified identity — engine registration decides which ones actually
+/// name a [`Distinction`]), and `#[repr(transparent)]` preserves the
+/// inner array's layout guarantees. Both invariants hold.
+///
+/// `Zeroable` requires that the all-zero bit pattern is a valid value of
+/// the type. Any 16-byte pattern is a valid `RawDistinctionId`; the
+/// all-zero case happens to also be `d0`'s identity.
+///
+/// [`Distinction::from_hex`]: crate::Distinction::from_hex
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(transparent)]
+pub struct RawDistinctionId(pub(crate) [u8; 16]);
+
+impl RawDistinctionId {
+    /// Construct a `RawDistinctionId` from raw bytes.
+    ///
+    /// No validation is performed. The bytes may or may not be
+    /// registered in any engine; pass through
+    /// [`DistinctionEngine::verify`] to obtain an engine-witnessed
+    /// [`Distinction`].
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
         Self(bytes)
     }
 
@@ -186,6 +291,25 @@ const PRIMORDIAL_D1: Distinction =
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
+
+/// Reasons [`DistinctionEngine::verify`] can reject an unverified
+/// [`RawDistinctionId`].
+///
+/// `#[non_exhaustive]`: future variants (`WrongEngine`, `WrongDomain`)
+/// can land additively when engine identity or federation ships without
+/// breaking consumer semver.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum VerifyError {
+    /// The 16 bytes are not registered in this engine's `nodes` map.
+    ///
+    /// A foreign engine may have synthesized them, or they may be pure
+    /// fiction — the engine cannot tell the difference. Content-addressing
+    /// (Axiom 4) determines identity across engines; engine state
+    /// determines whether *this* engine has witnessed the identity yet.
+    #[error("bytes not registered in this engine (foreign to this engine's witness state)")]
+    ForeignBytes,
+}
 
 /// Reasons [`DistinctionEngine::check_structural_invariant`] can fail.
 ///
@@ -803,6 +927,75 @@ impl DistinctionEngine {
         self.nodes.contains_key(&d.0)
     }
 
+    /// **Trust boundary.** Cross external bytes into an engine-verified
+    /// [`Distinction`] here. Every deserialized, hex-parsed, or
+    /// wire-received [`RawDistinctionId`] MUST pass through `verify`
+    /// before reaching [`synthesize`](Self::synthesize).
+    ///
+    /// Returns `Ok(Distinction)` if `raw`'s bytes are registered in this
+    /// engine's `nodes` map. Returns `Err(VerifyError::ForeignBytes)`
+    /// otherwise.
+    ///
+    /// # Engine-witnessed identity
+    ///
+    /// Identity is engine-witnessed, not byte-inherent. The same 16
+    /// bytes are `Distinction` on engine A and `ForeignBytes` on engine
+    /// B. Content-addressing determines identity (Axiom 4); *witnessing*
+    /// determines standing. `verify` is where byte-name meets
+    /// engine-that-knows.
+    ///
+    /// # A new probe entry point
+    ///
+    /// `verify` is a new public entry point into the engine's read-side
+    /// projection class — not a new probe class. Contrast: [`has`](Self::has)
+    /// requires the caller to already hold a [`Distinction`]; `verify`
+    /// queries engine-witness from raw bytes, serving the opposite half
+    /// of the same lookup. The observation channel is unchanged;
+    /// `verify` adds an entry point, not state.
+    ///
+    /// # Consumer flow
+    ///
+    /// ```
+    /// use koru_lambda_core::{DistinctionEngine, RawDistinctionId, VerifyError};
+    ///
+    /// // Downstream error type wrapping VerifyError via `From`.
+    /// #[derive(Debug)]
+    /// struct MyError;
+    /// impl From<VerifyError> for MyError {
+    ///     fn from(_: VerifyError) -> Self { MyError }
+    /// }
+    ///
+    /// let engine = DistinctionEngine::new();
+    /// let child = engine.synthesize(engine.d0(), engine.d1());
+    ///
+    /// // Wire bytes crossing the trust boundary:
+    /// let raw = RawDistinctionId::from_bytes(*child.as_bytes());
+    ///
+    /// // In your custom deserializer, the `?` operator threads
+    /// // `VerifyError` into `MyError` via `From`:
+    /// let d = engine.verify(raw).map_err(MyError::from)?;
+    /// assert_eq!(d.as_bytes(), child.as_bytes());
+    /// # Ok::<(), MyError>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VerifyError::ForeignBytes`] when the bytes are not
+    /// registered in this engine's `nodes` map.
+    ///
+    /// # Concurrency
+    ///
+    /// Safe to call from any thread. Reads the engine's `nodes` map once
+    /// (single DashMap `contains_key` — O(1)). No new engine state.
+    #[must_use = "verify returns a Result — foreign-byte errors must be handled, not discarded"]
+    pub fn verify(&self, raw: RawDistinctionId) -> Result<Distinction, VerifyError> {
+        if self.nodes.contains_key(&raw.0) {
+            Ok(Distinction(raw.0))
+        } else {
+            Err(VerifyError::ForeignBytes)
+        }
+    }
+
     /// Snapshot every parent-child relationship as an owned `Vec`.
     ///
     /// Returns the contents of `parents` (across all nodes that have
@@ -966,6 +1159,15 @@ mod compile_time_assertions {
 
     // bytemuck plain-old-data + zeroable — enables zero-copy slice views.
     assert_impl_all!(Distinction: bytemuck::Pod, bytemuck::Zeroable);
+
+    // `RawDistinctionId` is the unverified peer of `Distinction`. Its
+    // layout must match `[u8; 16]` and it must be `Pod + Zeroable` for
+    // the same zero-copy wire-deserialization patterns Contrarian
+    // flagged at E02-S01.
+    assert_eq_size!(RawDistinctionId, [u8; 16]);
+    assert_eq_align!(RawDistinctionId, [u8; 16]);
+    assert_impl_all!(RawDistinctionId: Copy, Send, Sync);
+    assert_impl_all!(RawDistinctionId: bytemuck::Pod, bytemuck::Zeroable);
 
     // Cond F — no new engine fields. Field-relative assertion
     // (Contrarian preference) so DashMap version bumps don't
@@ -2089,6 +2291,176 @@ mod engine_tests {
                 Distinction(bytes),
                 "race #{i}: outcome bytes drift from independently-computed SHA-256 (Axiom 4)"
             );
+        }
+    }
+
+    // ----- E02-S04 — RawDistinctionId + verify --------------------------
+
+    #[test]
+    fn verify_accepts_registered_bytes() {
+        // Round-trip: synthesize → get bytes → RawDistinctionId::from_bytes
+        // → verify → get Distinction back — same bytes, engine-witnessed.
+        let e = DistinctionEngine::new();
+        let child = e.synthesize(e.d0(), e.d1());
+        let raw = RawDistinctionId::from_bytes(*child.as_bytes());
+        let verified = e.verify(raw).expect("registered bytes verify (invariant)");
+        assert_eq!(verified.as_bytes(), child.as_bytes());
+        // Primordials also verify.
+        assert_eq!(
+            e.verify(RawDistinctionId::from_bytes(*e.d0().as_bytes()))
+                .expect("d0 registered (invariant)")
+                .as_bytes(),
+            e.d0().as_bytes()
+        );
+        assert_eq!(
+            e.verify(RawDistinctionId::from_bytes(*e.d1().as_bytes()))
+                .expect("d1 registered (invariant)")
+                .as_bytes(),
+            e.d1().as_bytes()
+        );
+    }
+
+    #[test]
+    fn verify_rejects_foreign_bytes() {
+        // A byte pattern that was never registered — verify must reject.
+        // `[0xCC; 16]` is chosen for symmetry with the debug-panic test
+        // above; it is not d0 (all-zero), not d1 (0x01 then zeros), and
+        // has not been produced by synthesize on this engine.
+        let e = DistinctionEngine::new();
+        let raw = RawDistinctionId::from_bytes([0xCC; 16]);
+        assert_eq!(e.verify(raw), Err(VerifyError::ForeignBytes));
+    }
+
+    #[test]
+    fn verify_rejects_partially_wrong_bytes() {
+        // Flip one bit of a genuinely-registered id — verify must reject.
+        // Falsifies "verify checks length or shape but not the actual
+        // 16-byte membership."
+        let e = DistinctionEngine::new();
+        let child = e.synthesize(e.d0(), e.d1());
+        let mut corrupted = *child.as_bytes();
+        corrupted[0] ^= 0x01;
+        // Sanity: the corruption must not accidentally land on another
+        // registered id (extremely unlikely, but assert to make the test
+        // load-bearing).
+        assert!(
+            !e.has(Distinction(corrupted)),
+            "test setup bug: bit-flip collides with a registered id"
+        );
+        let raw = RawDistinctionId::from_bytes(corrupted);
+        assert_eq!(e.verify(raw), Err(VerifyError::ForeignBytes));
+    }
+
+    #[test]
+    fn verify_across_engines_witness_relative() {
+        // The load-bearing engine-witnessed-identity claim: the same
+        // bytes are Distinction on engine A (which has them) and
+        // ForeignBytes on engine B (which does not — until it does).
+        //
+        // Falsifies "verify accepts bytes based on byte-inherent
+        // properties," i.e. that it would accept `child`'s bytes on
+        // engine B simply because they hash correctly.
+        let e_a = DistinctionEngine::new();
+        let child = e_a.synthesize(e_a.d0(), e_a.d1());
+
+        // Engine B has never synthesized this child — must reject.
+        let e_b = DistinctionEngine::new();
+        let raw = RawDistinctionId::from_bytes(*child.as_bytes());
+        assert_eq!(e_b.verify(raw), Err(VerifyError::ForeignBytes));
+
+        // Replay the synthesis on engine B — content-addressing (Axiom
+        // 4) says byte-identical output. Now the same bytes verify.
+        let child_b = e_b.synthesize(e_b.d0(), e_b.d1());
+        assert_eq!(child_b.as_bytes(), child.as_bytes());
+        let verified = e_b.verify(raw).expect("post-replay bytes verify (invariant)");
+        assert_eq!(verified.as_bytes(), child.as_bytes());
+    }
+
+    #[test]
+    fn raw_distinction_id_bytemuck_roundtrip() {
+        // The `Pod + Zeroable` derive must let `RawDistinctionId` cast
+        // to `&[u8]` and back losslessly — that is the contract Contrarian's
+        // S01 flag was about, and this is the falsifier for it.
+        let bytes = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54,
+            0x32, 0x10,
+        ];
+        let raw = RawDistinctionId::from_bytes(bytes);
+
+        // Cast to `&[u8]`, then back to a `RawDistinctionId`.
+        let as_slice: &[u8] = bytemuck::bytes_of(&raw);
+        assert_eq!(as_slice, &bytes);
+        let round_trip: RawDistinctionId = *bytemuck::from_bytes::<RawDistinctionId>(as_slice);
+        assert_eq!(round_trip, raw);
+        assert_eq!(round_trip.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn verify_error_is_std_error_and_displays() {
+        // thiserror derive must produce a working `std::error::Error`
+        // impl (via `Display`) — falsifier for accidental removal of
+        // the derive.
+        let err: VerifyError = VerifyError::ForeignBytes;
+        // Confirm `dyn std::error::Error` object-safety.
+        let _: &dyn std::error::Error = &err;
+        let msg = format!("{err}");
+        assert!(msg.contains("not registered"), "Display message missing key phrase: {msg}");
+    }
+
+    #[cfg(test)]
+    mod verify_proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(1_000))]
+
+            /// Round-trip: for every registered distinction in the
+            /// engine, `verify` returns bytes-equal to the input.
+            /// Falsifier for "verify accepts but returns different bytes."
+            #[test]
+            fn prop_verify_roundtrips_registered(i in 0usize..12) {
+                let e = DistinctionEngine::new();
+                let mut pool = vec![e.d0(), e.d1()];
+                pool.push(e.synthesize(pool[0], pool[1]));
+                pool.push(e.synthesize(pool[2], pool[0]));
+                pool.push(e.synthesize(pool[2], pool[1]));
+                pool.push(e.synthesize(pool[3], pool[4]));
+                pool.push(e.synthesize(pool[5], pool[0]));
+                pool.push(e.synthesize(pool[5], pool[1]));
+                pool.push(e.synthesize(pool[6], pool[7]));
+                pool.push(e.synthesize(pool[8], pool[2]));
+                pool.push(e.synthesize(pool[9], pool[3]));
+                pool.push(e.synthesize(pool[10], pool[4]));
+
+                let d = pool[i];
+                let raw = RawDistinctionId::from_bytes(*d.as_bytes());
+                let verified = e.verify(raw).expect("registered distinction verifies (invariant)");
+                prop_assert_eq!(verified.as_bytes(), d.as_bytes());
+            }
+
+            /// For every arbitrary 16-byte input NOT in the engine,
+            /// `verify` returns `ForeignBytes`. Guards against a
+            /// silent-accept bug when the engine has partial state.
+            #[test]
+            fn prop_verify_rejects_unregistered(bytes in prop::array::uniform16(any::<u8>())) {
+                let e = DistinctionEngine::new();
+                // Synthesize a few children so `nodes` has ~5 entries,
+                // then ensure `bytes` is NOT one of them. If the random
+                // input happens to collide with a registered id (2^-128
+                // per axis; effectively never), skip the assertion.
+                let mut pool = vec![e.d0(), e.d1()];
+                pool.push(e.synthesize(pool[0], pool[1]));
+                pool.push(e.synthesize(pool[2], pool[0]));
+                pool.push(e.synthesize(pool[2], pool[1]));
+
+                if e.has(Distinction(bytes)) {
+                    // Astronomically unlikely — just skip.
+                    return Ok(());
+                }
+                let raw = RawDistinctionId::from_bytes(bytes);
+                prop_assert_eq!(e.verify(raw), Err(VerifyError::ForeignBytes));
+            }
         }
     }
 

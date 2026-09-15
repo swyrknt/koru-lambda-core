@@ -43,6 +43,7 @@
 //! - **Cond F (no new engine fields):** the projection state lives on
 //!   `Projection<'e, S>`; the engine gains no field.
 
+use crate::engine::{RawDistinctionId, VerifyError};
 use crate::{Distinction, DistinctionEngine, InvariantError, ParentPair};
 use sha2::{Digest, Sha256};
 use std::any::TypeId;
@@ -843,6 +844,26 @@ pub enum RestoreError {
     },
 }
 
+/// Explicit `From` mapping from [`VerifyError`] to [`RestoreError`], so
+/// [`DistinctionEngine::restore_projection`] can use the `?` operator on
+/// [`DistinctionEngine::verify`] and preserve the existing
+/// [`RestoreError::ForeignEngine`] semantics.
+///
+/// The match is **explicit** (not a wildcard or closure) so any future
+/// [`VerifyError`] variant landing under `#[non_exhaustive]` triggers a
+/// compile error here — the correct place to force the mapping decision,
+/// not a silent swallow.
+impl From<VerifyError> for RestoreError {
+    fn from(err: VerifyError) -> Self {
+        match err {
+            VerifyError::ForeignBytes => RestoreError::ForeignEngine,
+            // Future `VerifyError` variants (e.g. `WrongEngine`,
+            // `WrongDomain`) will fail to compile here until this
+            // match is extended. Do NOT collapse to a wildcard arm.
+        }
+    }
+}
+
 /// Reasons [`Projection::try_canonical_bytes`] can reject.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
@@ -1237,7 +1258,14 @@ impl DistinctionEngine {
 
         let mut root_bytes = [0u8; 16];
         root_bytes.copy_from_slice(&bytes[5..21]);
-        let root = Distinction::from_bytes_unchecked(root_bytes);
+        // Trust boundary: wire bytes cross into engine-verified
+        // `Distinction` here. The `?` operator threads `VerifyError`
+        // into `RestoreError::ForeignEngine` via `impl From<VerifyError>
+        // for RestoreError` above — preserving the pre-S04
+        // `ForeignEngine` mapping while replacing the
+        // `from_bytes_unchecked` + guarded-by-`has()` pattern.
+        let raw = RawDistinctionId::from_bytes(root_bytes);
+        let root = self.verify(raw)?;
 
         let btag = bytes[21];
         let bpayload_bytes: [u8; 8] = bytes[22..30]
@@ -1290,10 +1318,8 @@ impl DistinctionEngine {
             });
         }
 
-        // Foreign-root guard: root must be registered in this engine.
-        if !self.has(root) {
-            return Err(RestoreError::ForeignEngine);
-        }
+        // Foreign-root guard already discharged above via `self.verify(raw)?`
+        // — the `Distinction` value here is engine-witnessed by construction.
 
         // Re-materialize and verify byte-equivalence.
         let proj = ReadyBuilder { engine: self, root, direction, boundary, signal }.materialize();

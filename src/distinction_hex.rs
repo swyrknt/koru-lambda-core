@@ -1,4 +1,4 @@
-//! Hex display boundary for [`Distinction`].
+//! Hex display boundary for [`Distinction`] and [`RawDistinctionId`].
 //!
 //! The substrate is byte-canonical: every distinction's identity is the
 //! 16-byte SHA-256 prefix of its canonical parent pair. Hex is the
@@ -11,8 +11,30 @@
 //! This module is the ONLY hex-aware part of the substrate. Engine logic
 //! operates on bytes exclusively.
 //!
+//! # Two hex constructors
+//!
+//! Both [`Distinction::from_hex`] and [`RawDistinctionId::from_hex`]
+//! parse the same 32-character lowercase-hex grammar and produce the
+//! same 16 bytes. They differ only in what the returned type
+//! *claims about engine membership*:
+//!
+//! - [`RawDistinctionId::from_hex`] — the recommended trust-boundary
+//!   path. The returned `RawDistinctionId` is bytes with a type name.
+//!   Pass it through [`DistinctionEngine::verify`] to obtain an
+//!   engine-witnessed [`Distinction`].
+//! - [`Distinction::from_hex`] — a legacy hatch. The returned
+//!   `Distinction` is unverified — the parse validated length and
+//!   charset, not engine membership. Consumers who use this path assume
+//!   the obligation `verify` would otherwise discharge.
+//!
+//! Under the hood, both route through a single crate-internal helper
+//! ([`decode_hex_16`]) so the [`ParseError`] surface stays uniform.
+//!
 //! [`Distinction`]: crate::Distinction
+//! [`RawDistinctionId`]: crate::RawDistinctionId
+//! [`DistinctionEngine::verify`]: crate::DistinctionEngine::verify
 
+use crate::engine::RawDistinctionId;
 use crate::Distinction;
 use std::fmt;
 use std::str::FromStr;
@@ -52,11 +74,15 @@ pub enum ParseError {
 impl Distinction {
     /// Parse a 32-character lowercase-hex string into a [`Distinction`].
     ///
-    /// The bytes are validated for length and charset, but **not** for
-    /// engine membership. A `Distinction` returned by `from_hex` is just
-    /// bytes; passing it to `engine.synthesize` for an engine that has
-    /// not registered those bytes triggers a debug-build panic via the
-    /// foreign-byte guard in `synthesize`.
+    /// **Trust boundary note.** The bytes are validated for length and
+    /// charset, but **not** for engine membership. A `Distinction`
+    /// returned by `from_hex` is unverified — call
+    /// [`DistinctionEngine::has`](crate::DistinctionEngine::has) before
+    /// use, or prefer the two-type path:
+    /// [`RawDistinctionId::from_hex`] followed by
+    /// [`DistinctionEngine::verify`](crate::DistinctionEngine::verify).
+    /// The latter is the recommended path per the crate's
+    /// `## Trust boundaries` framing.
     ///
     /// # Errors
     ///
@@ -65,22 +91,13 @@ impl Distinction {
     /// or [`ParseError::InvalidChar`] for characters outside `[0-9a-f]`
     /// (uppercase is explicitly rejected).
     pub fn from_hex(s: &str) -> Result<Self, ParseError> {
-        if s.len() != 32 {
-            return Err(ParseError::InvalidLength(s.len()));
-        }
-
-        let bytes = s.as_bytes();
-        let mut out = [0u8; 16];
-
-        for (i, out_byte) in out.iter_mut().enumerate() {
-            let hi_pos = i * 2;
-            let lo_pos = hi_pos + 1;
-            let hi = decode_nibble(bytes[hi_pos], hi_pos)?;
-            let lo = decode_nibble(bytes[lo_pos], lo_pos)?;
-            *out_byte = (hi << 4) | lo;
-        }
-
-        Ok(Distinction::from_bytes_unchecked(out))
+        // Route through `RawDistinctionId::from_hex` so the two parallel
+        // constructors share a single parse path and error surface. The
+        // resulting bytes are wrapped in a `Distinction` directly (no
+        // engine verification) — that matches this constructor's
+        // pre-S04 semantics and preserves the intentional hatch
+        // documented in the trust-boundaries block.
+        RawDistinctionId::from_hex(s).map(|r| Distinction::from_bytes_unchecked(r.0))
     }
 
     /// Render this distinction as a 32-character lowercase hex string.
@@ -88,6 +105,64 @@ impl Distinction {
     pub fn to_hex(&self) -> String {
         hex::encode(self.as_bytes())
     }
+}
+
+impl RawDistinctionId {
+    /// Parse a 32-character lowercase-hex string into a
+    /// [`RawDistinctionId`].
+    ///
+    /// The bytes are validated for length and charset. Because
+    /// `RawDistinctionId` makes no engine-membership claim by
+    /// construction, this constructor is the syntactic-parse-only entry
+    /// point at the trust boundary: pass the returned value through
+    /// [`DistinctionEngine::verify`](crate::DistinctionEngine::verify)
+    /// to obtain an engine-witnessed [`Distinction`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError::InvalidLength`] if the input is not exactly
+    /// 32 ASCII characters, [`ParseError::NonAscii`] for non-ASCII bytes,
+    /// or [`ParseError::InvalidChar`] for characters outside `[0-9a-f]`
+    /// (uppercase is explicitly rejected).
+    pub fn from_hex(s: &str) -> Result<Self, ParseError> {
+        decode_hex_16(s).map(RawDistinctionId::from_bytes)
+    }
+
+    /// Render these bytes as a 32-character lowercase hex string.
+    #[must_use]
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.as_bytes())
+    }
+}
+
+/// Decode a 32-character lowercase-hex string into 16 raw bytes.
+///
+/// The shared parse kernel behind [`Distinction::from_hex`] and
+/// [`RawDistinctionId::from_hex`]. Extracting the helper collapses ~15
+/// lines of duplication and guarantees a single [`ParseError`] surface
+/// across both constructors.
+///
+/// `pub(crate)` because the two public entry points are the intended
+/// consumer surface — external callers should pick a return type
+/// (verified `Distinction` or unverified `RawDistinctionId`) rather than
+/// working with a bare `[u8; 16]`.
+pub(crate) fn decode_hex_16(s: &str) -> Result<[u8; 16], ParseError> {
+    if s.len() != 32 {
+        return Err(ParseError::InvalidLength(s.len()));
+    }
+
+    let bytes = s.as_bytes();
+    let mut out = [0u8; 16];
+
+    for (i, out_byte) in out.iter_mut().enumerate() {
+        let hi_pos = i * 2;
+        let lo_pos = hi_pos + 1;
+        let hi = decode_nibble(bytes[hi_pos], hi_pos)?;
+        let lo = decode_nibble(bytes[lo_pos], lo_pos)?;
+        *out_byte = (hi << 4) | lo;
+    }
+
+    Ok(out)
 }
 
 /// Decode one ASCII byte to its nibble value, with position-aware error.
@@ -122,15 +197,38 @@ impl FromStr for Distinction {
     }
 }
 
+impl fmt::Display for RawDistinctionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.to_hex())
+    }
+}
+
+impl fmt::Debug for RawDistinctionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "RawDistinctionId({})", self.to_hex())
+    }
+}
+
+impl FromStr for RawDistinctionId {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_hex(s)
+    }
+}
+
 /// Serde adapter — serialize/deserialize a [`Distinction`] as its hex string.
 ///
-/// Use with `#[serde(with = "distinction_hex")]` on any field of type
-/// `Distinction`:
+/// Use with `#[serde(with = "koru_lambda_core::distinction_hex::serde_adapter")]`
+/// on any field of type `Distinction`:
 ///
-/// ```ignore
+/// ```
+/// use koru_lambda_core::Distinction;
+/// use serde::{Deserialize, Serialize};
+///
 /// #[derive(Serialize, Deserialize)]
 /// struct TransactionBatch {
-///     #[serde(with = "distinction_hex")]
+///     #[serde(with = "koru_lambda_core::distinction_hex::serde_adapter")]
 ///     previous_root: Distinction,
 /// }
 /// ```
@@ -138,13 +236,16 @@ pub mod serde_adapter {
     use super::Distinction;
     use serde::{Deserialize, Deserializer, Serializer};
 
+    /// Return type of [`serialize`] — factored out to keep the signature
+    /// below the `type-complexity-threshold` set in `clippy.toml`.
+    type SerializeResult<S> = Result<<S as Serializer>::Ok, <S as Serializer>::Error>;
+
     /// Serialize a [`Distinction`] as its 32-character lowercase hex string.
     ///
     /// # Errors
     ///
     /// Propagates any error from the serializer.
-    #[allow(clippy::type_complexity)] // canonical serde adapter signature
-    pub fn serialize<S>(d: &Distinction, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(d: &Distinction, serializer: S) -> SerializeResult<S>
     where
         S: Serializer,
     {
@@ -163,6 +264,74 @@ pub mod serde_adapter {
     {
         let s = <&str>::deserialize(deserializer)?;
         Distinction::from_hex(s).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Serde adapter — serialize/deserialize a [`RawDistinctionId`] as its
+/// hex string.
+///
+/// Parallel to [`serde_adapter`] for consumers whose wire schema carries
+/// unverified `RawDistinctionId`s (the recommended shape at the trust
+/// boundary — see the crate `## Trust boundaries` block). Use with
+/// `#[serde(with = "koru_lambda_core::distinction_hex::raw_serde_adapter")]`
+/// on any field of type `RawDistinctionId`:
+///
+/// ```
+/// use koru_lambda_core::RawDistinctionId;
+/// use serde::{Deserialize, Serialize};
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct Envelope {
+///     #[serde(with = "koru_lambda_core::distinction_hex::raw_serde_adapter")]
+///     claimed_root: RawDistinctionId,
+/// }
+///
+/// // At the trust boundary in your handler:
+/// // let root = engine.verify(envelope.claimed_root).map_err(MyError::from)?;
+/// ```
+///
+/// Deserialization performs only syntactic validation (length +
+/// charset). Consumers MUST route the returned `RawDistinctionId`
+/// through [`DistinctionEngine::verify`](crate::DistinctionEngine::verify)
+/// before treating it as engine-witnessed.
+pub mod raw_serde_adapter {
+    use super::RawDistinctionId;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    /// Return type of [`serialize`] — factored out to keep the signature
+    /// below the `type-complexity-threshold` set in `clippy.toml`.
+    type SerializeResult<S> = Result<<S as Serializer>::Ok, <S as Serializer>::Error>;
+
+    /// Serialize a [`RawDistinctionId`] as its 32-character lowercase
+    /// hex string.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any error from the serializer.
+    pub fn serialize<S>(r: &RawDistinctionId, serializer: S) -> SerializeResult<S>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&r.to_hex())
+    }
+
+    /// Deserialize a [`RawDistinctionId`] from a hex string.
+    ///
+    /// **Trust boundary reminder.** The returned value is unverified —
+    /// only length and charset were checked. Route through
+    /// [`DistinctionEngine::verify`](crate::DistinctionEngine::verify)
+    /// before use.
+    ///
+    /// # Errors
+    ///
+    /// Returns a deserializer error if the input is not valid 32-character
+    /// lowercase hex.
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<RawDistinctionId, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = <&str>::deserialize(deserializer)?;
+        RawDistinctionId::from_hex(s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -289,5 +458,99 @@ mod tests {
 
         let restored: Wrapper = serde_json::from_str(&json).expect("round-trips (invariant)");
         assert_eq!(original, restored);
+    }
+
+    // ----- E02-S04 — RawDistinctionId hex boundary ----------------------
+
+    #[test]
+    fn raw_hex_round_trip_mixed_bytes() {
+        // Parallel to `hex_round_trip_mixed_bytes` for RawDistinctionId
+        // — same 32-hex-char grammar, same 16 bytes, same shared
+        // decode_hex_16 kernel.
+        let bytes = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54,
+            0x32, 0x10,
+        ];
+        let r = RawDistinctionId::from_bytes(bytes);
+        let hex = r.to_hex();
+        assert_eq!(hex, "0123456789abcdeffedcba9876543210");
+        let parsed = RawDistinctionId::from_hex(&hex).expect("valid hex round-trips (invariant)");
+        assert_eq!(parsed, r);
+        assert_eq!(parsed.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn raw_from_hex_shares_parse_error_surface_with_distinction() {
+        // The parallel constructors MUST return the exact same
+        // ParseError variants for the exact same inputs — falsifier
+        // for accidental drift between the two parse paths.
+        let uppercase = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
+        assert_eq!(
+            RawDistinctionId::from_hex(uppercase),
+            Distinction::from_hex(uppercase).map(|d| RawDistinctionId::from_bytes(*d.as_bytes()))
+        );
+        // Both should return the same InvalidChar error shape.
+        assert!(matches!(
+            RawDistinctionId::from_hex(uppercase),
+            Err(ParseError::InvalidChar { .. })
+        ));
+
+        assert_eq!(RawDistinctionId::from_hex(""), Err(ParseError::InvalidLength(0)));
+        assert_eq!(RawDistinctionId::from_hex("deadbeef"), Err(ParseError::InvalidLength(8)));
+    }
+
+    #[test]
+    fn raw_display_and_debug_are_hex() {
+        let r = RawDistinctionId::from_bytes([0u8; 16]);
+        assert_eq!(format!("{}", r), "00000000000000000000000000000000");
+        assert_eq!(format!("{:?}", r), "RawDistinctionId(00000000000000000000000000000000)");
+    }
+
+    #[test]
+    fn raw_from_str_works() {
+        let s = "0123456789abcdeffedcba9876543210";
+        let r: RawDistinctionId = s.parse().expect("valid hex parses (invariant)");
+        assert_eq!(r.to_hex(), s);
+    }
+
+    #[test]
+    fn raw_serde_round_trip_via_adapter() {
+        // Falsifier: the raw serde adapter must round-trip byte-for-byte
+        // through `serde_json`. Consumers whose wire schema declares
+        // `#[serde(with = "raw_distinction_hex")]` (the recommended
+        // trust-boundary shape) rely on this.
+        use serde::{Deserialize, Serialize};
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct Envelope {
+            #[serde(with = "super::raw_serde_adapter")]
+            claimed_root: RawDistinctionId,
+        }
+
+        let original = Envelope { claimed_root: RawDistinctionId::from_bytes([0x42u8; 16]) };
+        let json = serde_json::to_string(&original).expect("serializes (invariant)");
+        assert!(json.contains("42424242"));
+
+        let restored: Envelope = serde_json::from_str(&json).expect("round-trips (invariant)");
+        assert_eq!(original, restored);
+    }
+
+    #[test]
+    fn raw_serde_deserialize_rejects_bad_hex() {
+        // Falsifier: the raw adapter must propagate ParseError as a
+        // deserializer error, not silently accept garbage. Uses the
+        // same Envelope shape as the round-trip test so the failure
+        // path exercises exactly the deserialize side.
+        use serde::{Deserialize, Serialize};
+
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct Envelope {
+            #[serde(with = "super::raw_serde_adapter")]
+            claimed_root: RawDistinctionId,
+        }
+
+        let bad_json = r#"{"claimed_root":"not-hex"}"#;
+        let result: Result<Envelope, _> = serde_json::from_str(bad_json);
+        assert!(result.is_err(), "adapter must reject invalid hex");
     }
 }
