@@ -8,6 +8,9 @@ resolver = "2"
 # carry different `rand` pins (Round 2 team review, rust-craftsman item
 # 5 + qa-sentinel Y2).
 [workspace.dependencies]
+# =0.8.5 exact — load-bearing for StdRng sequence stability across CI
+# runs (see tests/cond_d_falsifier.rs; a future ^0.8 loosening could
+# silently flake the Cond D falsifier as StdRng byte output changes).
 rand = "=0.8.5"
 
 [package]
