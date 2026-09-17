@@ -15,7 +15,7 @@ rand = "=0.8.5"
 
 [package]
 name = "koru-lambda-core"
-version = "1.2.0"
+version = "2.0.0"
 edition = "2021"
 rust-version = "1.80"
 description = "A minimal axiomatic system for distributed computation"

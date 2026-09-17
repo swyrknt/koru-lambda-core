@@ -314,8 +314,8 @@ Now **nobody** can merge without passing all checks (not even admins!)
 
 ### 3. Add Status Badges to README
 ```markdown
-[![CI](https://github.com/you/forma-core/actions/workflows/ci.yml/badge.svg)](https://github.com/you/forma-core/actions)
-[![Clippy](https://github.com/you/forma-core/actions/workflows/ci.yml/badge.svg)](https://github.com/you/forma-core/actions)
+[![CI](https://github.com/swyrknt/koru-lambda-core/actions/workflows/ci.yml/badge.svg)](https://github.com/swyrknt/koru-lambda-core/actions)
+[![Clippy](https://github.com/swyrknt/koru-lambda-core/actions/workflows/ci.yml/badge.svg)](https://github.com/swyrknt/koru-lambda-core/actions)
 ```
 
 Shows at a glance: "This project maintains high quality"

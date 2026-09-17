@@ -102,11 +102,24 @@ fn cond_d_cross_engine_projection_independence() {
     );
 
     // Materialize the same projection on each engine.
-    let root = chain1[PRIMORDIAL_COUNT + ROOT_OFFSET];
+    //
+    // Diagnostic-locality improvement (Contrarian, S05 hardening): bind
+    // the root from EACH chain separately and assert equality before
+    // projecting. If Axiom-4 content-addressing regresses (same input
+    // history producing different distinction bytes at the same chain
+    // index), the failure fires HERE with a clear message pointing at
+    // Axiom 4 — not later as an opaque byte-diff in `canonical_bytes()`
+    // that a reader has to trace back to a root-mismatch root cause.
+    let root1 = chain1[PRIMORDIAL_COUNT + ROOT_OFFSET];
+    let root2 = chain2[PRIMORDIAL_COUNT + ROOT_OFFSET];
+    assert_eq!(
+        root1, root2,
+        "parity pre-assert: root distinctions differ at same chain index — Axiom-4 content-addressing broken; see THEORY.md §Axiom 4"
+    );
     let proj1 =
-        e1.project(root).direction(Direction::Downstream).hops(3).signal(Adjacency).materialize();
+        e1.project(root1).direction(Direction::Downstream).hops(3).signal(Adjacency).materialize();
     let proj2 =
-        e2.project(root).direction(Direction::Downstream).hops(3).signal(Adjacency).materialize();
+        e2.project(root2).direction(Direction::Downstream).hops(3).signal(Adjacency).materialize();
 
     // The load-bearing assertions — byte equivalence.
     assert_eq!(

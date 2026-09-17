@@ -5,21 +5,24 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Build Status](https://github.com/swyrknt/koru-lambda-core/actions/workflows/ci.yml/badge.svg)](https://github.com/swyrknt/koru-lambda-core/actions)
 
-> ### ⚠️ v2.0 redesign in progress on `release/2.0.0`
+> ### ⚠️ v2.0.0 shipping on `release/2.0.0-next`; final README rewrite deferred to a follow-up docs story
 >
-> The body of this README describes the v1.2 API and is partly out of date.
-> v2.0 is a clean rewrite from `dev` with:
+> The body of this README below still describes the v1.2 API and is out of date.
+> v2.0.0 is a clean rewrite with:
 > - 4 axioms (not 5), 2 primordials, 1 operator — see [`THEORY.md`](THEORY.md)
 > - Byte-canonical `Distinction([u8; 16])` with content-addressed identity
 > - Merged-map engine: one `nodes: DashMap<[u8;16], EngineNode { parents, degree }>` carrying the three canonical O(1) projections (saturation check, parent lookup, degree query) as per-node fields
+> - Two-type discipline: `RawDistinctionId` + `engine.verify()` for Axiom-4 boundary narrowing at the type level
+> - `SynthesisOutcome::{Novel, Existing}` via `synthesize_novel` — the Law-7 novelty bit exposed
+> - Projection primitive: `engine.project(root).direction(..).hops(..).signal(..).materialize()` with cross-engine byte-identical output
 > - Tier-0 audit bugs (N5/N6/V5) designed structurally impossible
 > - Theory/budget/hygiene gate split with un-amendable axiom gates
 >
-> Plan-of-record docs on `release/2.0.0`:
-> [`THEORY.md`](THEORY.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DESIGN.md`](DESIGN.md)
+> Plan-of-record docs on `release/2.0.0-next`:
+> [`THEORY.md`](THEORY.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DESIGN.md`](DESIGN.md) · [`CHANGELOG.md`](CHANGELOG.md)
 >
-> A full README rewrite ships with v2.0 (tracked in the epics work
-> tracker at `.claude/warroom/epics/`, story E01-S05).
+> A full README rewrite ships in a follow-up docs story (tracked in the
+> epics work tracker at `.claude/warroom/epics/`, story E01-S05).
 
 A minimal axiomatic system for computation based on distinction calculus. This engine implements a timeless, self-consistent computational substrate where complex distributed system properties arise from simple synthesis operations.
 

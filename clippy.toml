@@ -1,4 +1,4 @@
-# Clippy configuration for forma-core
+# Clippy configuration for koru-lambda-core
 # These lints ensure high code quality and catch common mistakes
 
 # Cognitive complexity threshold - keep functions simple

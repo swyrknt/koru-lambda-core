@@ -93,7 +93,7 @@ completion: projection primitive API surface, `Cargo.toml` version bump
 Six preconditions for the version bump:
 
 1. E02 primitive API surface lands.
-2. `clippy.toml:1` `forma-core` string corrected.
+2. `clippy.toml:1` `forma-core` string corrected. `[SHIPPED @ E02-S06]`
 3. `Cargo.lock` policy affirmed (currently checked in for the library —
    retained; policy note added to the release commit).
 4. All E01 stories closed (S01 + S03 + S04 + S05).
@@ -133,16 +133,17 @@ enforces [the four axioms](THEORY.md#the-four-axioms) directly:
 
 `pub fn synthesize` `[SHIPPED @ src/engine.rs:386-484]`. The current API
 returns a bare `Distinction`, discarding the novelty bit; exposure of
-`SynthesisOutcome { child, was_novel }` is `[TARGET @ E02]` — see the
-"What v2.0.0 changes" section.
+`SynthesisOutcome::Novel(Distinction) | Existing(Distinction)` via
+`synthesize_novel` is `[SHIPPED @ E02-S03]` — see the "What v2.0.0
+changes" section.
 
 **Two-type discipline (Axiom-4 closure).** Bytes typed as `Distinction`
 that were not produced by the operator are structurally illegitimate.
 [`THEORY.md § The operator`](THEORY.md#the-operator) names the API-level
 convention: raw bytes admitted only as `RawDistinctionId`, converted to
 `Distinction` via `engine.verify()`, foreclosing foreign-byte injection at
-the type level. That API surface is `[TARGET @ E02]`. The current runtime
-closure is the debug-mode `debug_assert!` foreign-byte guard at
+the type level. That API surface is `[SHIPPED @ E02-S04]`. The runtime
+closure remains as the debug-mode `debug_assert!` foreign-byte guard at
 `[SHIPPED @ src/engine.rs:393-402]`; release builds trust the contract.
 
 ### The Distinction type
@@ -593,22 +594,26 @@ a projection is not new structure; it is the graph as viewed from
 somewhere. Cross-engine projection independence is the falsifier —
 two engines with the same synthesis history queried with the same
 projection `{ Root, boundary, Direction, Signal }` at quiescence must
-produce byte-identical output. `[TARGET @ E02]`.
+produce byte-identical output. `[SHIPPED @ E02-S05]`.
 
 **Novelty bit home.** The operator produces `(child, novel?)` per
-[`THEORY.md § The operator`](THEORY.md#the-operator); the API
-currently returns `Distinction`, discarding the novelty bit. v2.0.0
-exposes `SynthesisOutcome { child, was_novel }` at E02 completion.
-`[TARGET @ E02]`. This is one paragraph in one place — not a section
-header — matching Logic Enforcer's T13 placement discipline: the
+[`THEORY.md § The operator`](THEORY.md#the-operator); the bare
+`synthesize` API still returns `Distinction`, discarding the novelty
+bit. v2.0.0 exposes the novelty bit via a parallel `synthesize_novel`
+entry point returning `SynthesisOutcome::Novel(Distinction) |
+Existing(Distinction)` (a `#[non_exhaustive]` enum, not a struct with
+fields — the enum shape lets future variants land without breaking
+match arms). `[SHIPPED @ E02-S03]`. This is one paragraph in one place
+— not a section header — matching Logic Enforcer's T13 placement
+discipline: the
 theory-side status of the novelty bit is already fixed in
 [`THEORY.md § Implications not yet materialized`](THEORY.md#implications-not-yet-materialized);
 DESIGN.md merely names the API surface that materializes it.
 
 **Two-type API surface.** `RawDistinctionId → engine.verify() →
 Distinction`. The runtime closure is `[SHIPPED @ src/engine.rs:393-402]`;
-lifting it to a type-level API is `[TARGET @ E02]` — see substrate
-description above.
+the type-level API is `[SHIPPED @ E02-S04]` — see substrate description
+above.
 
 **Signal axis forward-compat.** The projection dual carries a `Signal`
 axis (see [`THEORY.md § synthesis/projection dual`](THEORY.md#the-synthesis-projection-dual)).

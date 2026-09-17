@@ -1,4 +1,4 @@
-# Rustfmt configuration for forma-core
+# Rustfmt configuration for koru-lambda-core
 # Enforces consistent formatting across the codebase
 # Using stable features only for maximum compatibility
 

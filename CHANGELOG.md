@@ -2,9 +2,86 @@
 
 Budget-gate amendments and substrate changes land under `## Unreleased`
 so consumer teams (ALIS, koru-protocol) see the ratchet before they
-migrate. This file will be rewritten as one coherent v2.0 entry during
-E02 completion (per `DESIGN.md` § "Path to v2.0.0"). The `## Unreleased`
-section below tracks amendments that land before that rewrite.
+migrate. The v2.0.0 section below is the coherent E02 entry described in
+`DESIGN.md § "Path to v2.0.0"`; `## Unreleased` below it retains the E01
+substrate close for provenance.
+
+## [2.0.0] - 2026-09-16
+
+E02 (Perspective Primitive) closes. v2.0.0 introduces the projection
+primitive as a first-class read dual to `synthesize`, the two-type
+discipline that lifts Axiom-4 boundary enforcement from a runtime
+`debug_assert!` to a type-level API, and the novelty-bit outcome enum
+that lets consumers observe Law 7 saturation without extra state.
+
+### Added
+
+- **Projection primitive** — `engine.project(root)` builder returning
+  `Projection` values. E02-S02 lands the full API surface: 14 types +
+  4 traits + wire codec. Types include `Root`, `Direction { Downstream,
+  Upstream, Both }`, and the shipped `Signal` implementors `Adjacency`,
+  `Degree`, `HopDistance` (see `src/projection.rs`). The builder chain
+  `engine.project(root).direction(..).hops(..).signal(..).materialize()`
+  returns a `Materialized<S: Signal>` carrying `projection_id()` +
+  `canonical_bytes()`, both content-addressed on the spec
+  `{ Root, boundary, Direction, Signal }` at quiescence.
+  `Signal` is object-unsafe by design (verified via `trybuild`).
+  Ships in commit `8efa70c`.
+
+- **`SynthesisOutcome` + `synthesize_novel`** — Law-7 novelty bit
+  exposure via a parallel entry point on `DistinctionEngine`.
+  `SynthesisOutcome` is `#[non_exhaustive] pub enum { Novel(Distinction),
+  Existing(Distinction), .. }` — variants, not `{ child, was_novel }`
+  fields, so future outcome classes can land without breaking match
+  arms. `synthesize` still returns a bare `Distinction` for backward
+  compatibility; consumers wanting the novelty bit call
+  `synthesize_novel`. Ships in commit `5707240`.
+
+- **Two-type discipline: `RawDistinctionId` + `engine.verify()`** —
+  Axiom-4 boundary narrowed from runtime `debug_assert!` to a type-level
+  API. External bytes enter the system as `RawDistinctionId` (a
+  `#[repr(transparent)]` wrapper with no engine-membership claim);
+  `engine.verify(raw) -> Result<Distinction, VerifyError>` is the sole
+  path from raw bytes to a verified `Distinction`. Foreign-byte
+  injection is now closed at the type level, not just in debug builds.
+  Ships in commit `10cebaf`.
+
+- **Cond D cross-engine falsifier probe** — `tests/cond_d_falsifier.rs`
+  ships as a `#[test]` converting `THEORY.md § The synthesis/projection
+  dual` from a spec claim into a CI-attested theorem. Two independent
+  engines with identical synthesis histories, queried with the same
+  projection spec at quiescence, must produce byte-identical output.
+  Every commit that touches synthesis, projection, or wire format either
+  preserves Cond D or fails this test. Ships in commit `40b6d25`.
+
+### Changed
+
+- **`Distinction::from_hex` retained for backward compatibility.**
+  `Distinction::from_hex` still parses bytes but makes no
+  engine-membership claim (see rustdoc). Consumers should migrate to
+  `RawDistinctionId::from_hex` + `engine.verify()`, the two-type-safe
+  path. The direct hex constructor stays for the v1.x → v2.0 migration
+  window; a future major release may deprecate it.
+
+### Fixed
+
+- `clippy.toml:1` and `rustfmt.toml:1` — project name comments corrected
+  from a stale `forma-core` rename artifact to `koru-lambda-core`.
+- `docs/development/GUARDRAILS.md:317-318` — CI badge URLs corrected
+  from placeholder `github.com/you/forma-core/…` to the real
+  `github.com/swyrknt/koru-lambda-core/…` repository path.
+
+### Migration
+
+Consumer migration guide lives in the E04 epic
+(`.claude/warroom/epics/E04-consumer-migration/`, currently empty).
+That story ships the actual "delete your wrapper" playbook for ALIS,
+koru-protocol, and other consumers with hand-rolled projection / novelty
+/ verify shims. Until then: E02 v2.0.0 is API-additive; nothing in the
+substrate's shipped surface (`synthesize`, `parents_of`, `degree`,
+`has`, `distinction_count`, hex round-trip) changed in a
+signature-breaking way. Novel consumers pick up the new APIs directly;
+existing consumers migrate at their own pace.
 
 ## Unreleased
 
