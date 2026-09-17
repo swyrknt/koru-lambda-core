@@ -97,6 +97,39 @@ so a `rand` version drift falsifies the pre-flight gate
 (`exp18_corpus_integrity`, `tests/coding_law.rs:48-70`) BEFORE ρ is
 reported.
 
+### v2.0.0 API surface — baseline (E02)
+
+Baseline throughput for the four E02 API surfaces added on
+`release/2.0.0-next`. Captured on M-series silicon in release mode under
+the same thermal-idle protocol as the Gate 11/12 numbers. Not gated
+today; recorded as reference for post-2.0.0 regression watch.
+
+- `verify(registered)` ~ 181 M ops/sec at `benches/perspective.rs:63`
+  (`verify/registered_distinction`).
+- `verify(foreign)` ~ 196 M ops/sec at `benches/perspective.rs:74`
+  (`verify/foreign_bytes`), against a `has()` baseline of ~ 215 M ops/sec
+  at `benches/perspective.rs:88` (`verify/has_baseline`).
+- `synthesize_novel` chain-extension ~ 3.38 M ops/sec at
+  `benches/perspective.rs:107`, against a `synthesize` baseline of
+  ~ 3.52 M ops/sec at `benches/perspective.rs:134` (same 100-warmup
+  chain workload; the two share `synthesize_inner`).
+- `Projection::materialize` at 3-hop upstream cone on a 10K-chain
+  mid-root: `Adjacency` ~ 754 ns at `benches/perspective.rs:183`,
+  `Degree` ~ 710 ns at `benches/perspective.rs:195`, `HopDistance`
+  ~ 696 ns at `benches/perspective.rs:210` (the `HopDistance` row
+  exercises the `CoreSignal::__materialize_special` fast-path).
+- `Projection::canonical_bytes` on a pre-materialized 3-hop
+  `Adjacency` projection ~ 716 ns at `benches/perspective.rs:240`.
+
+**Interpretation.** `verify` sits ~ 15% behind `has` — the `Result`
+construction is measurable but sub-nanosecond, so the trust-boundary
+type is a near-zero-cost wrapper over the `has` primitive. The
+`synthesize_novel` and `synthesize` paths are within noise of each
+other, confirming the `synthesize_inner` refactor centralizes the hot
+path without adding overhead. The `HopDistance` fast-path is slightly
+ahead of `Degree` at 3 hops, consistent with reusing the BFS-carried
+hop counts rather than per-node re-compute.
+
 **Ceiling probe at 50 M+ scale.** Not shipped. Whether the single- and
 multi-thread numbers hold past L3 cache (~8–32 MB), DashMap shard
 collision rate under sustained load, allocator paging near memory

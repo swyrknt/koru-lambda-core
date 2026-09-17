@@ -69,6 +69,10 @@ harness = false
 name = "upper_bound"
 harness = false
 
+[[bench]]
+name = "perspective"
+harness = false
+
 [dev-dependencies]
 criterion = "0.5"
 proptest = "1.0"
