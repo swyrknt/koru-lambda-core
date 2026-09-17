@@ -1,5 +1,5 @@
-[SHIPPED @ commit 7549860 (release/2.0.0-next)]
-Manifest version: 1.2.0
+[SHIPPED @ release/2.0.0]
+Manifest version: 2.0.0
 
 # koru-lambda-core v2.0.0 — Naming the projection dual
 
@@ -61,7 +61,7 @@ findable by search.
 
 ## Who this release is for
 
-The v2.0.0 preparation on `release/2.0.0-next` is for two audiences:
+The v2.0.0 preparation on `release/2.0.0` is for two audiences:
 
 - **Contributors** — the substrate's docs now match its code.
   `THEORY.md` is authoritative for axioms and laws; this document is
@@ -85,10 +85,10 @@ the release that *names the object* your wrapper has been implementing.
 
 ## Path to v2.0.0
 
-Current state: `release/2.0.0-next` at commit `7549860`. Manifest version
-1.2.0 on the branch (bump lands in E02 completion). What ships at E02
-completion: projection primitive API surface, `Cargo.toml` version bump
-1.2.0 → 2.0.0, no C ABI added.
+Current state: `release/2.0.0`. Manifest version 2.0.0 (bump landed
+at E02 completion). What shipped at E02 completion: projection
+primitive API surface, `Cargo.toml` version bump 1.2.0 → 2.0.0, no C
+ABI added.
 
 Six preconditions for the version bump:
 
@@ -131,24 +131,27 @@ enforces [the four axioms](THEORY.md#the-four-axioms) directly:
 - Content addressing: 16-byte SHA-256 prefix of the canonical pair
 - Saturation: `contains_key` fast path before entry lock
 
-`pub fn synthesize` `[SHIPPED @ src/engine.rs:386-484]`. The current API
-returns a bare `Distinction`, discarding the novelty bit; exposure of
-`SynthesisOutcome::Novel(Distinction) | Existing(Distinction)` via
-`synthesize_novel` is `[SHIPPED @ E02-S03]` — see the "What v2.0.0
-changes" section.
+`pub fn synthesize` `[SHIPPED @ src/engine.rs:605-611]`. The bare
+`synthesize` API returns `Distinction`, discarding the novelty bit;
+the parallel `synthesize_novel` entry point returns
+`SynthesisOutcome::Novel(Distinction) | Existing(Distinction)`
+`[SHIPPED @ src/engine.rs:708-713]`. Both route through the shared
+`synthesize_inner` implementation `[SHIPPED @ src/engine.rs:740-840]`.
 
 **Two-type discipline (Axiom-4 closure).** Bytes typed as `Distinction`
 that were not produced by the operator are structurally illegitimate.
 [`THEORY.md § The operator`](THEORY.md#the-operator) names the API-level
 convention: raw bytes admitted only as `RawDistinctionId`, converted to
 `Distinction` via `engine.verify()`, foreclosing foreign-byte injection at
-the type level. That API surface is `[SHIPPED @ E02-S04]`. The runtime
-closure remains as the debug-mode `debug_assert!` foreign-byte guard at
-`[SHIPPED @ src/engine.rs:393-402]`; release builds trust the contract.
+the type level. That API surface is `[SHIPPED @ src/engine.rs:158-177]`
+(`RawDistinctionId`) and `[SHIPPED @ src/engine.rs:991]` (`verify`).
+The runtime closure remains as the debug-mode `debug_assert!`
+foreign-byte guard at `[SHIPPED @ src/engine.rs:747-756]`; release
+builds trust the contract.
 
 ### The Distinction type
 
-`pub struct Distinction(pub(crate) [u8; 16])` `[SHIPPED @ src/engine.rs:53]`
+`pub struct Distinction(pub(crate) [u8; 16])` `[SHIPPED @ src/engine.rs:71]`
 — a 16-byte newtype with:
 
 - `#[repr(transparent)]` — zero-copy FFI / persistence layout.
@@ -187,9 +190,9 @@ bug (you computed a distinction and threw it away). Applies to
 One `DashMap<[u8; 16], EngineNode { parents, degree }>` plus two
 primordial constants:
 
-- `pub struct DistinctionEngine` `[SHIPPED @ src/engine.rs:275]`
-- `struct EngineNode` `[SHIPPED @ src/engine.rs:234]`
-- `pub struct IdentityHasher` `[SHIPPED @ src/engine.rs:101]`
+- `pub struct DistinctionEngine` `[SHIPPED @ src/engine.rs:494]`
+- `struct EngineNode` `[SHIPPED @ src/engine.rs:453]`
+- `pub struct IdentityHasher` `[SHIPPED @ src/engine.rs:206]`
 
 `EngineNode`'s two fields serve the three canonical O(1) projections
 the theory names:
@@ -208,7 +211,7 @@ refactor` for the provenance.
 
 ### IdentityHasher
 
-DashMap uses a specialized hasher `[SHIPPED @ src/engine.rs:101]` that
+DashMap uses a specialized hasher `[SHIPPED @ src/engine.rs:206]` that
 takes the leading 8 bytes of the 16-byte SHA-256 prefix directly as the
 u64 hash — no XOR, no rotation, no diffusion math. SHA-256 prefixes are
 already uniformly distributed; a general-purpose hasher would waste
@@ -222,13 +225,15 @@ instead of silently corrupting state. v2.0.0 has no tuple keys, so the
 hasher only ever sees single 16-byte writes.
 
 `pub type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>`
-`[SHIPPED @ src/engine.rs:169]` is what the `DashMap` field type
+`[SHIPPED @ src/engine.rs:274]` is what the `DashMap` field type
 parameterizes on.
 
 ### Synthesize hot path — concurrency contract
 
-`pub fn synthesize` `[SHIPPED @ src/engine.rs:386-484]` is race-free
-under concurrent synthesis. Shape:
+`pub fn synthesize` `[SHIPPED @ src/engine.rs:605-611]` and
+`synthesize_novel` `[SHIPPED @ src/engine.rs:708-713]` share the
+`synthesize_inner` hot path `[SHIPPED @ src/engine.rs:740-840]` and
+are race-free under concurrent synthesis. Shape:
 
 1. **Foreign-byte guard** on both parents (`debug_assert!` on
    `nodes.contains_key(&parent.0)`). Debug-only enforcement of the
@@ -285,9 +290,9 @@ wanting children iteration call `build_children_index` on a snapshot
 
 ### Structural invariants surfaced
 
-`pub fn check_structural_invariant` `[SHIPPED @ src/engine.rs:643]`
+`pub fn check_structural_invariant` `[SHIPPED @ src/engine.rs:1068]`
 returns `Result<(), InvariantError>`
-`[SHIPPED @ src/engine.rs:195]`. The check tests
+`[SHIPPED @ src/engine.rs:319]`. The check tests
 [Law 5 binary parentage](THEORY.md#law-5-binary-parentage) via the
 [Law 6 r = 2d − 3](THEORY.md#law-6-r--2d--3) accounting:
 `nodes.len() == parents_of_count + 2` (every non-primordial has parents
@@ -470,8 +475,8 @@ the FFI concurrent test in E03), and misuse-detection tests
 release-safe mismatch/unreachable/missing-primordial errors). Full
 test inventory lives in `src/**/tests` inline modules and in
 `tests/`. Coding Law ρ ≥ 0.985 is asserted at
-`[SHIPPED @ tests/coding_law.rs:82-125]` against a pinned exp18
-corpus.
+`[SHIPPED @ experiments/runner/tests/coding_law.rs:74-127]` against a
+pinned exp18 corpus.
 
 ### Why the code looks the way it does — grounded decisions
 
@@ -532,9 +537,8 @@ engine does not currently expose):
 ### API surface at the current commit
 
 Public entry points a v1.x consumer would touch. Every method carries
-a `[SHIPPED]` tag by construction (release/2.0.0-next commit
-`7549860`); items added at E02 or later carry a `[TARGET]` tag on the
-E02 line-item.
+a `[SHIPPED]` tag by construction (release/2.0.0); items added at
+later epics carry a `[TARGET]` tag on the relevant line-item.
 
 - `DistinctionEngine::new()` / `Default::default()` — bootstrap;
   inserts d₀, d₁; asserts `distinction_count() == 2`,
@@ -611,9 +615,10 @@ theory-side status of the novelty bit is already fixed in
 DESIGN.md merely names the API surface that materializes it.
 
 **Two-type API surface.** `RawDistinctionId → engine.verify() →
-Distinction`. The runtime closure is `[SHIPPED @ src/engine.rs:393-402]`;
-the type-level API is `[SHIPPED @ E02-S04]` — see substrate description
-above.
+Distinction`. The runtime closure is `[SHIPPED @ src/engine.rs:747-756]`;
+the type-level API is `[SHIPPED @ src/engine.rs:158-177]`
+(`RawDistinctionId`) and `[SHIPPED @ src/engine.rs:991]` (`verify`) —
+see substrate description above.
 
 **Signal axis forward-compat.** The projection dual carries a `Signal`
 axis (see [`THEORY.md § synthesis/projection dual`](THEORY.md#the-synthesis-projection-dual)).

@@ -100,7 +100,7 @@ reported.
 ### v2.0.0 API surface — baseline (E02)
 
 Baseline throughput for the four E02 API surfaces added on
-`release/2.0.0-next`. Captured on M-series silicon in release mode under
+`release/2.0.0`. Captured on M-series silicon in release mode under
 the same thermal-idle protocol as the Gate 11/12 numbers. Not gated
 today; recorded as reference for post-2.0.0 regression watch.
 

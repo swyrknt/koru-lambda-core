@@ -216,7 +216,8 @@ cargo flamegraph --bench performance
 5. Ask: "Would cloning here be acceptable?"
 
 ### Design Questions
-- Reference [Design Documentation](docs/DESIGN_DOC.md) for the theoretical foundation
+- Reference [THEORY.md](THEORY.md) for the axioms and structural laws
+- Reference [DESIGN.md](DESIGN.md) for the shipping story
 - Discuss architectural changes before implementing
 - Preserve the axioms at all costs
 

@@ -10,7 +10,10 @@ Welcome to the Koru Lambda Core documentation!
 ## Documentation
 
 ### Core Design
-- **[DESIGN_DOC.md](DESIGN_DOC.md)** - Theoretical foundation, SPoC protocol, and system architecture
+- **[THEORY.md](../THEORY.md)** - Axioms, primordials, structural laws (authoritative)
+- **[DESIGN.md](../DESIGN.md)** - Shipping story: what the substrate ships today
+- **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Code structure and module layout
+- **[BENCHMARKS.md](BENCHMARKS.md)** - Capacity and throughput measurements
 
 ### Development
 - **[TESTING_STANDARDS.md](development/TESTING_STANDARDS.md)** - Test philosophy and falsification methodology
