@@ -82,6 +82,18 @@ shipped surface (`synthesize`, `parents_of`, `degree`, `has`,
 way. Novel consumers pick up the new APIs directly; existing consumers
 migrate at their own pace.
 
+#### npm breaking changes
+
+For npm consumers upgrading from `koru-lambda-core@1.2.0`, the
+JS/wasm-bindgen surface is **not** additive. `WasmValidator`,
+`WasmCommitmentAgent`, and `WasmNetworkAgent` are retired with no
+replacement; `WasmEngine`'s method signatures move from string-typed to
+bytes-canonical; and `d0Id()` / `d1Id()` return different bytes than
+they did in 1.2 (16-byte primordials, not UTF-8 of `"0"` / `"1"`) — the
+one silent break in this release. See
+[docs/MIGRATION_JS.md](docs/MIGRATION_JS.md) for the full recipe list
+and migration checklist.
+
 ## Unreleased
 
 ### Substrate baseline (CLOSED — shipped in 2.0.0)

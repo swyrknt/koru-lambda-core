@@ -81,6 +81,8 @@ assert_eq!(verified.as_bytes(), child.as_bytes());
 - [CHANGELOG.md](CHANGELOG.md) — release history.
 - [docs/BENCHMARKS.md](docs/BENCHMARKS.md) — capacity and
   throughput measurements; every number cites an in-crate anchor.
+- [docs/MIGRATION_JS.md](docs/MIGRATION_JS.md) — JS/TS migration
+  guide for consumers upgrading from `koru-lambda-core@1.2.0` on npm.
 
 Auto-generated API docs live at
 [docs.rs/koru-lambda-core](https://docs.rs/koru-lambda-core).
