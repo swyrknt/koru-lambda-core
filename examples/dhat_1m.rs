@@ -29,11 +29,22 @@
 //! - Merged-map prediction:    ~80 B (Step 1e refactor estimate;
 //!   amendment expected at Step 4)
 
+// Native-only stub for wasm32 — `dhat` is a native-only dev-dep (heap
+// profiler over backtraces / OS APIs). We branch `main` on target so
+// `wasm-pack test --features wasm` (which compiles all examples) doesn't
+// hit the missing crate. The real profile runs on native only; wasm has
+// nothing to profile here.
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 use koru_lambda_core::DistinctionEngine;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     // `testing()` mode keeps stats queryable via `HeapStats::get()` while
     // still writing the dhat-heap.json profile on drop. Without `testing()`,

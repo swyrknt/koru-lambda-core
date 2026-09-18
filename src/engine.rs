@@ -1813,7 +1813,10 @@ mod engine_tests {
 
     // ----- Property-based tests (proptest, 10K cases) -------------------
 
-    #[cfg(test)]
+    // `proptest` is native-only in dev-deps (wasm-hostile transitives).
+    // Skip these modules on wasm32 — the substrate hot path itself is
+    // wasm-clean; the proptest coverage lives on native CI.
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     mod proptests {
         use super::*;
         use proptest::prelude::*;
@@ -2407,7 +2410,8 @@ mod engine_tests {
         assert!(msg.contains("not registered"), "Display message missing key phrase: {msg}");
     }
 
-    #[cfg(test)]
+    // `proptest` is native-only in dev-deps (see note above); wasm32 skips.
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     mod verify_proptests {
         use super::*;
         use proptest::prelude::*;
@@ -2464,7 +2468,8 @@ mod engine_tests {
         }
     }
 
-    #[cfg(test)]
+    // `proptest` is native-only in dev-deps (see note above); wasm32 skips.
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     mod novelty_proptests {
         use super::*;
         use proptest::prelude::*;

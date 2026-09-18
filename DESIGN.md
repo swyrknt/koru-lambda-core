@@ -440,10 +440,14 @@ Beyond what dev already pulls (`dashmap`, `sha2`, `serde`, `lru`,
   content-addressing contract) but the differential test catches
   bytes-injection regressions.
 
-FFI / WASM heavyweight dependencies (`parking_lot`, `console_error_panic_hook`,
-`wasm-bindgen`, `wasm-bindgen-test`) are NOT pulled at this commit — see
-anti-scope. The `wasm` feature flag remains declared in `Cargo.toml` for
-future E-series work; no `src/` code is currently gated on it.
+FFI heavyweight dependency (`parking_lot`) is NOT pulled at this commit — see
+anti-scope. E05-bindings-ffi remains queued for post-v2.0.0 C-ABI work.
+
+WASM dependencies (`wasm-bindgen`, `wasm-bindgen-test`, `console_error_panic_hook`,
+`serde_bytes`, `js-sys`, `serde-wasm-bindgen`) ARE pulled behind the `wasm`
+feature — `src/wasm.rs` `[SHIPPED @ E07-S01]` gates the JS/TS binding
+surface. Default `cargo build` and `cargo test --workspace` are unaffected
+(feature-off).
 
 No new heavyweight deps. Every addition serves a specific design goal.
 
@@ -676,11 +680,13 @@ Enumerated. No hedging.
 
 ### Deleted files and non-claims
 
-- **`network.rs`, `compactor.rs`, `parallel.rs`, `ffi.rs`, `wasm.rs`**
+- **`network.rs`, `compactor.rs`, `parallel.rs`, `ffi.rs`**
   — earlier design rounds described these files as shipping. They do
   not exist in `src/` at commit `7549860`; every prior section
   describing them has been removed. See `CHANGELOG.md § Removed
-  sections` for the excision record.
+  sections` for the excision record. Note: `wasm.rs` was in this list
+  in earlier revisions but now `[SHIPPED @ E07-S01]` — 683 LOC behind
+  `#[cfg(feature = "wasm")]`.
 
 - **v2.0.0 does not add a C ABI.** The `cdylib` / `staticlib`
   crate-types in `Cargo.toml` produce empty C-boundary artifacts at

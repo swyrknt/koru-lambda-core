@@ -56,10 +56,14 @@ wasm-bindgen = { version = "0.2", optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
 js-sys = { version = "0.3", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
+# `serde_bytes` — Uint8Array bridge for wasm-bindgen POJOs (R11).
+# Default `serde-wasm-bindgen` serializes `Vec<u8>` as `Array<number>`;
+# `#[serde(with = "serde_bytes")]` restores the expected Uint8Array shape.
+serde_bytes = { version = "0.11", optional = true }
 
 [features]
 default = []
-wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "console_error_panic_hook"]
+wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "console_error_panic_hook", "serde_bytes"]
 
 [[bench]]
 name = "substrate"
@@ -74,16 +78,30 @@ name = "perspective"
 harness = false
 
 [dev-dependencies]
+# Universally-safe dev-deps — compile fine on both native and wasm32.
+static_assertions = "1"
+serde_json = "1.0"
+
+# Native-only dev-deps. `proptest`, `criterion`, `loom`, `dhat`, `trybuild`
+# all have wasm-hostile transitive deps (`wait-timeout`, native FFI, etc.);
+# scoping them to non-wasm32 lets `wasm-pack test --features wasm` compile
+# `tests/wasm_smoke.rs` without dragging their broken transitives onto the
+# wasm target.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.5"
 proptest = "1.0"
 rand = { workspace = true } # see [workspace.dependencies] for the pin rationale
-static_assertions = "1"
 loom = "0.7"
 dhat = "0.3"
-serde_json = "1.0"
 # `trybuild` — compile-fail harness used by `tests/trybuild.rs` to prove
 # `dyn Signal` is object-unsafe by design (PROJECTION_SPEC §3.1).
 trybuild = "1"
+
+# wasm32-only dev-deps.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+# `wasm-bindgen-test` — smoke suite for `src/wasm.rs` at `tests/wasm_smoke.rs`.
+# Runs via `wasm-pack test --node --features wasm`.
+wasm-bindgen-test = "0.3"
 # Note: koru-experiments-runner is a workspace member (see [workspace]
 # above) but NOT a dev-dependency of the root crate — that edge, combined
 # with experiments/runner → koru-lambda-core (normal dep), created a

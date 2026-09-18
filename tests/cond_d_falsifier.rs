@@ -13,6 +13,13 @@
 //! falsifiability — every commit that touches synthesis, projection,
 //! or wire format either preserves Cond D or fails this test.
 
+// Native-only: `rand = "=0.8.5"` (workspace-pinned) is not available on
+// wasm32 (moved to `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]`
+// so `wasm-pack test` doesn't drag `wait-timeout` and other wasm-hostile
+// transitives). The wasm-side Axiom-4 falsifier lives in
+// `tests/wasm_smoke.rs`.
+#![cfg(not(target_arch = "wasm32"))]
+
 use koru_lambda_core::projection::Direction;
 use koru_lambda_core::{Adjacency, Distinction, DistinctionEngine};
 use rand::rngs::StdRng;

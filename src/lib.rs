@@ -158,6 +158,9 @@ pub mod recorder;
 pub mod replay;
 pub mod subsystems;
 
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
 pub use agent::{synthesize_causal_action, LocalCausalAgent};
 pub use distinction_hex::ParseError;
 pub use engine::{

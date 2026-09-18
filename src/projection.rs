@@ -1495,6 +1495,14 @@ mod tests {
         assert!(matches!(err, RestoreError::Malformed { .. }));
     }
 
+    // Uses a 64-bit-wide literal, which overflows `usize` on wasm32
+    // (`usize == u32` there). The wire-format guarantee itself is
+    // target-independent — `CanonicalBytes for usize` widens to `u64` LE
+    // — and the native test above proves it holds. Gating this out on
+    // wasm32 rather than narrowing the literal keeps the 8-byte
+    // assertion honest on the platform where `usize` actually is 8
+    // bytes.
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn canonicalbytes_usize_is_8_bytes_le() {
         let v: usize = 0x0102_0304_0506_0708;
