@@ -20,7 +20,7 @@ koru-lambda-core = "2.0"
 No default features. The `wasm` feature gates the `wasm-bindgen`
 surface for browser / Node / Deno targets.
 
-## Quickstart
+## Quickstart (Rust)
 
 ```rust
 use koru_lambda_core::{Adjacency, DistinctionEngine, RawDistinctionId};
@@ -45,6 +45,38 @@ let raw = RawDistinctionId::from_hex(&wire).expect("hex parses");
 let verified = engine.verify(raw).expect("this engine has these bytes");
 assert_eq!(verified.as_bytes(), child.as_bytes());
 ```
+
+## Quickstart (JS/TS via npm)
+
+```bash
+npm install koru-lambda-core
+```
+
+```typescript
+import init, { WasmEngine, idToHex } from "koru-lambda-core";
+
+await init();
+const engine = new WasmEngine();
+
+// Write side: synthesize a distinction from the two primordials.
+const child = engine.synthesize(engine.d0(), engine.d1());
+
+// Read side: project a 2-hop upstream cone anchored at the child.
+const cone = engine.projectAdjacency(child, "upstream", 2);
+console.assert(cone.contains(child));
+
+// Trust boundary: raw bytes from a wire / hex source verify back to
+// the same distinction.
+const verified = engine.verify(child);
+console.log("child:", idToHex(verified));
+```
+
+For a runnable end-to-end example with projections and the trust
+boundary wired up, see
+[`examples/wasm-quickstart/`](./examples/wasm-quickstart/).
+
+Migrating from `koru-lambda-core@1.2.0` on npm? See
+[docs/MIGRATION_JS.md](docs/MIGRATION_JS.md).
 
 ## What's inside
 

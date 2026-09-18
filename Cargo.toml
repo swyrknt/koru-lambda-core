@@ -25,6 +25,12 @@ readme = "README.md"
 repository = "https://github.com/swyrknt/koru-lambda-core"
 keywords = ["distributed", "consensus", "wasm", "deterministic"]
 categories = ["algorithms", "wasm"]
+# Keep the JS/TS example scaffold in the git repo, out of the crates.io
+# tarball. The example targets external discoverers landing on npmjs.com,
+# not crates.io consumers.
+exclude = [
+    "examples/wasm-quickstart/*",
+]
 
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
