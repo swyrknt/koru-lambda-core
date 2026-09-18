@@ -1,4 +1,5 @@
-//! `trybuild` compile-fail harness for E02-S02 discipline probes.
+//! `trybuild` compile-fail harness for v2.0.0 projection API discipline
+//! probes.
 //!
 //! Currently one probe: `dyn Signal` must not be object-safe. See
 //! `tests/trybuild/dyn_signal_unsafe.rs` for the compile-fail source

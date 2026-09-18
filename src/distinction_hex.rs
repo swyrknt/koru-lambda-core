@@ -460,7 +460,7 @@ mod tests {
         assert_eq!(original, restored);
     }
 
-    // ----- E02-S04 — RawDistinctionId hex boundary ----------------------
+    // ----- RawDistinctionId hex boundary ---------------------------------
 
     #[test]
     fn raw_hex_round_trip_mixed_bytes() {

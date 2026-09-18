@@ -55,7 +55,7 @@ fn synthesize_verify_has_degree_round_trip() {
 }
 
 // -------------------------------------------------------------------
-// Axiom-4 falsifier — the load-bearing Logic Enforcer probe.
+// Axiom-4 falsifier — the load-bearing engine-identity probe.
 //
 // Bytes from engineA must NOT be accepted by engineB (both engines have
 // synthesized the same child, but the substrate's identity is

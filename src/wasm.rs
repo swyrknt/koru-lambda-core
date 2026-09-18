@@ -25,9 +25,6 @@
 //! - **`typescript_custom_section`** declares the discriminated-union
 //!   type explicitly so TS narrowing on `kind` works — wasm-bindgen's
 //!   default would type `kind` as `string`, defeating the union.
-//!
-//! See warroom `E07-bindings-web/S01-wasm-surface/` for phase-by-phase
-//! design decisions.
 
 #![cfg(feature = "wasm")]
 

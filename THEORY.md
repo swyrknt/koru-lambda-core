@@ -24,10 +24,6 @@ document (`synthesize`, `commutativity`, `irreflexivity`,
 `THEORY.md:LINE` (verbatim-quote-only). Matches inside `[SHIPPED]` or
 `[TARGET]` tag blocks are exempt — those anchor to code by construction.
 
-**Enforcement.** `.claude/warroom/checks/theory_anchor_check.sh` is the
-falsifier stub for this policy; the real check lands in E01-S05 execute
-(see PLAN v2.1 Step 12).
-
 ---
 
 ## The operator
@@ -45,10 +41,9 @@ existence as a structural output of the operator.
 
 **Two-type discipline (Axiom-4 closure).** Bytes typed as `Distinction`
 that were not produced by the operator are structurally illegitimate.
-Implementations close this by admitting raw bytes only as
-`RawDistinctionId` and converting via `engine.verify()`, foreclosing
-foreign-byte injection at the type level. `[TARGET: two-type API
-discipline]`. Current runtime closure: `src/engine.rs:393-402` `[SHIPPED]`.
+The theory forces a boundary between verified distinctions and raw
+byte payloads; how a given implementation closes that boundary is a
+design concern (see `DESIGN.md` and `ARCHITECTURE.md`).
 
 ---
 
@@ -117,24 +112,11 @@ holds exactly at every scale. Each novel synthesis adds one new
 distinction and two new parent-child edges; the `−3` accounts for the
 genesis state (d=2, r=1: only the d₀↔d₁ edge).
 
-**Implementation note.** The d₀↔d₁ genesis edge is a *theory-level*
-relationship. Implementations may carry it implicitly (via a folklore
-`+ 1` addend) or materialize it explicitly. v2.0 uses the implicit form,
-and — because they answer *different* accounting questions — the addend
-appears in two distinct places:
-
-- `+ 1` at `src/engine.rs:523` and `src/engine.rs:554` `[SHIPPED]` — the
-  **genesis-edge addend**. In `degree()` it accounts for the d₀↔d₁ edge
-  when the queried distinction is a primordial; in `relationship_count()`
-  it accounts for the same edge at the whole-graph tally.
-- `+ 2` at `src/engine.rs:530` `[SHIPPED]` — the **parent-edge addend**
-  for non-primordial distinctions. Every non-primordial has exactly two
-  parent edges recorded in `nodes[d].parents` (not in `nodes[d].degree`);
-  the `+ 2` adds them back for the reported degree. This is a
-  parent-edge count, not a genesis-edge count.
-
-Either implicit-genesis or explicit-materialization satisfies Law 6
-without violating Law 5; primordials have no parents by definition.
+The d₀↔d₁ genesis edge is a *theory-level* relationship;
+implementations may carry it implicitly or materialize it explicitly.
+Either choice satisfies Law 6 without violating Law 5; primordials have
+no parents by definition. See `ARCHITECTURE.md` for how the current
+substrate materializes the addend.
 
 ### Law 7 — Saturation
 Repeating the same synthesis adds nothing. `synthesize(a, b)` called
@@ -209,10 +191,11 @@ irreflexivity axiom," not literally infinite.
 The two primordials become topological mega-hubs. By construction, byte
 folding through `synthesize` routes every byte through `d₀` and `d₁`
 multiple times, making them appear on every derivation path. The
-"depth ≤ 8" bound is **structural**: `ByteMapping` folds each input byte
-through exactly 8 `synthesize` steps (one per bit), with `d₀` and `d₁`
-participating in every step. The bound is a direct consequence of the
-`ByteMapping` construction, not a workload artifact. `[SHIPPED]`.
+"depth ≤ 8" bound is **structural**: the canonical byte-folding
+construction folds each input byte through exactly 8 `synthesize`
+steps (one per bit), with `d₀` and `d₁` participating in every step.
+The bound is a direct consequence of that construction, not a workload
+artifact.
 
 **Fold Law and Coding Law both operate at all depths.** They're not
 sequential — there's no "handoff" at depth 8. Fold Law dominates the
@@ -230,11 +213,11 @@ law has two parts that should not be conflated:
 
 **Structural part (universal, by construction):** `degree(d) = count of
 novel synthesis participations` plus the genesis addend. This is
-*definitional* — it's what `node.degree.fetch_add(1, Release)` does
-after the entry-gated `synthesize` insert wins. It holds under any
-workload, including adversarial ones, because it's how the engine is
-built. There is no workload where this fails without the engine being
-broken.
+*definitional* — every axiom-consistent implementation increments the
+count on the parents each time a novel synthesis is registered. It
+holds under any workload, including adversarial ones, because it's a
+property of how the operator writes the graph. There is no workload
+where this fails without the engine being broken.
 
 **Empirical part (workload-conditional):** the Spearman rank correlation
 between `degree(d)` and `frequency_of_use(d)` — where frequency counts
@@ -299,9 +282,8 @@ the theoretical claim itself carries no tag.
 **Falsifier.** Cross-engine projection independence probe — two engines
 with identical synthesis histories, queried with the same projection
 `{ Root, boundary, Direction, Signal }` at quiescence, must produce
-byte-identical output. If not, the projection is an engine-side artifact,
-not a theory-forced object, and this section is wrong. `[TARGET]` — see
-`docs/BENCHMARKS.md`.
+byte-identical output. If not, the projection is an engine-side
+artifact, not a theory-forced object, and this section is wrong.
 
 ---
 
@@ -339,11 +321,13 @@ The LCA pattern is the *reference* because:
   multi-consumer systems can interoperate without re-inventing the
   perspective discipline.
 
-The trait lives at `src/agent.rs` (substrate level, not subsystems)
+The LCA contract is a substrate-level construct — not a subsystem —
 because it formalizes the canonical *consumer contract*, not because
 it's the only legal way to consume the substrate. Future consumers
-that need different shapes are welcome; they'll just write their own
-traits and lose the interop benefits the LCA contract provides.
+that need different shapes are welcome; they'll simply write their own
+contracts and lose the interop benefits the LCA one provides.
+Implementation details for the reference LCA trait live in
+`ARCHITECTURE.md`.
 
 ---
 

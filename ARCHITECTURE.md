@@ -43,21 +43,20 @@ substrate.
 
 ```
 src/
-  lib.rs              ~40 LOC   public re-exports
-  engine.rs           ~430 LOC  Distinction, IdentityHasher, DistinctionEngine
-  agent.rs            ~80 LOC   LocalCausalAgent trait + helper
-  primitives.rs       ~100 LOC  Canonicalizable trait + ByteMapping
-  distinction_hex.rs  ~120 LOC  to_hex / from_hex / Display / Debug / serde
-  replay.rs           ~60 LOC   snapshot_parentage / replay_topological / build_children_index
-  recorder.rs         ~60 LOC   SynthesisRecorder reference observer
+  lib.rs              public re-exports
+  engine.rs           Distinction, IdentityHasher, DistinctionEngine,
+                      RawDistinctionId + verify, SynthesisOutcome
+  projection.rs       projection primitive (Root, Direction, Signal,
+                      Materialized) and its wire codec
+  agent.rs            LocalCausalAgent trait + helper
+  primitives.rs       Canonicalizable trait + ByteMapping
+  distinction_hex.rs  to_hex / from_hex / Display / Debug / serde
+  replay.rs           snapshot_parentage / replay_topological /
+                      build_children_index
+  recorder.rs         SynthesisRecorder reference observer
 ```
 
-**Total: ~890 LOC.** This is the heart of the crate.
-
-LOC sizes are targets. The `engine.rs ≤ 480 LOC` ceiling (gate 23 of
-`DESIGN.md` Part 10) is the upper bound that triggers the hard gate;
-~430 LOC is what we're trying to hit. Same idea applies to every other
-file size in this layout.
+This is the heart of the crate.
 
 ### `engine.rs` — the engine itself
 
@@ -168,6 +167,44 @@ consistent (Release/Acquire pair; B1 mitigation drops the lock before
 the bumps). Consumers driving sequential LCAs never see the in-flight
 window; quiescent reads are always consistent.
 
+**Memory ordering contract.** `fetch_add(1, Release)` on parent degree
+pairs with `Ordering::Acquire` loads in `pub fn degree` so probes
+reading `node.degree` directly (without first observing the new child)
+still get a happens-before edge to the writing synthesis. The
+Release/Acquire kernel has a loom test at `tests/loom_kernel.rs` —
+loom verifies the abstract memory-model interleavings; TSan on the
+concurrent-write byte-equivalence test verifies the DashMap-shard
+side. Neither alone covers both; both are required.
+
+**Law 8 quiescence qualifier.** Two engines processing the same
+operations produce byte-identical state
+[at quiescence](THEORY.md#law-8-engine-independence); mid-flight
+transient divergence is permitted while writes are in progress. The
+claim is post-processing convergence, not instantaneous equality.
+LCAs drive synthesis sequentially per LCA, so the relaxation is
+invisible to the documented consumer contract; probes reading
+`node.degree` mid-flight are responsible for their own quiescence
+boundary (post-join barrier, epoch boundary, etc.).
+
+**Why `AtomicUsize::fetch_add` not `Vec::push`.** Earlier design rounds
+kept a `children_of: DashMap<[u8;16], Vec<Distinction>>` for
+enumerating a distinction's children. d₀ and d₁ accumulate millions of
+children via the Fold Law; a `Vec<Distinction>` reallocates O(log N)
+times under the shard write-lock and stalls every other thread trying
+to synthesize against d₀ or d₁. `AtomicUsize::fetch_add` is
+constant-cost, lock-free, and the count itself is what
+[Coding Law](THEORY.md#law-12-coding-law) actually names. Consumers
+wanting children iteration call `build_children_index` on a snapshot.
+
+**Hasher misuse guard.** In addition to the `debug_assert!` on 16-byte
+keys, `IdentityHasher` implements `unreachable!()` on every non-`write`
+`Hasher` method (`write_u8`, `write_u16`, …, `write_length_prefix`).
+Misuse — hashing a slice, a non-16-byte key, or a typed integer —
+triggers an immediate panic instead of silently corrupting state.
+v2.0.0 has no tuple keys, so the hasher only ever sees single 16-byte
+writes. `pub type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>`
+is what the `DashMap` field type parameterizes on.
+
 The `expect("…invariant")` panic messages encode the proof obligation
 in source — a contributor who breaks the pre-seed invariant gets a
 breadcrumb to the right line instead of a bare `unwrapped None`.
@@ -262,12 +299,7 @@ src/subsystems/
   mod.rs              ~20 LOC   declarations + re-exports
   validator.rs        ~300 LOC  ConsensusValidator
   commitment.rs       ~250 LOC  CommitmentAgent + BatchCommitment
-  network.rs          ~550 LOC  NetworkAgent + PeerIdentity + NetworkAction
-  compactor.rs        ~250 LOC  StructuralCompactor + CompactionAction
-  parallel.rs         ~80  LOC  BatchSynthesizer
 ```
-
-**Total: ~1,450 LOC.**
 
 Each subsystem is a worked example of the LCA pattern with real
 consensus-protocol semantics. They demonstrate how a productive consumer
@@ -279,13 +311,13 @@ Bug-correct from the start:
 - **Validator** pre-validates batches before any `synthesize` call —
   engine state is invariant on rejection (closes V5 by construction).
 - **Commitment** `compute` hashes `leader_id` (closes N6 by construction).
-- **Network** `TransactionBatch::previous_root: Distinction`, not
-  `String` (closes N5 by construction; no truncation possible).
-- **PeerIdentity::new** returns typed `Result<Self, PeerIdentityError>`
-  with bounded id length (closes N1/N2 by construction).
-- **Compactor** takes explicit `(hot, warm)` thresholds at construction.
-  No magic defaults. All mutations go through `engine.synthesize`
-  (append-only).
+  `TransactionBatch::previous_root: Distinction`, not `String` (closes
+  N5 by construction; no truncation possible).
+
+Earlier design rounds enumerated additional subsystems (`network.rs`,
+`compactor.rs`, `parallel.rs`) as shipping in this release. Those
+files were removed before v2.0.0 tagged; if they return, they will
+land as separate reference LCAs alongside `validator` and `commitment`.
 
 ---
 
@@ -293,19 +325,23 @@ Bug-correct from the start:
 
 ```
 src/
-  ffi.rs              ~650 LOC  C ABI
-  wasm.rs             ~450 LOC  WASM bindings (feature-gated)
+  wasm.rs             ~680 LOC  WASM bindings (feature-gated)
 ```
 
-**Total: ~1,100 LOC.**
-
 ### FFI
+
+Post-v2.0.0 work; **not shipped in the current release.** The
+`cdylib` / `staticlib` crate-types remain declared in `Cargo.toml`
+so a future C-ABI binding release can drop into place without another
+manifest change, but there is no `src/ffi.rs`, no opaque handle set,
+and no C header in v2.0.0. The design sketch below documents what a
+future FFI binding is expected to look like when the surface is
+built; nothing here is a shipping commitment.
 
 - Opaque types: `#[repr(C)] pub struct KoruEngine { _private: [u8; 0] }`
   for `KoruEngine`, `KoruAgent`, `KoruValidator`. The C header gets
   distinct typedefs; callers can't pass one through as another.
-- Handle wrapping: `Box<parking_lot::Mutex<NetworkAgent>>`,
-  `Box<parking_lot::Mutex<ConsensusValidator>>`. `parking_lot::Mutex`
+- Handle wrapping: `Box<parking_lot::Mutex<...>>`. `parking_lot::Mutex`
   is ~5× faster than `std::sync::Mutex` uncontended and lacks
   poisoning semantics that don't apply to FFI.
 - Engine borrows: `ManuallyDrop<Arc<DistinctionEngine>>` via one
@@ -314,6 +350,11 @@ src/
 - Length guards on slice inputs (`batch_len > isize::MAX` rejected).
 
 ### WASM
+
+`src/wasm.rs` is gated behind `#[cfg(feature = "wasm")]` and exposes
+`DistinctionEngine`, the projection primitive, and `verify` to JS/TS.
+The current ship-set of signals is `Adjacency`, `Degree`, and
+`HopDistance`.
 
 - Bytes-canonical end to end. Every distinction ID crossing the JS
   boundary is `Uint8Array` of length 16.

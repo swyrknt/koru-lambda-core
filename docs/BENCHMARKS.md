@@ -15,9 +15,9 @@ Hard rules:
 - **≤ 200 LOC.** If a section grows past its share, split it into a probe
   file under `tests/` or `benches/` — do not fatten this doc.
 - **Every number cites an in-crate file:line.** External anchors
-  (warroom logs, planning-doc TODOs, experiment IDs) are forbidden. If
-  the number cannot be re-derived from a shipped file, it does not
-  belong here.
+  (planning-doc TODOs, experiment IDs, unshipped scratch files) are
+  forbidden. If the number cannot be re-derived from a shipped file, it
+  does not belong here.
 - **No forward-looking projections.** *"Coming soon"*, *"planned for X"*, or
   *"expected to reach Y"* language is disallowed. Version binding and
   release targets live in `DESIGN.md`; theory-forced consequences live in

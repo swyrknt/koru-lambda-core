@@ -2,22 +2,22 @@
 
 Budget-gate amendments and substrate changes land under `## Unreleased`
 so consumer teams (ALIS, koru-protocol) see the ratchet before they
-migrate. The v2.0.0 section below is the coherent E02 entry described in
-`DESIGN.md § "Path to v2.0.0"`; `## Unreleased` below it retains the E01
-substrate close for provenance.
+migrate. The v2.0.0 section below is the coherent entry described in
+`DESIGN.md § "Path to v2.0.0"`; `## Unreleased` below it retains the
+pre-2.0.0 substrate close for provenance.
 
 ## [2.0.0] - 2026-09-16
 
-E02 (Perspective Primitive) closes. v2.0.0 introduces the projection
-primitive as a first-class read dual to `synthesize`, the two-type
-discipline that lifts Axiom-4 boundary enforcement from a runtime
-`debug_assert!` to a type-level API, and the novelty-bit outcome enum
-that lets consumers observe Law 7 saturation without extra state.
+v2.0.0 introduces the projection primitive as a first-class read dual
+to `synthesize`, the two-type discipline that lifts Axiom-4 boundary
+enforcement from a runtime `debug_assert!` to a type-level API, and the
+novelty-bit outcome enum that lets consumers observe Law 7 saturation
+without extra state.
 
 ### Added
 
 - **Projection primitive** — `engine.project(root)` builder returning
-  `Projection` values. E02-S02 lands the full API surface: 14 types +
+  `Projection` values. v2.0.0 lands the full API surface: 14 types +
   4 traits + wire codec. Types include `Root`, `Direction { Downstream,
   Upstream, Both }`, and the shipped `Signal` implementors `Adjacency`,
   `Degree`, `HopDistance` (see `src/projection.rs`). The builder chain
@@ -73,22 +73,21 @@ that lets consumers observe Law 7 saturation without extra state.
 
 ### Migration
 
-Consumer migration guide lives in the E04 epic
-(`.claude/warroom/epics/E04-consumer-migration/`, currently empty).
-That story ships the actual "delete your wrapper" playbook for ALIS,
-koru-protocol, and other consumers with hand-rolled projection / novelty
-/ verify shims. Until then: E02 v2.0.0 is API-additive; nothing in the
-substrate's shipped surface (`synthesize`, `parents_of`, `degree`,
-`has`, `distinction_count`, hex round-trip) changed in a
-signature-breaking way. Novel consumers pick up the new APIs directly;
-existing consumers migrate at their own pace.
+A dedicated consumer migration guide is planned for v2.1. That guide
+will ship the "delete your wrapper" playbook for ALIS, koru-protocol,
+and other consumers with hand-rolled projection / novelty / verify
+shims. Until then: v2.0.0 is API-additive; nothing in the substrate's
+shipped surface (`synthesize`, `parents_of`, `degree`, `has`,
+`distinction_count`, hex round-trip) changed in a signature-breaking
+way. Novel consumers pick up the new APIs directly; existing consumers
+migrate at their own pace.
 
 ## Unreleased
 
-### Step 1 — substrate (CLOSED)
+### Substrate baseline (CLOSED — shipped in 2.0.0)
 
-All Step 1 measurement gates met. Branch `step/01-substrate` ready
-for merge to `release/2.0.0` once Step 2 unblocks.
+All substrate-baseline measurement gates met. Branch
+`step/01-substrate` merged to `release/2.0.0`.
 
 **Headline measurements (M3 Pro, criterion median of 100 iters,
 release build, ~5min thermal idle):**
@@ -153,10 +152,9 @@ release build, ~5min thermal idle):**
   cores) ≥ 4× ratio as regression watch, not gate. See
   `BUDGET_LOG.md` row 1 for measurement provenance and signers.
 
-### Docs — DESIGN.md v2 rewrite (E01-S01)
+### Docs — DESIGN.md v2 rewrite
 
-**Removed sections** (drift class documented in
-`.claude/warroom/epics/E01-v2-baseline-alignment/S01-design-doc/phase-1-research/`):
+**Removed sections:**
 
 - Rounds 1-4 revision log (historic planning cruft).
 - Promised-file sections for `src/network.rs`, `src/compactor.rs`,
@@ -165,14 +163,12 @@ release build, ~5min thermal idle):**
   them as shipping.
 - Empirical numbers, LOC comparisons, and throughput measurements —
   evicted to `docs/BENCHMARKS.md` with in-crate file:line anchors.
-- Part 6 (test strategy full inventory), Part 7 (step-by-step path
-  off `dev`), Part 8 (resolved decisions), Part 10 (34 done-criteria
-  gate checklist), Part 10.5 (Budget Amendment Policy), Appendix
-  (v1.2 → v2.0 fate mapping), Notes for review — moved to warroom
-  epic body / `BUDGET_LOG.md` / `CHANGELOG.md` per per-section
-  guidance in `phase-1-research/05-coder.md` Table 3.
+- Full test-strategy inventory, step-by-step path off `dev`, resolved
+  decisions log, 34 done-criteria gate checklist, Budget Amendment
+  Policy, v1.2 → v2.0 fate mapping, and pre-review notes — moved to
+  `BUDGET_LOG.md` / `CHANGELOG.md` where they belong.
 
-DESIGN.md now describes only what SHIPS at commit `7549860` plus
-TARGET-tagged pointers to E02/E03/E04. Every code-referencing claim
-carries a `[SHIPPED @ …]`, `[TARGET @ …]`, or `[DEPRECATED @ …]` tag.
-Every axiom-shaped sentence anchor-links to `THEORY.md`.
+DESIGN.md now describes only what SHIPS at the current release plus
+version-anchored pointers to planned v2.1 work. Every code-referencing
+claim carries a `[SHIPPED @ …]`, `[TARGET @ …]`, or `[DEPRECATED @ …]`
+tag. Every axiom-shaped sentence anchor-links to `THEORY.md`.

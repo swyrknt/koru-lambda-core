@@ -1,5 +1,5 @@
 //! v2.0.0 API criterion bench harness — measures the four new
-//! API surfaces added by E02 (S02-S05). No shipping gate on these numbers
+//! API surfaces added in v2.0.0. No shipping gate on these numbers
 //! yet; they exist as baseline references for post-2.0.0 regression watch.
 //!
 //! The four surfaces:

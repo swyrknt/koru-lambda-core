@@ -110,9 +110,9 @@ fn cond_d_cross_engine_projection_independence() {
 
     // Materialize the same projection on each engine.
     //
-    // Diagnostic-locality improvement (Contrarian, S05 hardening): bind
-    // the root from EACH chain separately and assert equality before
-    // projecting. If Axiom-4 content-addressing regresses (same input
+    // Diagnostic-locality improvement: bind the root from EACH chain
+    // separately and assert equality before projecting. If Axiom-4
+    // content-addressing regresses (same input
     // history producing different distinction bytes at the same chain
     // index), the failure fires HERE with a clear message pointing at
     // Axiom 4 — not later as an opaque byte-diff in `canonical_bytes()`

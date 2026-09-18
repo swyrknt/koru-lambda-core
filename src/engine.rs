@@ -1161,23 +1161,23 @@ mod compile_time_assertions {
     assert_impl_all!(Distinction: bytemuck::Pod, bytemuck::Zeroable);
 
     // `RawDistinctionId` is the unverified peer of `Distinction`. Its
-    // layout must match `[u8; 16]` and it must be `Pod + Zeroable` for
-    // the same zero-copy wire-deserialization patterns Contrarian
-    // flagged at E02-S01.
+    // layout must match `[u8; 16]` and it must be `Pod + Zeroable` so
+    // zero-copy wire-deserialization patterns (bytemuck cast, direct
+    // slice reinterpretation) apply identically to both types.
     assert_eq_size!(RawDistinctionId, [u8; 16]);
     assert_eq_align!(RawDistinctionId, [u8; 16]);
     assert_impl_all!(RawDistinctionId: Copy, Send, Sync);
     assert_impl_all!(RawDistinctionId: bytemuck::Pod, bytemuck::Zeroable);
 
-    // Cond F — no new engine fields. Field-relative assertion
-    // (Contrarian preference) so DashMap version bumps don't
+    // Cond F — no new engine fields. Field-relative assertion (rather
+    // than a hard-coded byte size) so DashMap version bumps don't
     // spuriously break the assertion. Adding the projection API adds
     // no field to the engine — projection state lives entirely on
     // `Projection<'e, S>`.
     assert_eq_size!(DistinctionEngine, (Distinction, Distinction, NodeMap));
 
-    // Practical Believer item 16 — protects against silent breakage
-    // if a future engine field is `!Send` / `!Sync`.
+    // Protects against silent breakage if a future engine field is
+    // `!Send` / `!Sync`.
     assert_impl_all!(DistinctionEngine: Send, Sync);
 
     fn _assert_send_sync<T: Send + Sync>() {}
@@ -2116,7 +2116,7 @@ mod engine_tests {
         e.check_structural_invariant().expect("post-race invariant");
     }
 
-    // ----- E02-S03 — SynthesisOutcome + synthesize_novel -----------------
+    // ----- SynthesisOutcome + synthesize_novel ---------------------------
 
     #[test]
     fn synthesize_novel_returns_novel_for_fresh_pair() {
@@ -2193,7 +2193,7 @@ mod engine_tests {
 
     #[test]
     fn synthesize_novel_concurrent_race_produces_single_novel() {
-        // Contrarian's race falsifier: spawn N threads all calling
+        // Race falsifier: spawn N threads all calling
         // `synthesize_novel(a, b)` on the same fresh pair. Assert:
         // exactly ONE thread observes `Novel(_)`, all others observe
         // `Existing(_)`. All N unwrap to the same Distinction.
@@ -2297,7 +2297,7 @@ mod engine_tests {
         }
     }
 
-    // ----- E02-S04 — RawDistinctionId + verify --------------------------
+    // ----- RawDistinctionId + verify -------------------------------------
 
     #[test]
     fn verify_accepts_registered_bytes() {
@@ -2382,8 +2382,8 @@ mod engine_tests {
     #[test]
     fn raw_distinction_id_bytemuck_roundtrip() {
         // The `Pod + Zeroable` derive must let `RawDistinctionId` cast
-        // to `&[u8]` and back losslessly — that is the contract Contrarian's
-        // S01 flag was about, and this is the falsifier for it.
+        // to `&[u8]` and back losslessly — this test is the falsifier for
+        // that layout contract.
         let bytes = [
             0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54,
             0x32, 0x10,

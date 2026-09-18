@@ -3,9 +3,8 @@
 //! A projection is a coherent read of the append-only distinction graph
 //! from a chosen `root`, at a chosen `boundary`, in a chosen `direction`,
 //! over a chosen `signal`. See `THEORY.md § The synthesis/projection
-//! dual` for the theoretical framing and PROJECTION_SPEC.md
-//! (`.claude/warroom/epics/E02-perspective-primitive/S01-projection-api-design/phase-5-execute/`)
-//! for the authoritative specification.
+//! dual` for the theoretical framing and `DESIGN.md` for the API
+//! surface rationale.
 //!
 //! Consumers construct projections through the fluent builder anchored
 //! on [`DistinctionEngine::project`]:
@@ -809,10 +808,10 @@ pub enum RestoreError {
     #[error("distinction bytes not registered in restore engine (foreign entry)")]
     ForeignEngine,
 
-    // NOTE: reserved for future quiescence-detection story; re-add via
-    // `#[non_exhaustive]` when needed. The substrate cannot detect
+    // NOTE: reserved for a future quiescence-detection variant; re-add
+    // via `#[non_exhaustive]` when needed. The substrate cannot detect
     // engine quiescence in v2.0.0, so shipping the variant now would
-    // be dead public API surface (Phase 4: Contrarian catch).
+    // be dead public API surface.
     /// The `S` type parameter passed to `restore_projection::<S>` does
     /// not match the `signal_identity` header in the bytes. Prevents
     /// type-confusion when bytes serialized as `Degree` are restored
@@ -1110,9 +1109,9 @@ impl<'e, S: Signal> ReadyBuilder<'e, S> {
     ///    carried in the pairs).
     /// 3. Otherwise fall through to the `compute()`-per-node loop.
     ///
-    /// `SignalContext` is constructed at materialize time (Phase 4:
-    /// Logic Enforcer confirmed Cond A holds either way — the context
-    /// is engine-history-derived; construction site is a policy call).
+    /// `SignalContext` is constructed at materialize time — Cond A
+    /// holds either way (the context is engine-history-derived, so its
+    /// construction site is a policy call, not a correctness one).
     pub fn materialize(self) -> Projection<'e, S> {
         let ctx = SignalContext {
             engine: self.engine,
@@ -1348,8 +1347,8 @@ mod tests {
     // Concrete compile check that `Projection<'e, S>` is covariant in
     // `'e`. If this function compiles AND `projection_is_covariant_in_engine_lifetime`
     // exercises it, projections behave the way references do under
-    // lifetime subtyping. If it fails to compile at a later refactor,
-    // Contrarian sign-off on the variance change is required. Living in
+    // lifetime subtyping. Failure to compile at a later refactor is a
+    // deliberate variance change and must be reviewed as such. Living in
     // `#[cfg(test)]` with a real caller makes it a compile-time test
     // rather than dead production code — no `#[allow(dead_code)]`
     // suppression required.

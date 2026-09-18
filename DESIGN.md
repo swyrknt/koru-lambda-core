@@ -6,17 +6,17 @@ Manifest version: 2.0.0
 The substrate has always produced two structural objects: the append-only
 graph the operator writes, and any consistent read over it — the projection.
 [`THEORY.md` names both](THEORY.md#the-synthesis-projection-dual). v2.0.0
-makes that naming operational: at E02 completion, the substrate exposes an
-API surface for the projection dual. Six independent koru projects have
-built projection-shaped wrappers under different names — Fields (alis-ai),
-Fields (koru-engine), Sessions (koru-wave), Peers (koru-mesh), Workspaces
-(koru-delta), PlayerState (game-studio consumers). What they share is what
-the axioms forced them to build. v2.0.0's contribution is that the
-substrate now provides it directly.
+makes that naming operational: v2.0.0 ships an API surface for the
+projection dual. Six independent koru projects have built
+projection-shaped wrappers under different names — Fields (alis-ai),
+Fields (koru-engine), Sessions (koru-wave), Peers (koru-mesh),
+Workspaces (koru-delta), PlayerState (game-studio consumers). What they
+share is what the axioms forced them to build. v2.0.0's contribution
+is that the substrate now provides it directly.
 
 Byte-identical across engines. No consensus. No handshake. Consumer
-migration to the substrate primitive is the subject of E04, sequenced
-after E02 completion.
+migration to the substrate primitive is a v2.1 target — see the
+`Consumer migration` section below.
 
 ---
 
@@ -29,9 +29,9 @@ each with a narrow charter:
   structural laws. Any claim about *what the substrate is* lives here,
   or nowhere. Downstream docs paraphrase; they do not restate.
 - **`DESIGN.md`** (this file) — the shipping story: what the substrate
-  ships today at the current commit, what E02/E03/E04 change, and the
-  anti-scope that keeps v2.0.0 honest. Version binding lives here and
-  nowhere else.
+  ships today at the current commit, what future minor releases plan
+  to change, and the anti-scope that keeps v2.0.0 honest. Version
+  binding lives here and nowhere else.
 - **`docs/BENCHMARKS.md`** — capacity and throughput measurements, with
   every quantitative claim citing an in-crate `benches/*.rs`,
   `tests/*.rs`, or `examples/*.rs` file at line-level. Numbers without
@@ -48,14 +48,9 @@ non-alphanumeric characters (including em-dashes, equals, and minus
 signs) dropped, remaining runs of whitespace converted to single
 hyphens. This is not always identical to GitHub UI's canonical
 `github-slugger` output for headings containing spaced punctuation
-(e.g., "Law 8 — Engine independence"). The full inventory and
-convention are documented in
-`.claude/warroom/epics/E01-v2-baseline-alignment/S01-design-doc/phase-5-execute/anchor-budget.md`.
-The real enforcement tool (`theory_anchor_check.sh`) lands in E01-S05
-and will normalize slugs to whichever canonical form the trio of docs
-adopts. Between now and S05, readers may encounter dead links in the
-GitHub UI for headings with spaced punctuation; content is still
-findable by search.
+(e.g., "Law 8 — Engine independence"). Readers may encounter dead links
+in the GitHub UI for headings with spaced punctuation; content is
+still findable by search until a canonical slug tool is adopted.
 
 ---
 
@@ -72,40 +67,38 @@ The v2.0.0 preparation on `release/2.0.0` is for two audiences:
 
 - **Downstream consumer teams building on 1.x** — the projection dual
   you have been reinventing is being named. v2.0.0 does not yet
-  require you to migrate; E04 will offer the migration guide when the
-  API surface (E02) is stable. Between now and then: pin to `1.2.0`,
-  read [`THEORY.md § synthesis/projection dual`](THEORY.md#the-synthesis-projection-dual)
-  for the concept, watch E02 for the API.
+  require you to migrate; a full migration guide is planned for v2.1
+  once the API surface has settled through consumer trials. Between
+  now and then: pin to `1.2.0`, read
+  [`THEORY.md § synthesis/projection dual`](THEORY.md#the-synthesis-projection-dual)
+  for the concept, and adopt the new API surface at your own pace.
 
-This is not a "delete your wrapper" promise — that pitch belongs in E04's
-migration guide, after the API is stable enough to migrate onto. This is
-the release that *names the object* your wrapper has been implementing.
+This is not a "delete your wrapper" promise — that pitch belongs in the
+v2.1 migration guide, after the API is stable enough to migrate onto.
+This is the release that *names the object* your wrapper has been
+implementing.
 
 ---
 
 ## Path to v2.0.0
 
-Current state: `release/2.0.0`. Manifest version 2.0.0 (bump landed
-at E02 completion). What shipped at E02 completion: projection
-primitive API surface, `Cargo.toml` version bump 1.2.0 → 2.0.0, no C
-ABI added.
+Current state: `release/2.0.0`. Manifest version 2.0.0. What shipped
+at 2.0.0: projection primitive API surface, `Cargo.toml` version bump
+1.2.0 → 2.0.0, no C ABI added.
 
-Six preconditions for the version bump:
+What landed for the version bump:
 
-1. E02 primitive API surface lands.
-2. `clippy.toml:1` `forma-core` string corrected. `[SHIPPED @ E02-S06]`
+1. Projection primitive API surface. `[SHIPPED @ v2.0.0]`
+2. `clippy.toml:1` `forma-core` string corrected. `[SHIPPED @ v2.0.0]`
 3. `Cargo.lock` policy affirmed (currently checked in for the library —
    retained; policy note added to the release commit).
-4. All E01 stories closed (S01 + S03 + S04 + S05).
-5. E03 BLOCKING closed (`TransactionBatch` deserialize cardinality cap).
-6. `theory_anchor_check.sh` real implementation lands (E01-S05).
+4. Substrate-baseline docs (`THEORY.md`, `DESIGN.md`, `ARCHITECTURE.md`)
+   closed to their v2.0.0 forms. `[SHIPPED @ v2.0.0]`
+5. WASM binding surface behind the `wasm` feature.
+   `[SHIPPED @ v2.0.0]`
 
-*This section describes preconditions for a version bump; nothing here
-is a shipping commitment.*
-
-Release mechanics — dates, coordination, tag sequencing, rollback
-plan — live in
-[`RELEASE_PLAN.md`](.claude/warroom/epics/E01-v2-baseline-alignment/RELEASE_PLAN.md).
+*This section describes what actually shipped; forward-looking targets
+are enumerated in the "What v2.0.0 changes" section below.*
 
 ---
 
@@ -185,108 +178,16 @@ bug (you computed a distinction and threw it away). Applies to
 `snapshot_parentage`, `replay_topological`, `build_children_index`,
 `SynthesisRecorder::new`, `SynthesisRecorder::log`.
 
-### Engine state
+### Engine internals — see ARCHITECTURE.md
 
-One `DashMap<[u8; 16], EngineNode { parents, degree }>` plus two
-primordial constants:
-
-- `pub struct DistinctionEngine` `[SHIPPED @ src/engine.rs:494]`
-- `struct EngineNode` `[SHIPPED @ src/engine.rs:453]`
-- `pub struct IdentityHasher` `[SHIPPED @ src/engine.rs:206]`
-
-`EngineNode`'s two fields serve the three canonical O(1) projections
-the theory names:
-
-| Projection | Theory anchor | Field access |
-|---|---|---|
-| Saturation check | [Law 7](THEORY.md#law-7-saturation) | `nodes.contains_key(id)` |
-| Parent lookup | [Law 5](THEORY.md#law-5-binary-parentage) | `nodes.get(id).parents` |
-| Degree query | [Law 11](THEORY.md#law-11-fold-law) + [Law 12](THEORY.md#law-12-coding-law) | `nodes.get(id).degree.load(Acquire)` + genesis addend |
-
-Three side-by-side maps from an earlier design (`all_distinctions` /
-`parents_of` / `degree_counts`) collapsed into this single map at
-Step 1e (public API signatures unchanged; single-thread +20%,
-8-thread +46% on M3 Pro). See `CHANGELOG.md § Step 1e merged-map
-refactor` for the provenance.
-
-### IdentityHasher
-
-DashMap uses a specialized hasher `[SHIPPED @ src/engine.rs:206]` that
-takes the leading 8 bytes of the 16-byte SHA-256 prefix directly as the
-u64 hash — no XOR, no rotation, no diffusion math. SHA-256 prefixes are
-already uniformly distributed; a general-purpose hasher would waste
-cycles re-mixing entropy. Speedup numbers live in `docs/BENCHMARKS.md § Throughput`.
-
-The hasher carries structural guards: `debug_assert!` on 16-byte keys
-plus `unreachable!()` on every non-`write` `Hasher` method (write_u8,
-write_u16, …, write_length_prefix). Misuse — hashing a slice, a
-non-16-byte key, or a typed integer — triggers an immediate panic
-instead of silently corrupting state. v2.0.0 has no tuple keys, so the
-hasher only ever sees single 16-byte writes.
-
-`pub type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>`
-`[SHIPPED @ src/engine.rs:274]` is what the `DashMap` field type
-parameterizes on.
-
-### Synthesize hot path — concurrency contract
-
-`pub fn synthesize` `[SHIPPED @ src/engine.rs:605-611]` and
-`synthesize_novel` `[SHIPPED @ src/engine.rs:708-713]` share the
-`synthesize_inner` hot path `[SHIPPED @ src/engine.rs:740-840]` and
-are race-free under concurrent synthesis. Shape:
-
-1. **Foreign-byte guard** on both parents (`debug_assert!` on
-   `nodes.contains_key(&parent.0)`). Debug-only enforcement of the
-   two-type discipline described above; release builds trust the
-   contract.
-2. **Irreflexivity check** — `a == b` returns `a` directly, before any
-   hashing (Axiom 3).
-3. **Canonical ordering** — `(first, second) = if a.0 <= b.0 { (a, b) } else { (b, a) }`
-   (Axiom 2).
-4. **Content addressing** — SHA-256 over the canonical pair, leading
-   16 bytes as the child's identity (Axioms 1 + 4).
-5. **Saturation fast path** — `contains_key(&new_bytes)` check before
-   the entry lock (Law 7). Hot-path optimization: avoids any shard
-   write-lock traffic on repeat calls.
-6. **Entry-gated insert** — `nodes.entry(new_bytes)` on `Vacant` runs
-   the closure that inserts the new `EngineNode`. Exactly one thread
-   wins the entry-vacant dispatch per novel child.
-7. **Parent degree bumps** — after the child's shard write-lock
-   releases, both parents' `degree.fetch_add(1, Ordering::Release)`
-   fire (B1 mitigation — parent and child may hash to the same shard;
-   holding the child-shard lock across a parent-shard operation could
-   deadlock if a peer thread races the mirror pair).
-
-**Memory ordering contract.** `fetch_add(1, Release)` on parent degree
-pairs with `Ordering::Acquire` loads in `pub fn degree` so probes
-reading `node.degree` directly (without first observing the new child)
-still get a happens-before edge to the writing synthesis. The
-Release/Acquire kernel is
-`[SHIPPED @ tests/loom_kernel.rs]` — loom verifies the abstract
-memory-model interleavings; TSan on the concurrent-write
-byte-equivalence test verifies the DashMap-shard side. Neither alone
-covers both; both are required.
-
-**Law 8 quiescence qualifier.** Two engines processing the same
-operations produce byte-identical state
-[at quiescence](THEORY.md#law-8-engine-independence); mid-flight
-transient divergence is permitted while writes are in progress. The
-claim is post-processing convergence, not instantaneous equality.
-LCAs drive synthesis sequentially per LCA, so the relaxation is
-invisible to the documented consumer contract; probes reading
-`node.degree` mid-flight are responsible for their own quiescence
-boundary (post-join barrier, epoch boundary, etc.).
-
-**Why `AtomicUsize::fetch_add` not `Vec::push`.** Earlier design rounds
-kept a `children_of: DashMap<[u8;16], Vec<Distinction>>` for
-enumerating a distinction's children. d₀ and d₁ accumulate millions of
-children via the Fold Law; a `Vec<Distinction>` reallocates O(log N)
-times under the shard write-lock and stalls every other thread trying
-to synthesize against d₀ or d₁. `AtomicUsize::fetch_add` is
-constant-cost, lock-free, and the count itself is what
-[Coding Law](THEORY.md#law-12-coding-law) actually names. Consumers
-wanting children iteration call `build_children_index` on a snapshot
-(see below).
+Engine state layout (the single `DashMap<[u8; 16], EngineNode>` and
+the two primordial constants), the `IdentityHasher` internals, and the
+`synthesize` hot path's concurrency contract (memory ordering, Law 8
+quiescence qualifier, `AtomicUsize::fetch_add` rationale) all live in
+[`ARCHITECTURE.md § engine.rs — the engine itself`](ARCHITECTURE.md).
+DESIGN.md's job is to name *what changed and why*; the code-level
+description of how the engine is structured belongs alongside the
+code, not here.
 
 ### Structural invariants surfaced
 
@@ -392,7 +293,7 @@ consensus code at the current commit:
   because there is no string to truncate. `pending_commitments` LRU
   cache with documented cap derivation
   (`COMMITMENT_CACHE_CAP` pinned in-file). `TransactionBatch`
-  deserialize cardinality cap is `[TARGET @ E03]` (BLOCKING for tag).
+  deserialize cardinality cap is `[TARGET @ v2.1]`.
 
 Common design principles across subsystems:
 
@@ -440,12 +341,13 @@ Beyond what dev already pulls (`dashmap`, `sha2`, `serde`, `lru`,
   content-addressing contract) but the differential test catches
   bytes-injection regressions.
 
-FFI heavyweight dependency (`parking_lot`) is NOT pulled at this commit — see
-anti-scope. E05-bindings-ffi remains queued for post-v2.0.0 C-ABI work.
+FFI heavyweight dependency (`parking_lot`) is NOT pulled at this
+commit — see anti-scope. A C-ABI binding surface is deferred to a
+future release; nothing in v2.0.0 claims C API compatibility.
 
 WASM dependencies (`wasm-bindgen`, `wasm-bindgen-test`, `console_error_panic_hook`,
 `serde_bytes`, `js-sys`, `serde-wasm-bindgen`) ARE pulled behind the `wasm`
-feature — `src/wasm.rs` `[SHIPPED @ E07-S01]` gates the JS/TS binding
+feature — `src/wasm.rs` `[SHIPPED @ v2.0.0]` gates the JS/TS binding
 surface. Default `cargo build` and `cargo test --workspace` are unaffected
 (feature-off).
 
@@ -472,8 +374,9 @@ The substrate ships with axiom-verification tests (isolated
 determinism / commutativity / irreflexivity / content-addressing),
 scale probes ([`r = 2d − 3`](THEORY.md#law-6-r--2d--3) at 5 M synths
 with zero deviations, saturation at 1 M repeats), concurrency probes
-(8-thread byte-equivalence, loom kernel for Release/Acquire, TSan on
-the FFI concurrent test in E03), and misuse-detection tests
+(8-thread byte-equivalence, loom kernel for Release/Acquire; a TSan
+sweep for the future FFI concurrent test is planned alongside the
+FFI surface itself), and misuse-detection tests
 (cross-engine foreign-byte injection debug panic, `SynthesisRecorder`
 `!Send + !Sync` compile-time assertion, `replay_topological`
 release-safe mismatch/unreachable/missing-primordial errors). Full
@@ -532,17 +435,18 @@ engine does not currently expose):
   [don't forbid removal](THEORY.md#what-follows-from-the-theory).
   Garbage collection by partial-reroot replay is theoretically
   permissible; v2.0.0 deliberately excludes it.
-- The engine does not expose `SynthesisOutcome`; the novelty bit is
-  discarded at the current commit. E02 changes this.
-- The engine does not accept `RawDistinctionId` at the API surface;
-  foreign-byte injection is caught by debug-mode `debug_assert!`
-  today. E02 promotes this to type-level.
+- Every entry point through `synthesize` continues to accept the bare
+  form; consumers wanting the novelty bit call `synthesize_novel` (see
+  the projection API surface section below).
+- `RawDistinctionId` at the API surface promotes the debug-mode
+  foreign-byte guard to a type-level boundary; see the projection API
+  surface section below.
 
 ### API surface at the current commit
 
 Public entry points a v1.x consumer would touch. Every method carries
-a `[SHIPPED]` tag by construction (release/2.0.0); items added at
-later epics carry a `[TARGET]` tag on the relevant line-item.
+a `[SHIPPED]` tag by construction (release/2.0.0); items planned for
+later minor releases carry a `[TARGET]` tag on the relevant line-item.
 
 - `DistinctionEngine::new()` / `Default::default()` — bootstrap;
   inserts d₀, d₁; asserts `distinction_count() == 2`,
@@ -581,28 +485,27 @@ later epics carry a `[TARGET]` tag on the relevant line-item.
 Every entry above resolves to a `[SHIPPED @ src/…]` file path per the
 substrate description sections above. `SynthesisOutcome` and the
 `RawDistinctionId → engine.verify() → Distinction` type-level API
-extend this surface at E02.
+extend this surface as part of v2.0.0's projection primitive.
 
 ---
 
-## What v2.0.0 changes (TARGET-tagged forward-pointers)
+## What v2.0.0 shipped
 
-This section names the deltas from the current shipping state to v2.0.0.
-Each item points to the epic that lands it. Tags follow the
-`[TARGET @ Enn]` convention on any code-referencing claim.
+This section names what v2.0.0 lands relative to the 1.x public API,
+and what remains as forward-looking targets for the next minor release.
 
-### E02 — projection primitive API surface
+### Projection primitive API surface
 
-The substrate has, until now, exposed only the write dual
-(`synthesize`). The read dual has lived in six ad-hoc reinventions
-across the ecosystem (see the headline). E02 exposes the projection
-API surface directly, respecting
+The substrate previously exposed only the write dual (`synthesize`).
+The read dual had lived in six ad-hoc reinventions across the
+ecosystem (see the headline). v2.0.0 exposes the projection API
+surface directly, respecting
 [the projection dual as theory-forced](THEORY.md#the-synthesis-projection-dual):
 a projection is not new structure; it is the graph as viewed from
 somewhere. Cross-engine projection independence is the falsifier —
 two engines with the same synthesis history queried with the same
 projection `{ Root, boundary, Direction, Signal }` at quiescence must
-produce byte-identical output. `[SHIPPED @ E02-S05]`.
+produce byte-identical output. `[SHIPPED @ v2.0.0]`.
 
 **Novelty bit home.** The operator produces `(child, novel?)` per
 [`THEORY.md § The operator`](THEORY.md#the-operator); the bare
@@ -611,10 +514,8 @@ bit. v2.0.0 exposes the novelty bit via a parallel `synthesize_novel`
 entry point returning `SynthesisOutcome::Novel(Distinction) |
 Existing(Distinction)` (a `#[non_exhaustive]` enum, not a struct with
 fields — the enum shape lets future variants land without breaking
-match arms). `[SHIPPED @ E02-S03]`. This is one paragraph in one place
-— not a section header — matching Logic Enforcer's T13 placement
-discipline: the
-theory-side status of the novelty bit is already fixed in
+match arms). `[SHIPPED @ v2.0.0]`. The theory-side status of the
+novelty bit is fixed in
 [`THEORY.md § Implications not yet materialized`](THEORY.md#implications-not-yet-materialized);
 DESIGN.md merely names the API surface that materializes it.
 
@@ -626,7 +527,7 @@ see substrate description above.
 
 **Signal axis forward-compat.** The projection dual carries a `Signal`
 axis (see [`THEORY.md § synthesis/projection dual`](THEORY.md#the-synthesis-projection-dual)).
-E02's initial API surface will expose a bounded set of signals
+v2.0.0's initial API surface exposes a bounded set of signals
 sufficient for the flagship consumers named above (adjacency, degree,
 hop-distance). Future signals — novelty rate, saturation-boundary
 probes, cross-vantage intersection, structural attention — are
@@ -634,21 +535,20 @@ exploration land, not shipping targets. Naming them here prevents
 v2.0.0 from hard-closing the read dual and forcing a v3.0.0 bump when
 the next novel signal lands.
 
-### E03 — subsystems hardening
+### Subsystems hardening (planned v2.1)
 
-Two hardening deliverables land at E03; both are BLOCKING for the
-v2.0.0 tag:
+Two hardening deliverables are planned for the next minor release:
 
-- **`TransactionBatch` deserialize cardinality cap** `[TARGET @ E03]` —
+- **`TransactionBatch` deserialize cardinality cap** `[TARGET @ v2.1]` —
   the current `TransactionBatch::previous_root: Distinction` typing
   closes the N5 String-truncation class at the type level, but a
   hostile-input `Vec<Transaction>` field can still allocate
-  unbounded memory during deserialization. E03 adds a
+  unbounded memory during deserialization. v2.1 adds a
   `#[serde(try_from = "Raw")]` wrapper with a documented cardinality
   cap so `Deserialize` can't produce an outsized batch. The cap value
   is derived from the same `MAX_LEADER_ID_LEN`-anchored arithmetic
   the LRU cache uses.
-- **Concurrent-read visibility contract doc** `[TARGET @ E03]` — the
+- **Concurrent-read visibility contract doc** `[TARGET @ v2.1]` — the
   Release/Acquire kernel described above ships today; formalizing the
   "read `node.degree` at quiescent points" contract in an in-crate
   ADR (`docs/adr/`) lets consumers reason about traversal probe
@@ -658,19 +558,20 @@ Validator + commitment paths get a hardened review pass at the same
 time — no new features, only bug-class closures a pre-tag audit
 surfaces.
 
-### E04 — consumer migration
+### Consumer migration (planned v2.1)
 
 Full migration guide from v1.x public API to v2.0.0. Includes
 per-version-pin (0.1.0 / 1.1.0 / 1.2.0) diffs, worked-example wrapper
 deletions for the six ecosystem projections named in the headline, and
-the "delete your wrapper" pitch after the API is stable enough for that
-claim to be honest. `[TARGET @ E04]`. Sequenced after E02 completion.
+the "delete your wrapper" pitch after the API is stable enough for
+that claim to be honest. `[TARGET @ v2.1]`.
 
-E04's structural role is that it is the *only* place downstream teams
-should read migration prose. This document names categories (see the
+The migration guide will be the *only* place downstream teams should
+read migration prose. This document names categories (see the
 Migration categories section below); THEORY.md names axioms and
-laws; E04 names diffs. Any migration-shaped sentence outside E04 is
-either a category summary (belongs here) or a drift-report.
+laws; the migration guide names diffs. Any migration-shaped sentence
+outside those two places is either a category summary (belongs here)
+or a drift-report.
 
 ---
 
@@ -682,16 +583,16 @@ Enumerated. No hedging.
 
 - **`network.rs`, `compactor.rs`, `parallel.rs`, `ffi.rs`**
   — earlier design rounds described these files as shipping. They do
-  not exist in `src/` at commit `7549860`; every prior section
+  not exist in `src/` at the release commit; every prior section
   describing them has been removed. See `CHANGELOG.md § Removed
   sections` for the excision record. Note: `wasm.rs` was in this list
-  in earlier revisions but now `[SHIPPED @ E07-S01]` — 683 LOC behind
+  in earlier revisions but now `[SHIPPED @ v2.0.0]` — 683 LOC behind
   `#[cfg(feature = "wasm")]`.
 
 - **v2.0.0 does not add a C ABI.** The `cdylib` / `staticlib`
   crate-types in `Cargo.toml` produce empty C-boundary artifacts at
-  this commit; they are retained for a future FFI epic but claim no
-  C API surface today.
+  this commit; they are retained for a future FFI binding release but
+  claim no C API surface today.
 
 - **No axiom or law claims not already in `THEORY.md`.** This document
   makes no theoretical claims of its own; every axiom-/law-shaped
@@ -699,7 +600,7 @@ Enumerated. No hedging.
   If a sentence looks like a theory claim without an anchor, treat it
   as a drift-report against this file.
 
-### Direction non-claims (Visionary Phase 1, verbatim)
+### Direction non-claims
 
 1. **No substrate-side event bus / pub-sub / reactive framework.** If
    perspective ships an `observe` verb at all, it is a bounded
@@ -715,7 +616,7 @@ Enumerated. No hedging.
 5. **No persistence rewrite.** `snapshot_parentage` +
    `replay_topological` are the persistence surface, unchanged.
 6. **No byte-fold / Fold Law changes.** `ByteMapping` semantics stay
-   what Step 1c shipped.
+   what the substrate baseline shipped.
 7. **No production BFT consensus layer.**
    `[SHIPPED @ src/subsystems/validator.rs]` and
    `[SHIPPED @ src/subsystems/commitment.rs]` are reference LCA
@@ -734,11 +635,11 @@ Enumerated. No hedging.
 
 ## Migration categories
 
-Full migration guide lands in E04 with diffs and per-version-pin
-(0.1.0 / 1.1.0 / 1.2.0) instructions. DESIGN.md carries only the
-category-level summary of what will change; downstream consumers use
-this section to bucket their audit surface, then follow E04 for the
-per-item diff.
+Full migration guide lands in a v2.1 companion document with diffs
+and per-version-pin (0.1.0 / 1.1.0 / 1.2.0) instructions. DESIGN.md
+carries only the category-level summary of what changed; downstream
+consumers use this section to bucket their audit surface, then follow
+the v2.1 migration guide for the per-item diff.
 
 - **v1.x → v2.0.0 breaking public-API changes.** Three categories:
   - *Type-rename* — String-typed IDs become byte-typed
@@ -748,8 +649,8 @@ per-item diff.
     adapter.
   - *Method-remove* — `get_distinction_by_id`, `Distinction::id()`,
     `Distinction::new(String)`, `ParallelBatchProcessor`,
-    `ParallelAction`. Each has a replacement documented in E04; none
-    is a silent deletion.
+    `ParallelAction`. Each has a replacement documented in the v2.1
+    migration guide; none is a silent deletion.
   - *Field-visibility* — `Distinction`'s inner byte field becomes
     `pub(crate)`. Consumers reaching into the field switch to
     `as_bytes()` or `to_hex()`.
@@ -773,29 +674,24 @@ per-item diff.
   of optional features is opt-in.
 
 Per-category diffs and worked-example wrapper deletions for each of
-the six ecosystem projections named in the headline live in E04's
+the six ecosystem projections named in the headline live in the v2.1
 migration guide. This document deliberately carries no diffs — a diff
-in DESIGN.md invites drift the moment E04 lands its authoritative
-version.
+in DESIGN.md invites drift the moment the migration guide lands its
+authoritative version.
 
 ---
 
 ## Downstream drift prevention
 
-Three checks close the drift class that motivated this rewrite:
+Two checks close the drift class that motivated this rewrite:
 
-1. **`theory_anchor_check.sh`** `[TARGET @ E01-S05]` — falsifier that
-   fails CI when a downstream doc paraphrases a THEORY.md
-   concept-term without an anchor-link. Stub lives at
-   `.claude/warroom/checks/theory_anchor_check.sh`; real
-   implementation lands with E01-S05.
+1. **Theory-anchor CI enforcement (planned).** A CI check that fails
+   the build when a downstream doc paraphrases a `THEORY.md`
+   concept-term without a resolving anchor-link. Not yet wired into
+   CI; until then, drift is caught at review time.
 2. **`cargo public-api` snapshot** — pre-tag hygiene ensuring every
    `[SHIPPED]` claim in this document resolves to an actually-exported
    symbol. Baseline lands with the v2.0.0 tag.
-3. **Anchor-budget review at each phase gate** — the manifest at
-   `.claude/warroom/epics/E01-.../S01-.../phase-5-execute/anchor-budget.md`
-   lists every THEORY.md anchor DESIGN.md uses; a PR that adds a
-   new anchor must extend the budget.
 
 ---
 

@@ -1,9 +1,9 @@
-//! E02-S02 projection API smoke tests — construction, serialize/deserialize
+//! v2.0.0 projection API smoke tests — construction, serialize/deserialize
 //! round-trip, and coerce-site checks.
 //!
-//! Broader Cond A-F falsifiers land in later stories. These are the
-//! bring-up-time verifications from PLAN_V2 item 17 (coerce-site test)
-//! and the basic wire-format round-trip.
+//! Broader Cond A-F falsifiers ship elsewhere in the test tree. These
+//! are the bring-up-time verifications (coerce-site test and basic
+//! wire-format round-trip).
 
 use std::sync::Arc;
 
