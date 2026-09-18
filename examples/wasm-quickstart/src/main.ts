@@ -1,4 +1,4 @@
-import init, {
+import {
     WasmEngine,
     idToHex,
     idFromHex,
@@ -8,8 +8,11 @@ import type {
     AdjacencyEntry,
 } from "koru-lambda-core";
 
+// `wasm-pack --target bundler` auto-initializes on import (see the
+// pkg/koru_lambda_core.js side-effect `wasm.__wbindgen_start()`). No
+// explicit `init()` call — vite-plugin-wasm + vite-plugin-top-level-await
+// handle the async import at bundle time.
 async function main(): Promise<void> {
-    await init();
     const engine = new WasmEngine();
 
     // Primordials — 16-byte Uint8Arrays.
