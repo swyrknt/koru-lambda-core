@@ -26,8 +26,8 @@
 //! against:
 //! - DESIGN.md Gate 13 target: ≤ 180 B
 //! - DESIGN.md Gate 13 floor:  ≤ 220 B
-//! - Merged-map prediction:    ~80 B (Step 1e refactor estimate;
-//!   amendment expected at Step 4)
+//! - Merged-map prediction:    ~80 B (single-map refactor estimate;
+//!   amendment expected once scale probes land)
 
 // Native-only stub for wasm32 — `dhat` is a native-only dev-dep (heap
 // profiler over backtraces / OS APIs). We branch `main` on target so

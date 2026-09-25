@@ -81,7 +81,7 @@ fn bench_verify(c: &mut Criterion) {
         });
     });
 
-    // has() baseline — the pre-S04 API a caller would have used if they
+    // has() baseline — the pre-two-type API a caller would have used if they
     // already held a `Distinction`. Compare against `registered_distinction`
     // to confirm `verify` is a `has` wrapped in `Result` construction with
     // near-zero measurable overhead.

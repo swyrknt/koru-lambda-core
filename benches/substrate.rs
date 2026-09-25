@@ -1,4 +1,4 @@
-//! Substrate criterion bench harness — Step 1 measurement gate.
+//! Substrate criterion bench harness — throughput measurement gate.
 //!
 //! Measures the substrate's headline throughput numbers per DESIGN.md
 //! Part 10.5 budget gates 11 and 12:
@@ -17,7 +17,7 @@
 //! Run with `cargo bench --bench substrate --release`. For deterministic
 //! comparison across runs, ensure thermal idle (5min cooldown between
 //! runs, no charging, no other heavy processes — same protocol as the
-//! Step 1 hard-gate capture).
+//! hard-gate capture).
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
 use koru_lambda_core::{ByteMapping, Distinction, DistinctionEngine};

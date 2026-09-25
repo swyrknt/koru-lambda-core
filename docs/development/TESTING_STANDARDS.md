@@ -500,8 +500,8 @@ const CONNECTIVITY_THRESHOLD: f64 = 0.95;
 /// **Falsifies if**: [Specific condition that proves hypothesis wrong]
 ///
 /// **Measurement**:
-/// 1. [Step 1]
-/// 2. [Step 2]
+/// 1. [first step]
+/// 2. [second step]
 /// 3. [Comparison/assertion]
 #[test]
 fn test_falsify_property_name() {

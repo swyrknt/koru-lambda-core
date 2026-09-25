@@ -112,7 +112,7 @@ release build, ~5min thermal idle):**
 | 14 Fold Law d₀/d₁ hub ratio | ≥ 100× | ≥ 50× | clears 100× | PASS |
 | 15 Coding Law ρ | ≥ 0.985 | ≥ 0.97 | **0.9940** | PASS |
 
-**Substrate facts pinned at Step 1 close:**
+**Substrate facts pinned at the substrate milestone:**
 - One `DashMap<[u8;16], EngineNode { parents, degree }>` carries the
   three canonical O(1) projections (saturation check, parent lookup,
   degree query) as per-node fields.
@@ -132,14 +132,14 @@ release build, ~5min thermal idle):**
 
 ### Substrate
 
-- **Step 1e merged-map refactor** — `DistinctionEngine` storage layout
+- **Single-map storage refactor** — `DistinctionEngine` storage layout
   changed from three side-by-side `DashMap`s
   (`all_distinctions` / `parents_of` / `degree_counts`) to one
   `DashMap<[u8;16], EngineNode { parents, degree }>`. Public API
   unchanged in signature; performance: single-thread +20%, 8-thread
   +46%, parallel-scaling ratio 2.85× → 3.43× on M3 Pro. See commits
   `30cc77f` (verification mock), `fd9c2b1` (refactor), `cd6ca3f`
-  (qa-sentinel falsification tests).
+  (falsification tests).
 
 - **Happens-before contract narrowed.** Parent `degree` `fetch_add`s
   now occur after the new-child shard write-lock is released (B1
