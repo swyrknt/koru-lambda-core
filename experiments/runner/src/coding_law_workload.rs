@@ -9,7 +9,7 @@
 //! - `M` parent pairs sampled from `pool` via Zipf(alpha) on the
 //!   chain index, with both indices distinct (irreflexive).
 //! - For each pair `(i, j)`: synthesize `pool[i]`, `pool[j]`; record
-//!   that both pool[i] and pool[j] were drawn (i.e. `freq[i] += 1`,
+//!   that both `pool[i]` and `pool[j]` were drawn (i.e. `freq[i] += 1`,
 //!   `freq[j] += 1`).
 //! - After all M syntheses: compute Spearman ρ between `freq[k]` and
 //!   `degree_after[k] − degree_before[k]` across all k.
@@ -28,7 +28,8 @@
 //! gate test.
 
 use koru_lambda_core::{Distinction, DistinctionEngine};
-use rand::distributions::{Distribution, WeightedIndex};
+use rand::distr::weighted::WeightedIndex;
+use rand::distr::Distribution;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 

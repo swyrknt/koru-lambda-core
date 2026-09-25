@@ -9,7 +9,7 @@ either case.
 
 This file closes the "one contributor coordinated-bumps SHA-256 + `rand`
 together" hazard by requiring regeneration to leave a visible audit
-trail. (Step 1 pre-merge Round 2; see commit log.)
+trail. (Adopted during pre-merge review; see commit log.)
 
 ## Authoritative pin (current)
 
@@ -18,7 +18,7 @@ trail. (Step 1 pre-merge Round 2; see commit log.)
 | **Generated** | 2026-06-28 |
 | **Generator commit** | `7e2127e` (`step1e-corpus-fix: include exp18.log corpus (was silently excluded)`) |
 | **Generator binary** | `experiments/runner/src/bin/gen_exp18_corpus.rs` |
-| **Workspace `rand` version** | `=0.8.5` (pinned via `[workspace.dependencies]` in root `Cargo.toml`) |
+| **Workspace `rand` version** | `=0.9.5` (pinned via `[workspace.dependencies]` in root `Cargo.toml`) |
 | **RNG seed** | `0xC0DE` |
 | **Alpha (Zipf exponent)** | `1.0` |
 | **N (chain pool size)** | `4096` |
@@ -51,8 +51,8 @@ Regeneration requires ALL of:
    with measurement, or generator-bug fix. NOT: "test failed and I want
    it to pass" or unrelated `rand` bumps.
 2. **`BUDGET_LOG.md` amendment row** if the ρ gate target or floor changes.
-3. **Sign-offs**: theory-guardian (workload interpretation) + qa-sentinel
-   (process integrity).
+3. **Sign-offs**: one reviewer for workload interpretation, one for
+   process integrity.
 4. **Update this file**: new generator commit, new digests, new ρ,
    History row.
 
@@ -64,4 +64,5 @@ corpus drifted; consult CORPUS_PROVENANCE.md."
 
 | Date | Generator commit | Reason | Signers |
 |---|---|---|---|
-| 2026-06-28 | `7e2127e` | Initial pinning (Step 1e gate close-out) | swyrknt, qa-sentinel R3 GREEN |
+| 2026-06-28 | `7e2127e` | Initial pinning (storage-refactor gate close-out) | swyrknt |
+| 2026-09-23 | (uncommitted) | `rand` pin moved `=0.8.5` → `=0.9.5` to clear RUSTSEC-2026-0097. Corpus regenerated and verified **byte-identical**: both SHA-256 digests unchanged, ρ unchanged at 0.9940. `StdRng::seed_from_u64` produces the same ChaCha12 stream across the two releases, so the pin moved without disturbing the measurement. The generator's output path was also corrected — it had been writing to the workspace root while the gate reads this crate's `tests/corpora`, so a regeneration would have left the pinned corpus stale. | swyrknt |

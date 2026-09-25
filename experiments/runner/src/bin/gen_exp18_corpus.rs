@@ -33,14 +33,12 @@ const N: usize = 4096;
 const M: usize = 8 * N;
 
 fn main() -> std::io::Result<()> {
-    // Resolve corpus paths relative to the workspace root.
-    // CARGO_MANIFEST_DIR for this binary is .../experiments/runner;
-    // climb two levels to the workspace root.
-    let workspace_root =
-        Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(Path::parent).ok_or_else(|| {
-            std::io::Error::other("could not resolve workspace root from CARGO_MANIFEST_DIR")
-        })?;
-    let corpora_dir = workspace_root.join("tests").join("corpora");
+    // Write where the gate reads: this crate's own `tests/corpora`, the
+    // same path `tests/coding_law.rs` resolves. These drifted apart when
+    // the gate test moved into this crate — the generator kept writing to
+    // the workspace root, where nothing reads, so a regeneration would
+    // leave the pinned corpus silently stale.
+    let corpora_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("corpora");
     std::fs::create_dir_all(&corpora_dir)?;
     let log_path = corpora_dir.join("exp18.log");
     let freq_path = corpora_dir.join("exp18.freq.bin");
