@@ -187,6 +187,8 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [ ] SUB-9 Compaction resolved honestly. The v1.2 `StructuralCompactor` never removed anything from the engine — it classified nodes by degree threshold and tracked its own archived set. So it is a read over a degree signal, which is what a projection is. Either port it as an explicitly consumer-side classifier, or express it as a projection boundary/signal; the "compactor" name goes if it evicts nothing. Required: classification is a pure function of engine state (shuffled replay yields identical stats).
 - [ ] SUB-10 `BatchSynthesizer` ported; the result representation (`Option` vs sentinel) is justified; concurrency is tested. *(No downstream consumer today; owner decided 2026-09-21 to ship it anyway — it meets the same bar as everything else.)*
 - [ ] SUB-11 Every subsystem meets the same mutation, coverage and error-variant bar as the core
+- [x] SUB-12 Consensus tests build distinctions through the engine, not through an internal constructor. Found when the crate split made `Distinction::from_bytes_unchecked` unreachable from outside the substrate — three tests had been fabricating identifiers from raw bytes.
+  - evidence: `crates/koru-lambda-consensus/src/{validator,commitment}.rs` @ 57d892f — no `from_bytes_unchecked` remains; the crate compiles only against the public API
 
 ## JS — wasm / TypeScript surface
 
@@ -198,6 +200,8 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [ ] JS-6 Projection wrappers don't clone their full contents on every getter call
 - [ ] JS-7 The generated `.d.ts` is reviewed; the demos typecheck against it under `strict`
 - [ ] JS-8 The published wasm target is a deliberate, documented decision and is verified against a real consumer. v1.2 shipped `--target web` (default `init` export); 2.0.0 currently ships `--target bundler` (no such export), which silently breaks the only npm consumer (`canon-cpg/cli/engine.js` calls `await initWasm({module_or_path})`). Whatever is chosen — single target or multiple entry points — a test consumes the packed tarball the way that consumer does. See DEC-7.
+- [x] JS-10 The bindings handle `#[non_exhaustive]` substrate enums across the crate boundary: an unknown `SynthesisOutcome` variant surfaces to the caller instead of failing to compile against a future substrate release.
+  - evidence: `crates/koru-lambda-wasm/src/lib.rs` @ 57d892f — wildcard arm returns a JS error
 - [ ] JS-9 The lift layer is reachable from JS: the fold, `Canonicalizable`-style byte/string lifting, and an agent advance are exposed and tested. Today a JS consumer cannot get domain data into the engine at all.
 
 ## FFI — C ABI (ships in `koru-lambda-ffi`; restored by owner decision 2026-09-21)
@@ -232,7 +236,8 @@ v1.2 shipped `WasmNetworkAgent`, `WasmValidator` and `WasmCommitmentAgent` (741-
 - [ ] TST-3a The loom model covers the real `synthesize` check-then-insert ordering (the mutant kernel must still fail loom)
 - [ ] TST-3b A real-code concurrency stress test: N threads, exactly one `Novel` per child, final state equal to a serial run
 - [ ] TST-4 Every public error variant is constructed and asserted by at least one test
-- [ ] TST-5 The miri subset passes and is listed in CI
+- [x] TST-5 The miri subset passes and is listed in CI
+  - evidence: `ci.yml` miri job @ 699a872; `cargo +nightly miri test -p koru-lambda-core --lib` exits 0
 
 ## API — Public surface
 
@@ -324,6 +329,8 @@ v1.2 shipped `WasmNetworkAgent`, `WasmValidator` and `WasmCommitmentAgent` (741-
   - evidence: `cargo audit` reports 0 @ e201dc1 — crossbeam-epoch 0.9.21, lru 0.18, rand pin =0.9.5
 - [ ] HYG-4 Crate tarball and npm package contents reviewed file by file, including whether `docs/development/*` ships
 - [ ] HYG-5 The whole workspace (including `experiments/`) builds and tests in CI
+- [x] HYG-7 The corpus generator writes where the gate reads. The two had drifted apart when the gate test moved crates, so a regeneration would have written to the workspace root — a path nothing reads — leaving the pinned corpus stale while appearing to succeed.
+  - evidence: `experiments/runner/src/bin/gen_exp18_corpus.rs` @ e201dc1; regeneration reproduces the pinned digests in place
 - [ ] HYG-6 `cargo publish --dry-run` output is byte-compared against a committed manifest; `Cargo.lock` is committed; a clean checkout reproduces the same tarball
 
 ## MIG — Downstream migration
