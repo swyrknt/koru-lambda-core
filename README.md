@@ -53,9 +53,11 @@ npm install koru-lambda-core
 ```
 
 ```typescript
-import init, { WasmEngine, idToHex } from "koru-lambda-core";
+// `wasm-pack --target bundler` auto-initializes on import — no
+// explicit init() call is needed. Bundlers with async-import support
+// (Vite + vite-plugin-wasm, webpack 5, esbuild >= 0.20) handle it.
+import { WasmEngine, idToHex } from "koru-lambda-core";
 
-await init();
 const engine = new WasmEngine();
 
 // Write side: synthesize a distinction from the two primordials.
@@ -71,12 +73,47 @@ const verified = engine.verify(child);
 console.log("child:", idToHex(verified));
 ```
 
-For a runnable end-to-end example with projections and the trust
-boundary wired up, see
-[`examples/wasm-quickstart/`](./examples/wasm-quickstart/).
-
 Migrating from `koru-lambda-core@1.2.0` on npm? See
 [docs/MIGRATION_JS.md](docs/MIGRATION_JS.md).
+
+## Demos
+
+Four use-cases from simple to complex, ported to both languages as
+**non-interactive CLI scripts** — run one, read the output, move on.
+Same operations at each tier so the two languages read as parallel
+translations of the same behavior:
+
+| Tier | Rust                                       | JS/TS               |
+|-----:|:-------------------------------------------|:--------------------|
+| 1    | `cargo run --example 01_hello_synth`       | `npm run demo:1`    |
+| 2    | `cargo run --example 02_novelty_and_chain` | `npm run demo:2`    |
+| 3    | `cargo run --example 03_projection_composition` | `npm run demo:3` |
+| 4    | `cargo run --example 04_wire_format_roundtrip`  | `npm run demo:4` |
+
+Tier 4 (`wire_format_roundtrip`) live-verifies **Cond D**: two engines
+running the same synthesis history produce byte-identical
+`canonical_bytes` on the same projection. The Rust and JS/TS tier-4
+demos independently produce the same projection id byte-for-byte —
+that's **Cond D′ cross-target byte-equivalence** demonstrated at
+runtime. `tests/cond_d_prime.rs` carries the same attestation in CI.
+
+Running the JS/TS side:
+
+```bash
+# from the repo root, one-time setup
+npm --prefix examples/wasm-demos run build:pkg
+cd examples/wasm-demos && npm install
+
+# then any of:
+npm run demo:1
+npm run demo:2
+npm run demo:3
+npm run demo:4
+npm run demo:all
+```
+
+See [`examples/wasm-demos/README.md`](./examples/wasm-demos/README.md)
+for details.
 
 ## What's inside
 

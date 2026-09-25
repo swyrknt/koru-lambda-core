@@ -1,0 +1,23 @@
+{
+    "name": "koru-lambda-core-wasm-demos",
+    "private": true,
+    "version": "0.0.0",
+    "type": "module",
+    "scripts": {
+        "build:pkg": "wasm-pack build --release --target nodejs --out-dir ../../examples/wasm-demos/pkg-node ../../crates/koru-lambda-wasm",
+        "demo:1": "tsx src/01-hello-synth.ts",
+        "demo:2": "tsx src/02-novelty-and-chain.ts",
+        "demo:3": "tsx src/03-projection-composition.ts",
+        "demo:4": "tsx src/04-wire-format-roundtrip.ts",
+        "demo:all": "npm run demo:1 && npm run demo:2 && npm run demo:3 && npm run demo:4",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "koru-lambda-core": "file:./pkg-node"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.0",
+        "tsx": "^4.7.0",
+        "typescript": "^5.4.0"
+    }
+}
