@@ -464,7 +464,7 @@ type NodeMap = DashMap<[u8; 16], EngineNode, IdentityBuildHasher>;
 /// # State
 ///
 /// Three fields total: two primordial constants + one indexed `nodes`
-/// map whose value is an [`EngineNode`] carrying both parents and degree
+/// map whose value is an `EngineNode` carrying both parents and degree
 /// per distinction. The three conceptual O(1) projections live as
 /// per-node fields:
 ///
@@ -1035,7 +1035,7 @@ impl DistinctionEngine {
     /// Cost: O(N) where N is `distinction_count()`.
     ///
     /// Intended for traversal probes (Coding Law degree-vs-frequency
-    /// in Step 4, Fold Law dominance tests, diagnostic dumps). Not
+    /// in scale probes, Fold Law dominance tests, diagnostic dumps). Not
     /// intended for the synthesis hot path.
     #[must_use]
     pub fn snapshot_distinctions(&self) -> Vec<Distinction> {
@@ -1193,11 +1193,11 @@ mod compile_time_assertions {
         assert_eq!(std::mem::align_of::<Distinction>(), 1);
     }
 
-    /// Append-only invariant (engine-architect round-2 promotion to theory
+    /// Append-only invariant (promoted to theory
     /// gate): `DistinctionEngine` MUST NOT expose any method that removes
     /// or clears state. The substrate is monotone — once a distinction
     /// exists in `nodes`, it stays. This source-level test is a
-    /// compile-time-ish guard; the Step 5 hygiene grep covers the same
+    /// compile-time-ish guard; the hygiene gate covers the same
     /// invariant at CI level (`fn (remove|clear|truncate|drop)_distinction`
     /// must not appear anywhere in `src/`).
     ///
@@ -1207,7 +1207,7 @@ mod compile_time_assertions {
     /// test --list`.
     #[test]
     fn engine_is_append_only_by_api_surface() {
-        // The public API surface is checked by the Step 5 hygiene grep.
+        // The public API surface is checked by the hygiene gate.
         // This test exists to make the invariant discoverable; failure
         // would manifest as the hygiene grep failing in CI, not here.
         let _ = DistinctionEngine::new;
@@ -1552,7 +1552,7 @@ mod engine_tests {
         for (a, b) in c1.iter().zip(c2.iter()) {
             assert_eq!(a.as_bytes(), b.as_bytes());
         }
-        // qa-sentinel round-2 hardening: assert state counts match too,
+        // Hardening: assert state counts match too,
         // not just chain IDs. A bug that produced correct IDs but
         // diverged on distinction_count would slip past the per-step
         // check.
@@ -1902,7 +1902,7 @@ mod engine_tests {
         assert!(msg.contains("7"));
     }
 
-    // ----- qa-sentinel round-3 follow-through: B1 + in-flight probes ----
+    // ----- Lock-ordering and in-flight probes -----------------------
 
     /// Stress the merged-map B1 mitigation by synthesizing
     /// thousands of distinct novel children whose parents necessarily
@@ -2487,7 +2487,7 @@ mod engine_tests {
                 i in 0usize..12,
                 j in 0usize..12,
             ) {
-                // Rebuild the same 12-distinction pool used by the S02
+                // Rebuild the same 12-distinction pool used by the
                 // proptests so we exercise a mix of primordials, direct
                 // children, and cross-fold nodes.
                 let e = DistinctionEngine::new();

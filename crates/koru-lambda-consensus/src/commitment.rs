@@ -16,9 +16,9 @@
 //!   stored leader_id. If the stored leader_id was tampered, the
 //!   recomputed hash won't match the stored `commitment_hash`.
 
-use crate::primitives::{ByteMapping, Canonicalizable};
-use crate::subsystems::validator::TransactionBatch;
-use crate::{Distinction, DistinctionEngine, LocalCausalAgent};
+use crate::validator::TransactionBatch;
+use koru_lambda_core::primitives::{ByteMapping, Canonicalizable};
+use koru_lambda_core::{Distinction, DistinctionEngine, LocalCausalAgent};
 use lru::LruCache;
 use sha2::{Digest, Sha256};
 use std::num::NonZeroUsize;
@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 /// Maximum bytes in a leader identifier.
 ///
-/// **Derivation:** matches `network.rs`'s `MAX_PEER_ID_LEN` (Step 2c)
+/// **Derivation:** matches `network.rs`'s `MAX_PEER_ID_LEN`
 /// so a peer identifier accepted by the network is also accepted as a
 /// commitment leader. 64 bytes covers UUIDs, hex-encoded pubkeys, and
 /// typical peer-id schemes without allowing DoS via oversized strings.
@@ -441,7 +441,7 @@ impl LocalCausalAgent for CommitmentAgent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::subsystems::validator::TransactionAction;
+    use crate::validator::TransactionAction;
 
     fn fresh() -> (Arc<DistinctionEngine>, CommitmentAgent) {
         let engine = Arc::new(DistinctionEngine::new());
@@ -700,9 +700,9 @@ mod tests {
 
     #[test]
     fn lca_impl_get_and_update_root() {
-        let (_engine, mut agent) = fresh();
+        let (engine, mut agent) = fresh();
         let r0 = agent.get_current_root();
-        let new_root = Distinction::from_bytes_unchecked([0xAB; 16]);
+        let new_root = engine.synthesize(engine.d0(), engine.d1());
         agent.update_local_root(new_root);
         assert_ne!(agent.get_current_root(), r0);
         assert_eq!(agent.get_current_root(), new_root);

@@ -35,10 +35,10 @@ fn parent_degree_release_acquire_publishes_child() {
         let new_w = Arc::clone(&new_child_published);
         let deg_w = Arc::clone(&parent_degree);
         let writer = thread::spawn(move || {
-            // Step 1: publish the new child. Production proxy: DashMap
+            // First: publish the new child. Production proxy: DashMap
             // shard lock release on the entry insert.
             new_w.store(true, Ordering::Release);
-            // Step 2: bump parent.degree. This is the substrate's
+            // Second: bump parent.degree. This is the substrate's
             // actual fetch_add — the load-bearing Release.
             deg_w.fetch_add(1, Ordering::Release);
         });

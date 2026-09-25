@@ -56,6 +56,7 @@ coverage/
 # Build artifacts
 dist/
 pkg/
+crates/koru-lambda-wasm/pkg/
 *.tar.gz
 *.zip
 

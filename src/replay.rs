@@ -96,7 +96,7 @@ pub enum ReplayError {
 ///
 /// O(N) typical for well-shaped DAGs (each entry visited a constant
 /// number of times). O(N²) worst case on pathologically linear chains
-/// where each iteration applies exactly one entry — a probe in Step 4
+/// where each iteration applies exactly one entry — a scale probe
 /// quantifies the worst-case overhead.
 ///
 /// # Errors
@@ -288,7 +288,7 @@ mod tests {
         assert_eq!(replayed.relationship_count(), 1);
     }
 
-    // ----- Log-replay invariant (theory-guardian round-2 promotion) ----
+    // ----- Log-replay invariant (promoted from review) ----------------
 
     #[test]
     fn log_replay_invariant_byte_identical_state() {

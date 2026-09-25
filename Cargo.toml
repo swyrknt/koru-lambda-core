@@ -1,17 +1,17 @@
 [workspace]
-members = [".", "experiments/runner"]
+members = [".", "crates/koru-lambda-consensus", "crates/koru-lambda-wasm", "experiments/runner"]
 resolver = "2"
 
 # Workspace-shared dependencies — see CORPUS_PROVENANCE.md for the
 # rationale on pinning `rand` to "=0.8.5". Hoisting here closes the
 # silent-drift hazard where the root crate and experiments/runner could
-# carry different `rand` pins (Round 2 team review, rust-craftsman item
-# 5 + qa-sentinel Y2).
+# carry different `rand` pins.
 [workspace.dependencies]
-# =0.8.5 exact — load-bearing for StdRng sequence stability across CI
-# runs (see tests/cond_d_falsifier.rs; a future ^0.8 loosening could
-# silently flake the Cond D falsifier as StdRng byte output changes).
-rand = "=0.8.5"
+# Exact pin — load-bearing for StdRng sequence stability across CI runs
+# (see tests/cond_d_falsifier.rs; a loosened requirement could silently
+# flake the cross-engine falsifier as StdRng byte output changes) and for
+# the pinned coding-law corpus (see CORPUS_PROVENANCE.md).
+rand = "=0.9.5"
 
 [package]
 name = "koru-lambda-core"
@@ -26,14 +26,25 @@ repository = "https://github.com/swyrknt/koru-lambda-core"
 keywords = ["distributed", "consensus", "wasm", "deterministic"]
 categories = ["algorithms", "wasm"]
 # Keep the JS/TS example scaffold in the git repo, out of the crates.io
-# tarball. The example targets external discoverers landing on npmjs.com,
-# not crates.io consumers.
+# tarball. `examples/wasm-demos/` targets external discoverers landing
+# on npmjs.com, not crates.io consumers. The `examples/*.rs` binaries
+# (01_hello_synth, 02_novelty_and_chain, 03_projection_composition,
+# 04_wire_format_roundtrip) ship in the tarball by default — cargo
+# convention.
 exclude = [
-    "examples/wasm-quickstart/*",
+    "examples/wasm-demos/*",
+    "/CHECKLIST.md",
+    "/BUDGET_LOG.md",
 ]
 
+[package.metadata.docs.rs]
+# Without this docs.rs builds with default features and half the surface
+# silently vanishes from the published documentation.
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lib]
-crate-type = ["cdylib", "staticlib", "rlib"]
+crate-type = ["rlib"]
 
 [profile.release]
 panic = "abort"
@@ -54,22 +65,14 @@ dashmap = "6.0"
 hex = "0.4"
 bytemuck = { version = "1", features = ["derive"] }
 thiserror = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-lru = "0.12"
+serde = { version = "1.0", features = ["derive"], optional = true }
 
-# WASM support (Step 3)
-wasm-bindgen = { version = "0.2", optional = true }
-serde-wasm-bindgen = { version = "0.6", optional = true }
-js-sys = { version = "0.3", optional = true }
-console_error_panic_hook = { version = "0.1", optional = true }
-# `serde_bytes` — Uint8Array bridge for wasm-bindgen POJOs (R11).
-# Default `serde-wasm-bindgen` serializes `Vec<u8>` as `Array<number>`;
-# `#[serde(with = "serde_bytes")]` restores the expected Uint8Array shape.
-serde_bytes = { version = "0.11", optional = true }
 
 [features]
 default = []
-wasm = ["wasm-bindgen", "serde-wasm-bindgen", "js-sys", "console_error_panic_hook", "serde_bytes"]
+# Hex serde adapters for `Distinction` / `RawDistinctionId`. Optional so a
+# substrate consumer that does not serialize ids carries no serde tree.
+serde = ["dep:serde"]
 
 [[bench]]
 name = "substrate"
@@ -100,7 +103,7 @@ rand = { workspace = true } # see [workspace.dependencies] for the pin rationale
 loom = "0.7"
 dhat = "0.3"
 # `trybuild` — compile-fail harness used by `tests/trybuild.rs` to prove
-# `dyn Signal` is object-unsafe by design (PROJECTION_SPEC §3.1).
+# `dyn Signal` is object-unsafe by design (docs/SPEC.md §5).
 trybuild = "1"
 
 # wasm32-only dev-deps.

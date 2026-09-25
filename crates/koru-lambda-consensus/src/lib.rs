@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 //! Reference subsystems — consumer patterns built atop the substrate.
 //!
 //! These are **not substrate**. They demonstrate idiomatic LCA-pattern

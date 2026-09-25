@@ -1,0 +1,22 @@
+[package]
+name = "koru-lambda-consensus"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Reference consensus consumers built on the koru-lambda-core substrate: batch validation, commitments, networking and batch synthesis"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/swyrknt/koru-lambda-core"
+keywords = ["consensus", "validator", "commitment", "content-addressed"]
+categories = ["data-structures"]
+
+[dependencies]
+koru-lambda-core = { path = "../..", version = "=2.0.0", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10"
+hex = "0.4"
+thiserror = "1.0"
+lru = "0.18"
+
+[dev-dependencies]
+proptest = "1.0"
+serde_json = "1.0"

@@ -28,7 +28,7 @@
 //!   the obligation `verify` would otherwise discharge.
 //!
 //! Under the hood, both route through a single crate-internal helper
-//! ([`decode_hex_16`]) so the [`ParseError`] surface stays uniform.
+//! (`decode_hex_16`) so the [`ParseError`] surface stays uniform.
 //!
 //! [`Distinction`]: crate::Distinction
 //! [`RawDistinctionId`]: crate::RawDistinctionId
@@ -95,14 +95,14 @@ impl Distinction {
         // constructors share a single parse path and error surface. The
         // resulting bytes are wrapped in a `Distinction` directly (no
         // engine verification) — that matches this constructor's
-        // pre-S04 semantics and preserves the intentional hatch
+        // pre-two-type semantics and preserves the intentional hatch
         // documented in the trust-boundaries block.
         RawDistinctionId::from_hex(s).map(|r| Distinction::from_bytes_unchecked(r.0))
     }
 
     /// Render this distinction as a 32-character lowercase hex string.
     #[must_use]
-    pub fn to_hex(&self) -> String {
+    pub fn to_hex(self) -> String {
         hex::encode(self.as_bytes())
     }
 }
@@ -130,7 +130,7 @@ impl RawDistinctionId {
 
     /// Render these bytes as a 32-character lowercase hex string.
     #[must_use]
-    pub fn to_hex(&self) -> String {
+    pub fn to_hex(self) -> String {
         hex::encode(self.as_bytes())
     }
 }
@@ -232,6 +232,7 @@ impl FromStr for RawDistinctionId {
 ///     previous_root: Distinction,
 /// }
 /// ```
+#[cfg(feature = "serde")]
 pub mod serde_adapter {
     use super::Distinction;
     use serde::{Deserialize, Deserializer, Serializer};
@@ -294,6 +295,7 @@ pub mod serde_adapter {
 /// charset). Consumers MUST route the returned `RawDistinctionId`
 /// through [`DistinctionEngine::verify`](crate::DistinctionEngine::verify)
 /// before treating it as engine-witnessed.
+#[cfg(feature = "serde")]
 pub mod raw_serde_adapter {
     use super::RawDistinctionId;
     use serde::{Deserialize, Deserializer, Serializer};
@@ -443,6 +445,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     fn serde_round_trip_via_adapter() {
         use serde::{Deserialize, Serialize};
 
@@ -514,6 +517,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     fn raw_serde_round_trip_via_adapter() {
         // Falsifier: the raw serde adapter must round-trip byte-for-byte
         // through `serde_json`. Consumers whose wire schema declares
@@ -536,6 +540,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
     fn raw_serde_deserialize_rejects_bad_hex() {
         // Falsifier: the raw adapter must propagate ParseError as a
         // deserializer error, not silently accept garbage. Uses the

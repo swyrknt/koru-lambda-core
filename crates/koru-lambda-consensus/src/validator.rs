@@ -25,8 +25,8 @@
 //! - **V8 (empty-data by design)** — `TransactionAction::data` must be
 //!   non-empty. Enforced in pre-validation AND at deserialize-time.
 
-use crate::primitives::{ByteMapping, Canonicalizable};
-use crate::{Distinction, DistinctionEngine, LocalCausalAgent};
+use koru_lambda_core::primitives::{ByteMapping, Canonicalizable};
+use koru_lambda_core::{Distinction, DistinctionEngine, LocalCausalAgent};
 
 // --- Constants ---------------------------------------------------------
 
@@ -146,7 +146,7 @@ impl TryFrom<TransactionActionRaw> for TransactionAction {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TransactionBatch {
     /// The parent root this batch continues from.
-    #[serde(with = "crate::distinction_hex::serde_adapter")]
+    #[serde(with = "koru_lambda_core::distinction_hex::serde_adapter")]
     pub previous_root: Distinction,
     /// Ordered transactions. Non-empty at commit time (enforced in
     /// [`ConsensusValidator::validate_batch`]).
@@ -358,7 +358,7 @@ impl LocalCausalAgent for ConsensusValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::synthesize_causal_action;
+    use koru_lambda_core::synthesize_causal_action;
     use std::sync::Arc;
 
     fn fresh() -> (Arc<DistinctionEngine>, ConsensusValidator) {
@@ -430,9 +430,10 @@ mod tests {
         // String field would NOT be caught by this test — the test
         // only sees what's listed. Compensation: a real invariant
         // check on Display shape belongs in a hygiene test or
-        // proptest at the Step 4 audit layer. This test proves the
+        // proptest at the audit layer. This test proves the
         // current variants are bounded.
-        let d = Distinction::from_bytes_unchecked([0xAA; 16]);
+        let engine = DistinctionEngine::new();
+        let d = engine.synthesize(engine.d0(), engine.d1());
         let variants = [
             ValidatorError::RootMismatch { expected: d, got: d },
             ValidatorError::EmptyBatch,
@@ -543,8 +544,10 @@ mod tests {
         // verify: both fields are set by the single call. Regression
         // guard for a future refactor that split restore_state into
         // two methods (which would break the "both together" property).
-        let (_engine, mut v) = fresh();
-        let target_root = Distinction::from_bytes_unchecked([0x42; 16]);
+        let (engine, mut v) = fresh();
+        // Engine-witnessed: a sibling crate cannot fabricate a
+        // distinction from raw bytes, and should not want to.
+        let target_root = engine.synthesize(engine.d0(), engine.d1());
         v.restore_state(target_root, 999);
         assert_eq!(v.state_root_id(), target_root);
         assert_eq!(v.expected_nonce(), 999);

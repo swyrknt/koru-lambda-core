@@ -253,7 +253,7 @@ mod tests {
         // exactly 512 degree — the topological maximum for the 8-bit
         // fold shape (see ByteMapping doc-comment for the derivation).
         //
-        // qa-sentinel round-2: tightened from `>= 510` to `== 512`
+        // Tightened from `>= 510` to `== 512`
         // because the value is provably exact under content-addressing
         // saturation. A `>=` gate would mask regressions where someone
         // accidentally adds an extra synth call (degree silently grows
@@ -274,7 +274,7 @@ mod tests {
         //
         // Predicted novel bumps per primordial:
         //   Steps 0-6 (bits 0-6 vary normally): 2+4+8+16+32+64+128 = 254
-        //   Step 7 (bit 7 always 0): 128 unique starting accs from
+        //   Bit 7 (always 0): 128 unique starting accs from
         //     step 6, ONE bit-value processed, so 128 combinations
         //     each contributing one d0 and one d1 bump.
         //   Subtotal: 254 + 128 = 382 novel bumps.
@@ -294,7 +294,7 @@ mod tests {
 
     #[test]
     fn fold_law_d0_d1_are_top_two_by_degree() {
-        // qa-sentinel round-2: the Fold Law's claim is that d0 and d1
+        // The Fold Law's claim is that d0 and d1
         // are the topological mega-hubs — meaning they have the highest
         // degrees in the engine, not merely "above some threshold."
         // After the 256-byte exercise, iterate every distinction in
@@ -333,7 +333,7 @@ mod tests {
         // DESIGN.md gate 14: d0/d1 hub ratio
         // ≥ 100× the maximum non-primordial degree after the full
         // 256-byte exercise. This is the Fold Law's quantitative
-        // teeth: d0 and d1 aren't just slightly dominant (qa-sentinel
+        // teeth: d0 and d1 aren't just slightly dominant (review
         // round-2 test asserts strict-greater), they are TOPOLOGICAL
         // MEGA-HUBS — orders of magnitude above any other node.
         //

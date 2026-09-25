@@ -31,7 +31,7 @@
 //! ```
 //!
 //! See the [`projection`] module for the full API. See
-//! `PROJECTION_SPEC.md` for the authoritative spec.
+//! `docs/SPEC.md` for the authoritative spec.
 //!
 //! ## Trust boundaries
 //!
@@ -144,6 +144,7 @@
 //! Rationale: panics in invariant-violation paths are preferable to
 //! silent corruption of the append-only graph.
 
+#![forbid(unsafe_code)]
 #![warn(clippy::unwrap_used)]
 #![warn(clippy::must_use_candidate)]
 #![warn(clippy::missing_const_for_fn)]
@@ -156,10 +157,7 @@ pub mod primitives;
 pub mod projection;
 pub mod recorder;
 pub mod replay;
-pub mod subsystems;
-
-#[cfg(feature = "wasm")]
-pub mod wasm;
+pub mod vectors;
 
 pub use agent::{synthesize_causal_action, LocalCausalAgent};
 pub use distinction_hex::ParseError;

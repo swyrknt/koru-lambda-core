@@ -5,7 +5,7 @@
 // `Box<dyn Signal<Output = usize>>` (or any other `dyn Signal`)
 // must fail with an object-safety error at compile time.
 //
-// See PROJECTION_SPEC §3.1 for the design rationale.
+// See `docs/SPEC.md` §5 for the design rationale.
 
 use koru_lambda_core::projection::Signal;
 

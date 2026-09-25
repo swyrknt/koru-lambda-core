@@ -2,7 +2,7 @@
 //! discharges `THEORY.md § The synthesis/projection dual` from a spec
 //! claim into a CI-attested theorem.
 //!
-//! Corresponds verbatim to `PROJECTION_SPEC.md §7`. The probe fails
+//! Corresponds to the cross-engine condition in `docs/SPEC.md` §8. The probe fails
 //! loudly if two independent engines with identical synthesis histories
 //! produce byte-different projection output for the same spec at
 //! quiescence — i.e. if projection materialization turns out to be an
@@ -34,8 +34,8 @@ fn seeded_corpus_pairs(seed: u64, count: usize) -> Vec<(u32, u32)> {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut pairs = Vec::with_capacity(count);
     for _ in 0..count {
-        let a: u32 = rng.gen_range(0..1024);
-        let b: u32 = rng.gen_range(0..1024);
+        let a: u32 = rng.random_range(0..1024);
+        let b: u32 = rng.random_range(0..1024);
         pairs.push((a, b));
     }
     pairs
@@ -47,7 +47,7 @@ fn seeded_corpus_pairs(seed: u64, count: usize) -> Vec<(u32, u32)> {
 /// (Cond D). Corresponds to `THEORY.md § The synthesis/projection
 /// dual` falsifier.
 ///
-/// Corpus size 500 inherited from PROJECTION_SPEC §7 verbatim;
+/// Corpus size 500 is the original probe's parameter;
 /// falsifier power comes from depth-of-random-walk, not corpus size
 /// specifically.
 ///
@@ -137,6 +137,6 @@ fn cond_d_cross_engine_projection_independence() {
     assert_eq!(
         proj1.canonical_bytes(),
         proj2.canonical_bytes(),
-        "Cond D violation: cross-engine projection determinism broken — replay/wire/snapshot consumers will fail; see PROJECTION_SPEC.md §7 and THEORY.md §synthesis/projection dual"
+        "Cond D violation: cross-engine projection determinism broken — replay/wire/snapshot consumers will fail; see docs/SPEC.md §8 and THEORY.md"
     );
 }

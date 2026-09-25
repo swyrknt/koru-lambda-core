@@ -99,7 +99,7 @@ fn restore_wrong_signal_returns_signal_mismatch() {
 
 #[test]
 fn project_arc_coerce_site() {
-    // PLAN_V2 item 17: verify that `Projection<'a, Adjacency>` is
+    // Verify that `Projection<'a, Adjacency>` is
     // constructible from `&'a Arc<DistinctionEngine>` via the
     // `project_arc` entry point. Doubly-fat `&(dyn ReadOnlyEngine +
     // Send + Sync)` must coerce cleanly.

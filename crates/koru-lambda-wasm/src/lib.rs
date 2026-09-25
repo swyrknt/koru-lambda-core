@@ -1,13 +1,13 @@
 //! wasm-bindgen surface for JS/TS consumers of koru-lambda-core.
 //!
-//! Behind `#[cfg(feature = "wasm")]`. Zero touches to axiom hot paths
+//! Ships as its own crate over the substrate. Zero touches to axiom hot paths
 //! in `engine.rs`/`projection.rs`. Every byte-slice input crosses the
 //! Axiom-4 trust boundary via [`WasmEngine::verify`] (or an internal
 //! `verify` call) before reaching `synthesize_inner`.
 //!
 //! Ship-set: [`Adjacency`], [`Degree`], [`HopDistance`] (sealed
 //! `CoreSignal`). Consumer-defined signals are impossible from JS — the
-//! `private::Sealed` bound in [`crate::projection`] blocks external
+//! `private::Sealed` bound in [`koru_lambda_core::projection`] blocks external
 //! implementations of `CoreSignal`, and JS has no path to define a Rust
 //! trait implementation.
 //!
@@ -26,10 +26,12 @@
 //!   type explicitly so TS narrowing on `kind` works — wasm-bindgen's
 //!   default would type `kind` as `string`, defeating the union.
 
-#![cfg(feature = "wasm")]
+#![forbid(unsafe_code)]
 
-use crate::projection::{Adjacency, Boundary, Degree, Direction, HopDistance, Projection, Signal};
-use crate::{Distinction, DistinctionEngine, RawDistinctionId, SynthesisOutcome};
+use koru_lambda_core::projection::{
+    Adjacency, Boundary, Degree, Direction, HopDistance, Projection, Signal,
+};
+use koru_lambda_core::{Distinction, DistinctionEngine, RawDistinctionId, SynthesisOutcome};
 use serde::Serialize;
 use std::collections::HashSet;
 use wasm_bindgen::prelude::*;
@@ -203,7 +205,7 @@ impl WasmEngine {
     ///
     /// Note: v2.0.0 primordials are byte-content-different from v1.2 npm
     /// (which returned UTF-8 of `"0"` / `"1"`). See MIGRATION_JS.md
-    /// (S02 scope).
+    /// (initial bindings scope).
     #[wasm_bindgen(js_name = d0)]
     #[must_use]
     pub fn d0(&self) -> Vec<u8> {
@@ -256,6 +258,15 @@ impl WasmEngine {
             },
             SynthesisOutcome::Existing(d) => {
                 WasmOutcomePojo::Existing { distinction: d.as_bytes().to_vec() }
+            },
+            // `SynthesisOutcome` is `#[non_exhaustive]`. As a separate
+            // crate this binding must handle variants added by a future
+            // substrate release rather than failing to compile — surface
+            // it to JS instead of guessing a shape TS cannot narrow.
+            other => {
+                return Err(JsError::new(&format!(
+                    "unsupported synthesis outcome for this bindings version: {other:?}"
+                )))
             },
         };
         to_js(&pojo)
@@ -390,7 +401,7 @@ impl WasmEngine {
     /// Restore an `Adjacency` projection from canonical wire bytes.
     ///
     /// Round-trips the substrate's `restore_projection::<Adjacency>` —
-    /// see PROJECTION_SPEC §5. Errors surface as `JsError` with the
+    /// see `docs/SPEC.md` §6. Errors surface as `JsError` with the
     /// `RestoreError` variant name preserved for JS-side triage.
     #[wasm_bindgen(js_name = restoreProjectionAdjacency)]
     pub fn restore_projection_adjacency(
@@ -529,7 +540,7 @@ impl AdjacencyProjection {
         Ok(self.contains_set.contains(&arr))
     }
 
-    /// Canonical wire bytes per PROJECTION_SPEC §5. The SOLE canonical
+    /// Canonical wire bytes per `docs/SPEC.md` §6. The SOLE canonical
     /// form of this projection.
     #[wasm_bindgen(js_name = canonicalBytes)]
     #[must_use]
@@ -537,8 +548,8 @@ impl AdjacencyProjection {
         self.canonical_bytes_data.clone()
     }
 
-    /// 32-byte content-addressed [`crate::projection::ProjectionId`] per
-    /// PROJECTION_SPEC §6 Cond B.
+    /// 32-byte content-addressed [`koru_lambda_core::projection::ProjectionId`] per
+    /// `docs/SPEC.md` §7.
     #[wasm_bindgen(js_name = projectionId)]
     #[must_use]
     pub fn projection_id(&self) -> Vec<u8> {
@@ -594,7 +605,7 @@ impl DegreeProjection {
         Ok(self.contains_set.contains(&arr))
     }
 
-    /// Canonical wire bytes per PROJECTION_SPEC §5.
+    /// Canonical wire bytes per `docs/SPEC.md` §6.
     #[wasm_bindgen(js_name = canonicalBytes)]
     #[must_use]
     pub fn canonical_bytes(&self) -> Vec<u8> {
@@ -657,7 +668,7 @@ impl HopDistanceProjection {
         Ok(self.contains_set.contains(&arr))
     }
 
-    /// Canonical wire bytes per PROJECTION_SPEC §5.
+    /// Canonical wire bytes per `docs/SPEC.md` §6.
     #[wasm_bindgen(js_name = canonicalBytes)]
     #[must_use]
     pub fn canonical_bytes(&self) -> Vec<u8> {

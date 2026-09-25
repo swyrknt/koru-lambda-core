@@ -27,19 +27,17 @@
 //!   canonical_bytes(proj)       — asserted equal to
 //!                                 `EXPECTED_CANONICAL_BYTES_HEX`
 
-// -- Shared fixture --------------------------------------------------
-
-const EXPECTED_C_HEX: &str = "6cc4f0e930b34481d03a4134331852ea";
-const EXPECTED_D_HEX: &str = "3309377e376d6ca3c2e3bf9885900260";
-const EXPECTED_E_HEX: &str = "5f02c8386c05dc7311e0c73a011e18be";
-const EXPECTED_CANONICAL_BYTES_HEX: &str = "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000";
-
-// -- Native test -----------------------------------------------------
+// -- Native half. The wasm half lives in the bindings crate; both
+// assert against `koru_lambda_core::vectors`, which is what makes the
+// cross-target agreement checkable rather than self-referential.
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
-    use super::{EXPECTED_CANONICAL_BYTES_HEX, EXPECTED_C_HEX, EXPECTED_D_HEX, EXPECTED_E_HEX};
     use koru_lambda_core::projection::Direction;
+    use koru_lambda_core::vectors::{
+        ADJACENCY_UPSTREAM_HOPS2_CANONICAL_HEX as EXPECTED_CANONICAL_BYTES_HEX,
+        C_HEX as EXPECTED_C_HEX, D_HEX as EXPECTED_D_HEX, E_HEX as EXPECTED_E_HEX,
+    };
     use koru_lambda_core::{Adjacency, DistinctionEngine};
 
     #[test]
@@ -76,41 +74,3 @@ mod native {
 }
 
 // -- Wasm test -------------------------------------------------------
-
-#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
-mod wasm {
-    use super::{EXPECTED_CANONICAL_BYTES_HEX, EXPECTED_C_HEX, EXPECTED_D_HEX, EXPECTED_E_HEX};
-    use koru_lambda_core::wasm::WasmEngine;
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    #[wasm_bindgen_test]
-    fn cond_d_prime_wasm_matches_fixture() {
-        let engine = WasmEngine::new();
-        let a = engine.d0();
-        let b = engine.d1();
-        let c = engine.synthesize(&a, &b).expect("(invariant) synthesize c");
-        let d = engine.synthesize(&c, &a).expect("(invariant) synthesize d");
-        let e_child = engine.synthesize(&d, &b).expect("(invariant) synthesize e_child");
-
-        assert_eq!(
-            hex::encode(&c),
-            EXPECTED_C_HEX,
-            "wasm: c bytes drift — Cond D′ violation, native/wasm targets diverged at Axiom-4"
-        );
-        assert_eq!(hex::encode(&d), EXPECTED_D_HEX, "wasm: d bytes drift");
-        assert_eq!(hex::encode(&e_child), EXPECTED_E_HEX, "wasm: e_child bytes drift");
-
-        // Single-iteration materialization — no `.free()` OOM concern
-        // at this scale (would matter only in tight synthesis loops).
-        let projection = engine
-            .project_adjacency(&c, "upstream", Some(2))
-            .expect("(invariant) projectAdjacency");
-
-        let canonical = projection.canonical_bytes();
-        assert_eq!(
-            hex::encode(&canonical),
-            EXPECTED_CANONICAL_BYTES_HEX,
-            "wasm: canonicalBytes drift — Cond D′ violation, native/wasm targets diverged on wire form"
-        );
-    }
-}

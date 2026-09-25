@@ -1,12 +1,12 @@
 //! wasm-bindgen-test smoke suite for `src/wasm.rs`.
 //!
 //! Run via `wasm-pack test --node --features wasm`. Gated on
-//! `target_arch = "wasm32"` AND `feature = "wasm"` so the default
+//! `target_arch = "wasm32"` so the default
 //! `cargo test --workspace` path never picks it up.
 
-#![cfg(all(target_arch = "wasm32", feature = "wasm"))]
+#![cfg(target_arch = "wasm32")]
 
-use koru_lambda_core::wasm::{id_from_hex, id_to_hex, WasmEngine};
+use koru_lambda_wasm::{id_from_hex, id_to_hex, WasmEngine};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -135,7 +135,7 @@ fn synthesize_novel_returns_kind_discriminant() {
 // projectionId()` — that literal equivalence is FALSE against the
 // substrate (projection_id hashes only the spec header; canonical_bytes
 // serializes header + entries with a different domain tag). This test
-// verifies the invariants that DO hold and feed S04's Cond D′ falsifier:
+// verifies the invariants that DO hold and feed the cross-target falsifier:
 // both are deterministic and well-shaped across engines.
 // -------------------------------------------------------------------
 
