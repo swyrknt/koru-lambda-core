@@ -1,22 +1,164 @@
 name: CI
 
+# Every branch, every PR. The previous configuration ran only on main and
+# dev, so the entire 2.0.0 release branch was never gated.
 on:
   push:
-    branches: [ main, dev ]
+    branches: ['**']
   pull_request:
-    branches: [ main, dev ]
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
 
 jobs:
-  check:
-    name: Check
+  gates:
+    name: Repository gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/gates/no_suppression.sh
+      - run: ./scripts/gates/crate_boundary.sh
+      - run: ./scripts/gates/no_process_leaks.sh
+
+  fmt:
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with: { components: rustfmt }
+      - run: cargo fmt --all --check
+
+  clippy:
+    name: Clippy (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: native
+            args: --workspace --all-targets --all-features
+          - name: wasm32
+            args: -p koru-lambda-wasm --target wasm32-unknown-unknown --all-features
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-      - name: Run checks
-        run: ./scripts/check.sh
+          components: clippy
+          targets: wasm32-unknown-unknown
+      - run: cargo clippy ${{ matrix.args }} -- -D warnings
+
+  test:
+    name: Tests (${{ matrix.profile }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [debug, release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # The debug run matters: `--release` compiles out every
+      # `#[cfg(debug_assertions)]` test, which is where the foreign-byte
+      # guards live. Running only release silently skipped them.
+      - run: cargo test --workspace --all-features ${{ matrix.profile == 'release' && '--release' || '' }}
+
+  features:
+    name: Feature matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --workspace --all-targets --no-default-features
+      - run: cargo check --workspace --all-targets
+      - run: cargo check -p koru-lambda-core --all-targets --features serde
+      - run: cargo check --workspace --all-targets --all-features
+
+  wasm:
+    name: Wasm bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: wasm32-unknown-unknown }
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - run: wasm-pack test --node
+        working-directory: crates/koru-lambda-wasm
+      - run: wasm-pack build --release --target bundler
+        working-directory: crates/koru-lambda-wasm
+
+  docs:
+    name: Rustdoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo doc --workspace --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  msrv:
+    name: MSRV 1.80
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.80.0
+      - run: cargo check --workspace --all-targets --all-features
+
+  loom:
+    name: Loom model check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --test loom_kernel --release
+        env:
+          RUSTFLAGS: --cfg loom
+
+  miri:
+    name: Miri (subset)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with: { components: miri }
+      - run: cargo miri test -p koru-lambda-core --lib
+
+  supply-chain:
+    name: Advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  package:
+    name: Package dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo publish --dry-run -p koru-lambda-core
+
+  examples:
+    name: Examples and demos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: wasm32-unknown-unknown }
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Rust examples
+        run: |
+          for ex in 01_hello_synth 02_novelty_and_chain 03_projection_composition 04_wire_format_roundtrip; do
+            cargo run --quiet --example "$ex"
+          done
+      - name: JS demos
+        working-directory: examples/wasm-demos
+        run: |
+          npm run build:pkg
+          npm install
+          npm run typecheck
+          npm run demo:all

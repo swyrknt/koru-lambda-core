@@ -123,11 +123,9 @@ impl CurrentEngine {
 // MergedEngine — one-map mock (proposed redesign)
 // ---------------------------------------------------------------------------
 
-// `parents` is written but not read in this bench — its purpose is to
-// reproduce the production memory layout / allocation cost so the
-// comparison against CurrentEngine is fair. Real code reads it via
-// `parents_of()`. dead_code suppression is bench-only.
-#[allow(dead_code)]
+// `parents` reproduces the production memory layout so the comparison
+// against CurrentEngine is fair, and is read back through `parents_of`
+// below — the same access production code performs.
 struct MergedNode {
     parents: Option<ParentPair>,
     degree: AtomicUsize,
@@ -158,7 +156,7 @@ impl MergedEngine {
         // of this statement; RefMut dropped at the semicolon. This
         // releases the lock BEFORE the parent gets — avoids deadlock
         // if first or second hash to the same shard as new_bytes (B1
-        // qa-sentinel concern).
+        // concern).
         self.nodes.entry(new_bytes).or_insert_with(|| MergedNode {
             parents: Some((first, second)),
             degree: AtomicUsize::new(0),
@@ -174,6 +172,14 @@ impl MergedEngine {
             .degree
             .fetch_add(1, Ordering::Release);
         new_bytes
+    }
+
+    /// Mirror of the production parent lookup. Exercising this keeps the
+    /// mock's memory layout honest: a `parents` field that is written
+    /// but never read would let the compiler treat it differently from
+    /// the shape it is meant to model.
+    fn parents_of(&self, d: [u8; 16]) -> Option<ParentPair> {
+        self.nodes.get(&d).and_then(|n| n.parents)
     }
 }
 
@@ -221,6 +227,9 @@ fn warmup_current(engine: &CurrentEngine, prev: &mut [u8; 16], cur: &mut [u8; 16
 fn warmup_merged(engine: &MergedEngine, prev: &mut [u8; 16], cur: &mut [u8; 16], n: usize) {
     for _ in 0..n {
         let next = engine.synthesize(*cur, *prev);
+        // Read parentage back, as production consumers do. Also asserts
+        // the mock records what it claims to record.
+        debug_assert_eq!(engine.parents_of(next).is_some(), next != *cur);
         *prev = *cur;
         *cur = next;
     }

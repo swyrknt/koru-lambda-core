@@ -1,0 +1,7 @@
+# Pinned so every contributor and CI job compiles with the same rustc.
+# MSRV is declared separately in each crate's `rust-version`; CI verifies
+# the crate still builds on it.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]

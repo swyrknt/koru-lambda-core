@@ -7,8 +7,11 @@ cognitive-complexity-threshold = 15
 # Type complexity threshold
 type-complexity-threshold = 100
 
-# Avoid breaking exported APIs
-avoid-breaking-exported-api = true
+# Clippy defaults this to true, which silences exactly the lints that flag
+# public signatures — the ones that become permanent once a version is
+# published. Before release is precisely when we want to hear them, so it is
+# explicitly false. The suppression gate requires this line.
+avoid-breaking-exported-api = false
 
 # Note: Enable additional lints via Cargo.toml or command line:
 # cargo clippy -- -W clippy::missing_docs_in_private_items
