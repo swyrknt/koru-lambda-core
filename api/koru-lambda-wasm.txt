@@ -1,0 +1,230 @@
+pub mod koru_lambda_wasm
+pub struct koru_lambda_wasm::AdjacencyProjection
+impl koru_lambda_wasm::AdjacencyProjection
+pub fn koru_lambda_wasm::AdjacencyProjection::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn koru_lambda_wasm::AdjacencyProjection::contains(&self, &[u8]) -> core::result::Result<bool, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::AdjacencyProjection::entries(&self) -> core::result::Result<wasm_bindgen::JsValue, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::AdjacencyProjection::projection_id(&self) -> alloc::vec::Vec<u8>
+impl core::convert::From<koru_lambda_wasm::AdjacencyProjection> for wasm_bindgen::JsValue
+pub fn wasm_bindgen::JsValue::from(koru_lambda_wasm::AdjacencyProjection) -> Self
+impl wasm_bindgen::__rt::marker::SupportsConstructor for koru_lambda_wasm::AdjacencyProjection
+impl wasm_bindgen::__rt::marker::SupportsInstanceProperty for koru_lambda_wasm::AdjacencyProjection
+impl wasm_bindgen::__rt::marker::SupportsStaticProperty for koru_lambda_wasm::AdjacencyProjection
+impl wasm_bindgen::convert::traits::FromWasmAbi for koru_lambda_wasm::AdjacencyProjection
+pub type koru_lambda_wasm::AdjacencyProjection::Abi = u32
+pub unsafe fn koru_lambda_wasm::AdjacencyProjection::from_abi(u32) -> Self
+impl wasm_bindgen::convert::traits::IntoWasmAbi for koru_lambda_wasm::AdjacencyProjection
+pub type koru_lambda_wasm::AdjacencyProjection::Abi = u32
+pub fn koru_lambda_wasm::AdjacencyProjection::into_abi(self) -> u32
+impl wasm_bindgen::convert::traits::LongRefFromWasmAbi for koru_lambda_wasm::AdjacencyProjection
+pub type koru_lambda_wasm::AdjacencyProjection::Abi = u32
+pub type koru_lambda_wasm::AdjacencyProjection::Anchor = wasm_bindgen::__rt::RcRef<koru_lambda_wasm::AdjacencyProjection>
+pub unsafe fn koru_lambda_wasm::AdjacencyProjection::long_ref_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::OptionFromWasmAbi for koru_lambda_wasm::AdjacencyProjection
+pub fn koru_lambda_wasm::AdjacencyProjection::is_none(&Self::Abi) -> bool
+impl wasm_bindgen::convert::traits::OptionIntoWasmAbi for koru_lambda_wasm::AdjacencyProjection
+pub fn koru_lambda_wasm::AdjacencyProjection::none() -> Self::Abi
+impl wasm_bindgen::convert::traits::RefFromWasmAbi for koru_lambda_wasm::AdjacencyProjection
+pub type koru_lambda_wasm::AdjacencyProjection::Abi = u32
+pub type koru_lambda_wasm::AdjacencyProjection::Anchor = wasm_bindgen::__rt::RcRef<koru_lambda_wasm::AdjacencyProjection>
+pub unsafe fn koru_lambda_wasm::AdjacencyProjection::ref_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::RefMutFromWasmAbi for koru_lambda_wasm::AdjacencyProjection
+pub type koru_lambda_wasm::AdjacencyProjection::Abi = u32
+pub type koru_lambda_wasm::AdjacencyProjection::Anchor = wasm_bindgen::__rt::RcRefMut<koru_lambda_wasm::AdjacencyProjection>
+pub unsafe fn koru_lambda_wasm::AdjacencyProjection::ref_mut_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::TryFromJsValue for koru_lambda_wasm::AdjacencyProjection
+pub fn koru_lambda_wasm::AdjacencyProjection::try_from_js_value(wasm_bindgen::JsValue) -> core::result::Result<Self, wasm_bindgen::JsValue>
+pub fn koru_lambda_wasm::AdjacencyProjection::try_from_js_value_ref(&wasm_bindgen::JsValue) -> core::option::Option<Self>
+impl wasm_bindgen::convert::traits::VectorFromWasmAbi for koru_lambda_wasm::AdjacencyProjection
+pub type koru_lambda_wasm::AdjacencyProjection::Abi = <alloc::boxed::Box<[wasm_bindgen::JsValue]> as wasm_bindgen::convert::traits::FromWasmAbi>::Abi
+pub unsafe fn koru_lambda_wasm::AdjacencyProjection::vector_from_abi(Self::Abi) -> alloc::boxed::Box<[koru_lambda_wasm::AdjacencyProjection]>
+impl wasm_bindgen::convert::traits::VectorIntoWasmAbi for koru_lambda_wasm::AdjacencyProjection
+pub type koru_lambda_wasm::AdjacencyProjection::Abi = <alloc::boxed::Box<[wasm_bindgen::JsValue]> as wasm_bindgen::convert::traits::IntoWasmAbi>::Abi
+pub fn koru_lambda_wasm::AdjacencyProjection::vector_into_abi(alloc::boxed::Box<[koru_lambda_wasm::AdjacencyProjection]>) -> Self::Abi
+impl wasm_bindgen::describe::WasmDescribe for koru_lambda_wasm::AdjacencyProjection
+pub fn koru_lambda_wasm::AdjacencyProjection::describe()
+impl wasm_bindgen::describe::WasmDescribeVector for koru_lambda_wasm::AdjacencyProjection
+pub fn koru_lambda_wasm::AdjacencyProjection::describe_vector()
+impl core::marker::Freeze for koru_lambda_wasm::AdjacencyProjection
+impl core::marker::Send for koru_lambda_wasm::AdjacencyProjection
+impl core::marker::Sync for koru_lambda_wasm::AdjacencyProjection
+impl core::marker::Unpin for koru_lambda_wasm::AdjacencyProjection
+impl core::marker::UnsafeUnpin for koru_lambda_wasm::AdjacencyProjection
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_wasm::AdjacencyProjection
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_wasm::AdjacencyProjection
+pub struct koru_lambda_wasm::DegreeProjection
+impl koru_lambda_wasm::DegreeProjection
+pub fn koru_lambda_wasm::DegreeProjection::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn koru_lambda_wasm::DegreeProjection::contains(&self, &[u8]) -> core::result::Result<bool, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::DegreeProjection::entries(&self) -> core::result::Result<wasm_bindgen::JsValue, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::DegreeProjection::projection_id(&self) -> alloc::vec::Vec<u8>
+impl core::convert::From<koru_lambda_wasm::DegreeProjection> for wasm_bindgen::JsValue
+pub fn wasm_bindgen::JsValue::from(koru_lambda_wasm::DegreeProjection) -> Self
+impl wasm_bindgen::__rt::marker::SupportsConstructor for koru_lambda_wasm::DegreeProjection
+impl wasm_bindgen::__rt::marker::SupportsInstanceProperty for koru_lambda_wasm::DegreeProjection
+impl wasm_bindgen::__rt::marker::SupportsStaticProperty for koru_lambda_wasm::DegreeProjection
+impl wasm_bindgen::convert::traits::FromWasmAbi for koru_lambda_wasm::DegreeProjection
+pub type koru_lambda_wasm::DegreeProjection::Abi = u32
+pub unsafe fn koru_lambda_wasm::DegreeProjection::from_abi(u32) -> Self
+impl wasm_bindgen::convert::traits::IntoWasmAbi for koru_lambda_wasm::DegreeProjection
+pub type koru_lambda_wasm::DegreeProjection::Abi = u32
+pub fn koru_lambda_wasm::DegreeProjection::into_abi(self) -> u32
+impl wasm_bindgen::convert::traits::LongRefFromWasmAbi for koru_lambda_wasm::DegreeProjection
+pub type koru_lambda_wasm::DegreeProjection::Abi = u32
+pub type koru_lambda_wasm::DegreeProjection::Anchor = wasm_bindgen::__rt::RcRef<koru_lambda_wasm::DegreeProjection>
+pub unsafe fn koru_lambda_wasm::DegreeProjection::long_ref_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::OptionFromWasmAbi for koru_lambda_wasm::DegreeProjection
+pub fn koru_lambda_wasm::DegreeProjection::is_none(&Self::Abi) -> bool
+impl wasm_bindgen::convert::traits::OptionIntoWasmAbi for koru_lambda_wasm::DegreeProjection
+pub fn koru_lambda_wasm::DegreeProjection::none() -> Self::Abi
+impl wasm_bindgen::convert::traits::RefFromWasmAbi for koru_lambda_wasm::DegreeProjection
+pub type koru_lambda_wasm::DegreeProjection::Abi = u32
+pub type koru_lambda_wasm::DegreeProjection::Anchor = wasm_bindgen::__rt::RcRef<koru_lambda_wasm::DegreeProjection>
+pub unsafe fn koru_lambda_wasm::DegreeProjection::ref_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::RefMutFromWasmAbi for koru_lambda_wasm::DegreeProjection
+pub type koru_lambda_wasm::DegreeProjection::Abi = u32
+pub type koru_lambda_wasm::DegreeProjection::Anchor = wasm_bindgen::__rt::RcRefMut<koru_lambda_wasm::DegreeProjection>
+pub unsafe fn koru_lambda_wasm::DegreeProjection::ref_mut_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::TryFromJsValue for koru_lambda_wasm::DegreeProjection
+pub fn koru_lambda_wasm::DegreeProjection::try_from_js_value(wasm_bindgen::JsValue) -> core::result::Result<Self, wasm_bindgen::JsValue>
+pub fn koru_lambda_wasm::DegreeProjection::try_from_js_value_ref(&wasm_bindgen::JsValue) -> core::option::Option<Self>
+impl wasm_bindgen::convert::traits::VectorFromWasmAbi for koru_lambda_wasm::DegreeProjection
+pub type koru_lambda_wasm::DegreeProjection::Abi = <alloc::boxed::Box<[wasm_bindgen::JsValue]> as wasm_bindgen::convert::traits::FromWasmAbi>::Abi
+pub unsafe fn koru_lambda_wasm::DegreeProjection::vector_from_abi(Self::Abi) -> alloc::boxed::Box<[koru_lambda_wasm::DegreeProjection]>
+impl wasm_bindgen::convert::traits::VectorIntoWasmAbi for koru_lambda_wasm::DegreeProjection
+pub type koru_lambda_wasm::DegreeProjection::Abi = <alloc::boxed::Box<[wasm_bindgen::JsValue]> as wasm_bindgen::convert::traits::IntoWasmAbi>::Abi
+pub fn koru_lambda_wasm::DegreeProjection::vector_into_abi(alloc::boxed::Box<[koru_lambda_wasm::DegreeProjection]>) -> Self::Abi
+impl wasm_bindgen::describe::WasmDescribe for koru_lambda_wasm::DegreeProjection
+pub fn koru_lambda_wasm::DegreeProjection::describe()
+impl wasm_bindgen::describe::WasmDescribeVector for koru_lambda_wasm::DegreeProjection
+pub fn koru_lambda_wasm::DegreeProjection::describe_vector()
+impl core::marker::Freeze for koru_lambda_wasm::DegreeProjection
+impl core::marker::Send for koru_lambda_wasm::DegreeProjection
+impl core::marker::Sync for koru_lambda_wasm::DegreeProjection
+impl core::marker::Unpin for koru_lambda_wasm::DegreeProjection
+impl core::marker::UnsafeUnpin for koru_lambda_wasm::DegreeProjection
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_wasm::DegreeProjection
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_wasm::DegreeProjection
+pub struct koru_lambda_wasm::HopDistanceProjection
+impl koru_lambda_wasm::HopDistanceProjection
+pub fn koru_lambda_wasm::HopDistanceProjection::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn koru_lambda_wasm::HopDistanceProjection::contains(&self, &[u8]) -> core::result::Result<bool, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::HopDistanceProjection::entries(&self) -> core::result::Result<wasm_bindgen::JsValue, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::HopDistanceProjection::projection_id(&self) -> alloc::vec::Vec<u8>
+impl core::convert::From<koru_lambda_wasm::HopDistanceProjection> for wasm_bindgen::JsValue
+pub fn wasm_bindgen::JsValue::from(koru_lambda_wasm::HopDistanceProjection) -> Self
+impl wasm_bindgen::__rt::marker::SupportsConstructor for koru_lambda_wasm::HopDistanceProjection
+impl wasm_bindgen::__rt::marker::SupportsInstanceProperty for koru_lambda_wasm::HopDistanceProjection
+impl wasm_bindgen::__rt::marker::SupportsStaticProperty for koru_lambda_wasm::HopDistanceProjection
+impl wasm_bindgen::convert::traits::FromWasmAbi for koru_lambda_wasm::HopDistanceProjection
+pub type koru_lambda_wasm::HopDistanceProjection::Abi = u32
+pub unsafe fn koru_lambda_wasm::HopDistanceProjection::from_abi(u32) -> Self
+impl wasm_bindgen::convert::traits::IntoWasmAbi for koru_lambda_wasm::HopDistanceProjection
+pub type koru_lambda_wasm::HopDistanceProjection::Abi = u32
+pub fn koru_lambda_wasm::HopDistanceProjection::into_abi(self) -> u32
+impl wasm_bindgen::convert::traits::LongRefFromWasmAbi for koru_lambda_wasm::HopDistanceProjection
+pub type koru_lambda_wasm::HopDistanceProjection::Abi = u32
+pub type koru_lambda_wasm::HopDistanceProjection::Anchor = wasm_bindgen::__rt::RcRef<koru_lambda_wasm::HopDistanceProjection>
+pub unsafe fn koru_lambda_wasm::HopDistanceProjection::long_ref_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::OptionFromWasmAbi for koru_lambda_wasm::HopDistanceProjection
+pub fn koru_lambda_wasm::HopDistanceProjection::is_none(&Self::Abi) -> bool
+impl wasm_bindgen::convert::traits::OptionIntoWasmAbi for koru_lambda_wasm::HopDistanceProjection
+pub fn koru_lambda_wasm::HopDistanceProjection::none() -> Self::Abi
+impl wasm_bindgen::convert::traits::RefFromWasmAbi for koru_lambda_wasm::HopDistanceProjection
+pub type koru_lambda_wasm::HopDistanceProjection::Abi = u32
+pub type koru_lambda_wasm::HopDistanceProjection::Anchor = wasm_bindgen::__rt::RcRef<koru_lambda_wasm::HopDistanceProjection>
+pub unsafe fn koru_lambda_wasm::HopDistanceProjection::ref_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::RefMutFromWasmAbi for koru_lambda_wasm::HopDistanceProjection
+pub type koru_lambda_wasm::HopDistanceProjection::Abi = u32
+pub type koru_lambda_wasm::HopDistanceProjection::Anchor = wasm_bindgen::__rt::RcRefMut<koru_lambda_wasm::HopDistanceProjection>
+pub unsafe fn koru_lambda_wasm::HopDistanceProjection::ref_mut_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::TryFromJsValue for koru_lambda_wasm::HopDistanceProjection
+pub fn koru_lambda_wasm::HopDistanceProjection::try_from_js_value(wasm_bindgen::JsValue) -> core::result::Result<Self, wasm_bindgen::JsValue>
+pub fn koru_lambda_wasm::HopDistanceProjection::try_from_js_value_ref(&wasm_bindgen::JsValue) -> core::option::Option<Self>
+impl wasm_bindgen::convert::traits::VectorFromWasmAbi for koru_lambda_wasm::HopDistanceProjection
+pub type koru_lambda_wasm::HopDistanceProjection::Abi = <alloc::boxed::Box<[wasm_bindgen::JsValue]> as wasm_bindgen::convert::traits::FromWasmAbi>::Abi
+pub unsafe fn koru_lambda_wasm::HopDistanceProjection::vector_from_abi(Self::Abi) -> alloc::boxed::Box<[koru_lambda_wasm::HopDistanceProjection]>
+impl wasm_bindgen::convert::traits::VectorIntoWasmAbi for koru_lambda_wasm::HopDistanceProjection
+pub type koru_lambda_wasm::HopDistanceProjection::Abi = <alloc::boxed::Box<[wasm_bindgen::JsValue]> as wasm_bindgen::convert::traits::IntoWasmAbi>::Abi
+pub fn koru_lambda_wasm::HopDistanceProjection::vector_into_abi(alloc::boxed::Box<[koru_lambda_wasm::HopDistanceProjection]>) -> Self::Abi
+impl wasm_bindgen::describe::WasmDescribe for koru_lambda_wasm::HopDistanceProjection
+pub fn koru_lambda_wasm::HopDistanceProjection::describe()
+impl wasm_bindgen::describe::WasmDescribeVector for koru_lambda_wasm::HopDistanceProjection
+pub fn koru_lambda_wasm::HopDistanceProjection::describe_vector()
+impl core::marker::Freeze for koru_lambda_wasm::HopDistanceProjection
+impl core::marker::Send for koru_lambda_wasm::HopDistanceProjection
+impl core::marker::Sync for koru_lambda_wasm::HopDistanceProjection
+impl core::marker::Unpin for koru_lambda_wasm::HopDistanceProjection
+impl core::marker::UnsafeUnpin for koru_lambda_wasm::HopDistanceProjection
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_wasm::HopDistanceProjection
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_wasm::HopDistanceProjection
+pub struct koru_lambda_wasm::WasmEngine
+impl koru_lambda_wasm::WasmEngine
+pub fn koru_lambda_wasm::WasmEngine::d0(&self) -> alloc::vec::Vec<u8>
+pub fn koru_lambda_wasm::WasmEngine::d1(&self) -> alloc::vec::Vec<u8>
+pub fn koru_lambda_wasm::WasmEngine::degree(&self, &[u8]) -> core::result::Result<u64, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::distinction_count(&self) -> u64
+pub fn koru_lambda_wasm::WasmEngine::has(&self, &[u8]) -> core::result::Result<bool, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::new() -> Self
+pub fn koru_lambda_wasm::WasmEngine::parents_of(&self, &[u8]) -> core::result::Result<wasm_bindgen::JsValue, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::project_adjacency(&self, &[u8], &str, core::option::Option<u32>) -> core::result::Result<koru_lambda_wasm::AdjacencyProjection, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::project_degree(&self, &[u8], &str, core::option::Option<u32>) -> core::result::Result<koru_lambda_wasm::DegreeProjection, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::project_hop_distance(&self, &[u8], &str, core::option::Option<u32>) -> core::result::Result<koru_lambda_wasm::HopDistanceProjection, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::relationship_count(&self) -> u64
+pub fn koru_lambda_wasm::WasmEngine::restore_projection_adjacency(&self, &[u8]) -> core::result::Result<koru_lambda_wasm::AdjacencyProjection, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::restore_projection_degree(&self, &[u8]) -> core::result::Result<koru_lambda_wasm::DegreeProjection, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::restore_projection_hop_distance(&self, &[u8]) -> core::result::Result<koru_lambda_wasm::HopDistanceProjection, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::synthesize(&self, &[u8], &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::synthesize_novel(&self, &[u8], &[u8]) -> core::result::Result<wasm_bindgen::JsValue, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::WasmEngine::verify(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, wasm_bindgen::JsError>
+impl core::convert::From<koru_lambda_wasm::WasmEngine> for wasm_bindgen::JsValue
+pub fn wasm_bindgen::JsValue::from(koru_lambda_wasm::WasmEngine) -> Self
+impl core::default::Default for koru_lambda_wasm::WasmEngine
+pub fn koru_lambda_wasm::WasmEngine::default() -> Self
+impl wasm_bindgen::__rt::marker::SupportsConstructor for koru_lambda_wasm::WasmEngine
+impl wasm_bindgen::__rt::marker::SupportsInstanceProperty for koru_lambda_wasm::WasmEngine
+impl wasm_bindgen::__rt::marker::SupportsStaticProperty for koru_lambda_wasm::WasmEngine
+impl wasm_bindgen::convert::traits::FromWasmAbi for koru_lambda_wasm::WasmEngine
+pub type koru_lambda_wasm::WasmEngine::Abi = u32
+pub unsafe fn koru_lambda_wasm::WasmEngine::from_abi(u32) -> Self
+impl wasm_bindgen::convert::traits::IntoWasmAbi for koru_lambda_wasm::WasmEngine
+pub type koru_lambda_wasm::WasmEngine::Abi = u32
+pub fn koru_lambda_wasm::WasmEngine::into_abi(self) -> u32
+impl wasm_bindgen::convert::traits::LongRefFromWasmAbi for koru_lambda_wasm::WasmEngine
+pub type koru_lambda_wasm::WasmEngine::Abi = u32
+pub type koru_lambda_wasm::WasmEngine::Anchor = wasm_bindgen::__rt::RcRef<koru_lambda_wasm::WasmEngine>
+pub unsafe fn koru_lambda_wasm::WasmEngine::long_ref_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::OptionFromWasmAbi for koru_lambda_wasm::WasmEngine
+pub fn koru_lambda_wasm::WasmEngine::is_none(&Self::Abi) -> bool
+impl wasm_bindgen::convert::traits::OptionIntoWasmAbi for koru_lambda_wasm::WasmEngine
+pub fn koru_lambda_wasm::WasmEngine::none() -> Self::Abi
+impl wasm_bindgen::convert::traits::RefFromWasmAbi for koru_lambda_wasm::WasmEngine
+pub type koru_lambda_wasm::WasmEngine::Abi = u32
+pub type koru_lambda_wasm::WasmEngine::Anchor = wasm_bindgen::__rt::RcRef<koru_lambda_wasm::WasmEngine>
+pub unsafe fn koru_lambda_wasm::WasmEngine::ref_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::RefMutFromWasmAbi for koru_lambda_wasm::WasmEngine
+pub type koru_lambda_wasm::WasmEngine::Abi = u32
+pub type koru_lambda_wasm::WasmEngine::Anchor = wasm_bindgen::__rt::RcRefMut<koru_lambda_wasm::WasmEngine>
+pub unsafe fn koru_lambda_wasm::WasmEngine::ref_mut_from_abi(Self::Abi) -> Self::Anchor
+impl wasm_bindgen::convert::traits::TryFromJsValue for koru_lambda_wasm::WasmEngine
+pub fn koru_lambda_wasm::WasmEngine::try_from_js_value(wasm_bindgen::JsValue) -> core::result::Result<Self, wasm_bindgen::JsValue>
+pub fn koru_lambda_wasm::WasmEngine::try_from_js_value_ref(&wasm_bindgen::JsValue) -> core::option::Option<Self>
+impl wasm_bindgen::convert::traits::VectorFromWasmAbi for koru_lambda_wasm::WasmEngine
+pub type koru_lambda_wasm::WasmEngine::Abi = <alloc::boxed::Box<[wasm_bindgen::JsValue]> as wasm_bindgen::convert::traits::FromWasmAbi>::Abi
+pub unsafe fn koru_lambda_wasm::WasmEngine::vector_from_abi(Self::Abi) -> alloc::boxed::Box<[koru_lambda_wasm::WasmEngine]>
+impl wasm_bindgen::convert::traits::VectorIntoWasmAbi for koru_lambda_wasm::WasmEngine
+pub type koru_lambda_wasm::WasmEngine::Abi = <alloc::boxed::Box<[wasm_bindgen::JsValue]> as wasm_bindgen::convert::traits::IntoWasmAbi>::Abi
+pub fn koru_lambda_wasm::WasmEngine::vector_into_abi(alloc::boxed::Box<[koru_lambda_wasm::WasmEngine]>) -> Self::Abi
+impl wasm_bindgen::describe::WasmDescribe for koru_lambda_wasm::WasmEngine
+pub fn koru_lambda_wasm::WasmEngine::describe()
+impl wasm_bindgen::describe::WasmDescribeVector for koru_lambda_wasm::WasmEngine
+pub fn koru_lambda_wasm::WasmEngine::describe_vector()
+impl core::marker::Freeze for koru_lambda_wasm::WasmEngine
+impl core::marker::Send for koru_lambda_wasm::WasmEngine
+impl core::marker::Sync for koru_lambda_wasm::WasmEngine
+impl core::marker::Unpin for koru_lambda_wasm::WasmEngine
+impl core::marker::UnsafeUnpin for koru_lambda_wasm::WasmEngine
+impl !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_wasm::WasmEngine
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_wasm::WasmEngine
+pub fn koru_lambda_wasm::id_from_hex(&str) -> core::result::Result<alloc::vec::Vec<u8>, wasm_bindgen::JsError>
+pub fn koru_lambda_wasm::id_to_hex(&[u8]) -> core::result::Result<alloc::string::String, wasm_bindgen::JsError>

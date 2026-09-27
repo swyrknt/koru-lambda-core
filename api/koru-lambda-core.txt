@@ -1,0 +1,1115 @@
+pub mod koru_lambda_core
+pub mod koru_lambda_core::agent
+pub trait koru_lambda_core::agent::LocalCausalAgent
+pub type koru_lambda_core::agent::LocalCausalAgent::ActionData: koru_lambda_core::primitives::Canonicalizable
+pub fn koru_lambda_core::agent::LocalCausalAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::agent::LocalCausalAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::agent::LocalCausalAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
+pub fn koru_lambda_core::agent::synthesize_causal_action<A: koru_lambda_core::primitives::Canonicalizable>(koru_lambda_core::engine::Distinction, A, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub mod koru_lambda_core::distinction_hex
+#[non_exhaustive] pub enum koru_lambda_core::distinction_hex::ParseError
+pub koru_lambda_core::distinction_hex::ParseError::InvalidChar
+pub koru_lambda_core::distinction_hex::ParseError::InvalidChar::found: char
+pub koru_lambda_core::distinction_hex::ParseError::InvalidChar::position: usize
+pub koru_lambda_core::distinction_hex::ParseError::InvalidLength(usize)
+pub koru_lambda_core::distinction_hex::ParseError::NonAscii
+pub koru_lambda_core::distinction_hex::ParseError::NonAscii::position: usize
+impl core::clone::Clone for koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::distinction_hex::ParseError::clone(&self) -> koru_lambda_core::distinction_hex::ParseError
+impl core::cmp::Eq for koru_lambda_core::distinction_hex::ParseError
+impl core::cmp::PartialEq for koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::distinction_hex::ParseError::eq(&self, &koru_lambda_core::distinction_hex::ParseError) -> bool
+impl core::error::Error for koru_lambda_core::distinction_hex::ParseError
+impl core::fmt::Debug for koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::distinction_hex::ParseError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::distinction_hex::ParseError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::Freeze for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::Send for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::Sync for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::Unpin for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::UnsafeUnpin for koru_lambda_core::distinction_hex::ParseError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::distinction_hex::ParseError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::distinction_hex::ParseError
+pub mod koru_lambda_core::engine
+#[non_exhaustive] pub enum koru_lambda_core::engine::InvariantError
+pub koru_lambda_core::engine::InvariantError::BinaryParentageMismatch
+pub koru_lambda_core::engine::InvariantError::BinaryParentageMismatch::all_distinctions: usize
+pub koru_lambda_core::engine::InvariantError::BinaryParentageMismatch::parents_of_plus_two: usize
+impl core::clone::Clone for koru_lambda_core::engine::InvariantError
+pub fn koru_lambda_core::engine::InvariantError::clone(&self) -> koru_lambda_core::engine::InvariantError
+impl core::cmp::Eq for koru_lambda_core::engine::InvariantError
+impl core::cmp::PartialEq for koru_lambda_core::engine::InvariantError
+pub fn koru_lambda_core::engine::InvariantError::eq(&self, &koru_lambda_core::engine::InvariantError) -> bool
+impl core::error::Error for koru_lambda_core::engine::InvariantError
+impl core::fmt::Debug for koru_lambda_core::engine::InvariantError
+pub fn koru_lambda_core::engine::InvariantError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::engine::InvariantError
+pub fn koru_lambda_core::engine::InvariantError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::InvariantError
+impl core::marker::Freeze for koru_lambda_core::engine::InvariantError
+impl core::marker::Send for koru_lambda_core::engine::InvariantError
+impl core::marker::Sync for koru_lambda_core::engine::InvariantError
+impl core::marker::Unpin for koru_lambda_core::engine::InvariantError
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::InvariantError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::InvariantError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::InvariantError
+#[non_exhaustive] pub enum koru_lambda_core::engine::SynthesisOutcome
+pub koru_lambda_core::engine::SynthesisOutcome::Existing(koru_lambda_core::engine::Distinction)
+pub koru_lambda_core::engine::SynthesisOutcome::Novel(koru_lambda_core::engine::Distinction)
+impl koru_lambda_core::engine::SynthesisOutcome
+pub const fn koru_lambda_core::engine::SynthesisOutcome::distinction(&self) -> koru_lambda_core::engine::Distinction
+pub const fn koru_lambda_core::engine::SynthesisOutcome::into_distinction(self) -> koru_lambda_core::engine::Distinction
+pub const fn koru_lambda_core::engine::SynthesisOutcome::is_novel(&self) -> bool
+impl core::clone::Clone for koru_lambda_core::engine::SynthesisOutcome
+pub fn koru_lambda_core::engine::SynthesisOutcome::clone(&self) -> koru_lambda_core::engine::SynthesisOutcome
+impl core::cmp::Eq for koru_lambda_core::engine::SynthesisOutcome
+impl core::cmp::PartialEq for koru_lambda_core::engine::SynthesisOutcome
+pub fn koru_lambda_core::engine::SynthesisOutcome::eq(&self, &koru_lambda_core::engine::SynthesisOutcome) -> bool
+impl core::fmt::Debug for koru_lambda_core::engine::SynthesisOutcome
+pub fn koru_lambda_core::engine::SynthesisOutcome::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::Freeze for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::Send for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::Sync for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::Unpin for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::SynthesisOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::SynthesisOutcome
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::SynthesisOutcome
+#[non_exhaustive] pub enum koru_lambda_core::engine::VerifyError
+pub koru_lambda_core::engine::VerifyError::ForeignBytes
+impl core::clone::Clone for koru_lambda_core::engine::VerifyError
+pub fn koru_lambda_core::engine::VerifyError::clone(&self) -> koru_lambda_core::engine::VerifyError
+impl core::cmp::Eq for koru_lambda_core::engine::VerifyError
+impl core::cmp::PartialEq for koru_lambda_core::engine::VerifyError
+pub fn koru_lambda_core::engine::VerifyError::eq(&self, &koru_lambda_core::engine::VerifyError) -> bool
+impl core::convert::From<koru_lambda_core::engine::VerifyError> for koru_lambda_core::projection::RestoreError
+pub fn koru_lambda_core::projection::RestoreError::from(koru_lambda_core::engine::VerifyError) -> Self
+impl core::error::Error for koru_lambda_core::engine::VerifyError
+impl core::fmt::Debug for koru_lambda_core::engine::VerifyError
+pub fn koru_lambda_core::engine::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::engine::VerifyError
+pub fn koru_lambda_core::engine::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::engine::VerifyError
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::VerifyError
+impl core::marker::Freeze for koru_lambda_core::engine::VerifyError
+impl core::marker::Send for koru_lambda_core::engine::VerifyError
+impl core::marker::Sync for koru_lambda_core::engine::VerifyError
+impl core::marker::Unpin for koru_lambda_core::engine::VerifyError
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::VerifyError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::VerifyError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::VerifyError
+#[repr(transparent)] pub struct koru_lambda_core::engine::Distinction(_)
+impl koru_lambda_core::engine::Distinction
+pub const fn koru_lambda_core::engine::Distinction::as_bytes(&self) -> &[u8; 16]
+impl koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::from_hex(&str) -> core::result::Result<Self, koru_lambda_core::distinction_hex::ParseError>
+pub fn koru_lambda_core::engine::Distinction::to_hex(self) -> alloc::string::String
+impl bytemuck::pod::Pod for koru_lambda_core::engine::Distinction
+impl bytemuck::zeroable::Zeroable for koru_lambda_core::engine::Distinction
+impl core::clone::Clone for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::clone(&self) -> koru_lambda_core::engine::Distinction
+impl core::cmp::Eq for koru_lambda_core::engine::Distinction
+impl core::cmp::Ord for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::cmp(&self, &koru_lambda_core::engine::Distinction) -> core::cmp::Ordering
+impl core::cmp::PartialEq for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::eq(&self, &koru_lambda_core::engine::Distinction) -> bool
+impl core::cmp::PartialOrd for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::partial_cmp(&self, &koru_lambda_core::engine::Distinction) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for koru_lambda_core::engine::Distinction
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::Distinction
+impl core::str::traits::FromStr for koru_lambda_core::engine::Distinction
+pub type koru_lambda_core::engine::Distinction::Err = koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::engine::Distinction::from_str(&str) -> core::result::Result<Self, Self::Err>
+impl core::marker::Freeze for koru_lambda_core::engine::Distinction
+impl core::marker::Send for koru_lambda_core::engine::Distinction
+impl core::marker::Sync for koru_lambda_core::engine::Distinction
+impl core::marker::Unpin for koru_lambda_core::engine::Distinction
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::Distinction
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::Distinction
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::Distinction
+pub struct koru_lambda_core::engine::DistinctionEngine
+impl koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
+pub const fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
+pub const fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::distinction_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
+pub fn koru_lambda_core::engine::DistinctionEngine::new() -> Self
+pub fn koru_lambda_core::engine::DistinctionEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)>
+pub fn koru_lambda_core::engine::DistinctionEngine::relationship_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
+pub fn koru_lambda_core::engine::DistinctionEngine::synthesize(&self, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::synthesize_novel(&self, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::SynthesisOutcome
+pub fn koru_lambda_core::engine::DistinctionEngine::verify(&self, koru_lambda_core::engine::RawDistinctionId) -> core::result::Result<koru_lambda_core::engine::Distinction, koru_lambda_core::engine::VerifyError>
+impl koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::project(&self, koru_lambda_core::engine::Distinction) -> koru_lambda_core::projection::ProjectionBuilder<'_, koru_lambda_core::projection::NeedsDirection>
+pub fn koru_lambda_core::engine::DistinctionEngine::project_arc<'a>(&'a alloc::sync::Arc<Self>, koru_lambda_core::engine::Distinction) -> koru_lambda_core::projection::ProjectionBuilder<'a, koru_lambda_core::projection::NeedsDirection>
+pub fn koru_lambda_core::engine::DistinctionEngine::restore_projection<S: koru_lambda_core::projection::Signal>(&self, &[u8], S) -> core::result::Result<koru_lambda_core::projection::Projection<'_, S>, koru_lambda_core::projection::RestoreError>
+impl core::default::Default for koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::default() -> Self
+impl core::fmt::Debug for koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl koru_lambda_core::projection::ReadOnlyEngine for koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
+pub fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::distinction_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
+pub fn koru_lambda_core::engine::DistinctionEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_core::engine::DistinctionEngine::relationship_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
+impl core::marker::Freeze for koru_lambda_core::engine::DistinctionEngine
+impl core::marker::Send for koru_lambda_core::engine::DistinctionEngine
+impl core::marker::Sync for koru_lambda_core::engine::DistinctionEngine
+impl core::marker::Unpin for koru_lambda_core::engine::DistinctionEngine
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::DistinctionEngine
+impl !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::DistinctionEngine
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::DistinctionEngine
+pub struct koru_lambda_core::engine::IdentityHasher
+impl core::default::Default for koru_lambda_core::engine::IdentityHasher
+pub fn koru_lambda_core::engine::IdentityHasher::default() -> koru_lambda_core::engine::IdentityHasher
+impl core::hash::Hasher for koru_lambda_core::engine::IdentityHasher
+pub fn koru_lambda_core::engine::IdentityHasher::finish(&self) -> u64
+pub fn koru_lambda_core::engine::IdentityHasher::write(&mut self, &[u8])
+pub fn koru_lambda_core::engine::IdentityHasher::write_i128(&mut self, i128)
+pub fn koru_lambda_core::engine::IdentityHasher::write_i16(&mut self, i16)
+pub fn koru_lambda_core::engine::IdentityHasher::write_i32(&mut self, i32)
+pub fn koru_lambda_core::engine::IdentityHasher::write_i64(&mut self, i64)
+pub fn koru_lambda_core::engine::IdentityHasher::write_i8(&mut self, i8)
+pub fn koru_lambda_core::engine::IdentityHasher::write_isize(&mut self, isize)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u128(&mut self, u128)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u16(&mut self, u16)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u32(&mut self, u32)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u64(&mut self, u64)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u8(&mut self, u8)
+pub fn koru_lambda_core::engine::IdentityHasher::write_usize(&mut self, usize)
+impl core::marker::Freeze for koru_lambda_core::engine::IdentityHasher
+impl core::marker::Send for koru_lambda_core::engine::IdentityHasher
+impl core::marker::Sync for koru_lambda_core::engine::IdentityHasher
+impl core::marker::Unpin for koru_lambda_core::engine::IdentityHasher
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::IdentityHasher
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::IdentityHasher
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::IdentityHasher
+#[repr(transparent)] pub struct koru_lambda_core::engine::RawDistinctionId(_)
+impl koru_lambda_core::engine::RawDistinctionId
+pub const fn koru_lambda_core::engine::RawDistinctionId::as_bytes(&self) -> &[u8; 16]
+pub const fn koru_lambda_core::engine::RawDistinctionId::from_bytes([u8; 16]) -> Self
+impl koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::from_hex(&str) -> core::result::Result<Self, koru_lambda_core::distinction_hex::ParseError>
+pub fn koru_lambda_core::engine::RawDistinctionId::to_hex(self) -> alloc::string::String
+impl bytemuck::pod::Pod for koru_lambda_core::engine::RawDistinctionId
+impl bytemuck::zeroable::Zeroable for koru_lambda_core::engine::RawDistinctionId
+impl core::clone::Clone for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::clone(&self) -> koru_lambda_core::engine::RawDistinctionId
+impl core::cmp::Eq for koru_lambda_core::engine::RawDistinctionId
+impl core::cmp::Ord for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::cmp(&self, &koru_lambda_core::engine::RawDistinctionId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::eq(&self, &koru_lambda_core::engine::RawDistinctionId) -> bool
+impl core::cmp::PartialOrd for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::partial_cmp(&self, &koru_lambda_core::engine::RawDistinctionId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::RawDistinctionId
+impl core::str::traits::FromStr for koru_lambda_core::engine::RawDistinctionId
+pub type koru_lambda_core::engine::RawDistinctionId::Err = koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::engine::RawDistinctionId::from_str(&str) -> core::result::Result<Self, Self::Err>
+impl core::marker::Freeze for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::Send for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::Sync for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::Unpin for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::RawDistinctionId
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::RawDistinctionId
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::RawDistinctionId
+pub type koru_lambda_core::engine::IdentityBuildHasher = core::hash::BuildHasherDefault<koru_lambda_core::engine::IdentityHasher>
+pub type koru_lambda_core::engine::ParentPair = (koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)
+pub mod koru_lambda_core::primitives
+pub struct koru_lambda_core::primitives::ByteMapping
+impl koru_lambda_core::primitives::ByteMapping
+pub const koru_lambda_core::primitives::ByteMapping::BITS_PER_BYTE: usize
+pub fn koru_lambda_core::primitives::ByteMapping::map_byte_to_distinction(u8, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl core::marker::Freeze for koru_lambda_core::primitives::ByteMapping
+impl core::marker::Send for koru_lambda_core::primitives::ByteMapping
+impl core::marker::Sync for koru_lambda_core::primitives::ByteMapping
+impl core::marker::Unpin for koru_lambda_core::primitives::ByteMapping
+impl core::marker::UnsafeUnpin for koru_lambda_core::primitives::ByteMapping
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::primitives::ByteMapping
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::primitives::ByteMapping
+pub trait koru_lambda_core::primitives::Canonicalizable
+pub fn koru_lambda_core::primitives::Canonicalizable::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl koru_lambda_core::primitives::Canonicalizable for u8
+pub fn u8::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+pub mod koru_lambda_core::projection
+#[non_exhaustive] pub enum koru_lambda_core::projection::Boundary
+pub koru_lambda_core::projection::Boundary::Hops(usize)
+pub koru_lambda_core::projection::Boundary::Saturated
+impl core::clone::Clone for koru_lambda_core::projection::Boundary
+pub fn koru_lambda_core::projection::Boundary::clone(&self) -> koru_lambda_core::projection::Boundary
+impl core::cmp::Eq for koru_lambda_core::projection::Boundary
+impl core::cmp::PartialEq for koru_lambda_core::projection::Boundary
+pub fn koru_lambda_core::projection::Boundary::eq(&self, &koru_lambda_core::projection::Boundary) -> bool
+impl core::fmt::Debug for koru_lambda_core::projection::Boundary
+pub fn koru_lambda_core::projection::Boundary::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::projection::Boundary
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::Boundary
+impl core::marker::Freeze for koru_lambda_core::projection::Boundary
+impl core::marker::Send for koru_lambda_core::projection::Boundary
+impl core::marker::Sync for koru_lambda_core::projection::Boundary
+impl core::marker::Unpin for koru_lambda_core::projection::Boundary
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::Boundary
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::Boundary
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::Boundary
+#[non_exhaustive] pub enum koru_lambda_core::projection::Direction
+pub koru_lambda_core::projection::Direction::Downstream
+pub koru_lambda_core::projection::Direction::Undirected
+pub koru_lambda_core::projection::Direction::Upstream
+impl core::clone::Clone for koru_lambda_core::projection::Direction
+pub fn koru_lambda_core::projection::Direction::clone(&self) -> koru_lambda_core::projection::Direction
+impl core::cmp::Eq for koru_lambda_core::projection::Direction
+impl core::cmp::PartialEq for koru_lambda_core::projection::Direction
+pub fn koru_lambda_core::projection::Direction::eq(&self, &koru_lambda_core::projection::Direction) -> bool
+impl core::fmt::Debug for koru_lambda_core::projection::Direction
+pub fn koru_lambda_core::projection::Direction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::projection::Direction
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::Direction
+impl core::marker::Freeze for koru_lambda_core::projection::Direction
+impl core::marker::Send for koru_lambda_core::projection::Direction
+impl core::marker::Sync for koru_lambda_core::projection::Direction
+impl core::marker::Unpin for koru_lambda_core::projection::Direction
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::Direction
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::Direction
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::Direction
+#[non_exhaustive] pub enum koru_lambda_core::projection::RestoreError
+pub koru_lambda_core::projection::RestoreError::ForeignEngine
+pub koru_lambda_core::projection::RestoreError::IntegerOverflow
+pub koru_lambda_core::projection::RestoreError::IntegerOverflow::field: &'static str
+pub koru_lambda_core::projection::RestoreError::IntegerOverflow::value: u64
+pub koru_lambda_core::projection::RestoreError::Malformed
+pub koru_lambda_core::projection::RestoreError::Malformed::offset: usize
+pub koru_lambda_core::projection::RestoreError::Malformed::reason: &'static str
+pub koru_lambda_core::projection::RestoreError::SignalMismatch
+pub koru_lambda_core::projection::RestoreError::SignalMismatch::actual: [u8; 16]
+pub koru_lambda_core::projection::RestoreError::SignalMismatch::expected: [u8; 16]
+impl core::clone::Clone for koru_lambda_core::projection::RestoreError
+pub fn koru_lambda_core::projection::RestoreError::clone(&self) -> koru_lambda_core::projection::RestoreError
+impl core::cmp::Eq for koru_lambda_core::projection::RestoreError
+impl core::cmp::PartialEq for koru_lambda_core::projection::RestoreError
+pub fn koru_lambda_core::projection::RestoreError::eq(&self, &koru_lambda_core::projection::RestoreError) -> bool
+impl core::convert::From<koru_lambda_core::engine::VerifyError> for koru_lambda_core::projection::RestoreError
+pub fn koru_lambda_core::projection::RestoreError::from(koru_lambda_core::engine::VerifyError) -> Self
+impl core::error::Error for koru_lambda_core::projection::RestoreError
+impl core::fmt::Debug for koru_lambda_core::projection::RestoreError
+pub fn koru_lambda_core::projection::RestoreError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::projection::RestoreError
+pub fn koru_lambda_core::projection::RestoreError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::RestoreError
+impl core::marker::Freeze for koru_lambda_core::projection::RestoreError
+impl core::marker::Send for koru_lambda_core::projection::RestoreError
+impl core::marker::Sync for koru_lambda_core::projection::RestoreError
+impl core::marker::Unpin for koru_lambda_core::projection::RestoreError
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::RestoreError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::RestoreError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::RestoreError
+#[non_exhaustive] pub enum koru_lambda_core::projection::SerializeError
+pub koru_lambda_core::projection::SerializeError::EntryTooLarge
+pub koru_lambda_core::projection::SerializeError::EntryTooLarge::distinction: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::projection::SerializeError::EntryTooLarge::output_len: usize
+impl core::clone::Clone for koru_lambda_core::projection::SerializeError
+pub fn koru_lambda_core::projection::SerializeError::clone(&self) -> koru_lambda_core::projection::SerializeError
+impl core::cmp::Eq for koru_lambda_core::projection::SerializeError
+impl core::cmp::PartialEq for koru_lambda_core::projection::SerializeError
+pub fn koru_lambda_core::projection::SerializeError::eq(&self, &koru_lambda_core::projection::SerializeError) -> bool
+impl core::error::Error for koru_lambda_core::projection::SerializeError
+impl core::fmt::Debug for koru_lambda_core::projection::SerializeError
+pub fn koru_lambda_core::projection::SerializeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::projection::SerializeError
+pub fn koru_lambda_core::projection::SerializeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::SerializeError
+impl core::marker::Freeze for koru_lambda_core::projection::SerializeError
+impl core::marker::Send for koru_lambda_core::projection::SerializeError
+impl core::marker::Sync for koru_lambda_core::projection::SerializeError
+impl core::marker::Unpin for koru_lambda_core::projection::SerializeError
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::SerializeError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::SerializeError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::SerializeError
+pub struct koru_lambda_core::projection::Adjacency
+impl core::clone::Clone for koru_lambda_core::projection::Adjacency
+pub fn koru_lambda_core::projection::Adjacency::clone(&self) -> koru_lambda_core::projection::Adjacency
+impl core::cmp::Eq for koru_lambda_core::projection::Adjacency
+impl core::cmp::PartialEq for koru_lambda_core::projection::Adjacency
+pub fn koru_lambda_core::projection::Adjacency::eq(&self, &koru_lambda_core::projection::Adjacency) -> bool
+impl core::default::Default for koru_lambda_core::projection::Adjacency
+pub fn koru_lambda_core::projection::Adjacency::default() -> koru_lambda_core::projection::Adjacency
+impl core::fmt::Debug for koru_lambda_core::projection::Adjacency
+pub fn koru_lambda_core::projection::Adjacency::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::projection::Adjacency
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::Adjacency
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Adjacency
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::Adjacency
+pub type koru_lambda_core::projection::Adjacency::Output = core::option::Option<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)>
+pub fn koru_lambda_core::projection::Adjacency::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::Adjacency::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::Adjacency::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl core::marker::Freeze for koru_lambda_core::projection::Adjacency
+impl core::marker::Send for koru_lambda_core::projection::Adjacency
+impl core::marker::Sync for koru_lambda_core::projection::Adjacency
+impl core::marker::Unpin for koru_lambda_core::projection::Adjacency
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::Adjacency
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::Adjacency
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::Adjacency
+pub struct koru_lambda_core::projection::Degree
+impl core::clone::Clone for koru_lambda_core::projection::Degree
+pub fn koru_lambda_core::projection::Degree::clone(&self) -> koru_lambda_core::projection::Degree
+impl core::cmp::Eq for koru_lambda_core::projection::Degree
+impl core::cmp::PartialEq for koru_lambda_core::projection::Degree
+pub fn koru_lambda_core::projection::Degree::eq(&self, &koru_lambda_core::projection::Degree) -> bool
+impl core::default::Default for koru_lambda_core::projection::Degree
+pub fn koru_lambda_core::projection::Degree::default() -> koru_lambda_core::projection::Degree
+impl core::fmt::Debug for koru_lambda_core::projection::Degree
+pub fn koru_lambda_core::projection::Degree::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::projection::Degree
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::Degree
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Degree
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::Degree
+pub type koru_lambda_core::projection::Degree::Output = usize
+pub fn koru_lambda_core::projection::Degree::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::Degree::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::Degree::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl core::marker::Freeze for koru_lambda_core::projection::Degree
+impl core::marker::Send for koru_lambda_core::projection::Degree
+impl core::marker::Sync for koru_lambda_core::projection::Degree
+impl core::marker::Unpin for koru_lambda_core::projection::Degree
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::Degree
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::Degree
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::Degree
+pub struct koru_lambda_core::projection::HopDistance
+impl core::clone::Clone for koru_lambda_core::projection::HopDistance
+pub fn koru_lambda_core::projection::HopDistance::clone(&self) -> koru_lambda_core::projection::HopDistance
+impl core::cmp::Eq for koru_lambda_core::projection::HopDistance
+impl core::cmp::PartialEq for koru_lambda_core::projection::HopDistance
+pub fn koru_lambda_core::projection::HopDistance::eq(&self, &koru_lambda_core::projection::HopDistance) -> bool
+impl core::default::Default for koru_lambda_core::projection::HopDistance
+pub fn koru_lambda_core::projection::HopDistance::default() -> koru_lambda_core::projection::HopDistance
+impl core::fmt::Debug for koru_lambda_core::projection::HopDistance
+pub fn koru_lambda_core::projection::HopDistance::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::projection::HopDistance
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::HopDistance
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::HopDistance
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::HopDistance
+pub type koru_lambda_core::projection::HopDistance::Output = usize
+pub fn koru_lambda_core::projection::HopDistance::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::HopDistance::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::HopDistance::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl core::marker::Freeze for koru_lambda_core::projection::HopDistance
+impl core::marker::Send for koru_lambda_core::projection::HopDistance
+impl core::marker::Sync for koru_lambda_core::projection::HopDistance
+impl core::marker::Unpin for koru_lambda_core::projection::HopDistance
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::HopDistance
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::HopDistance
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::HopDistance
+pub struct koru_lambda_core::projection::NeedsBoundary
+impl core::marker::Freeze for koru_lambda_core::projection::NeedsBoundary
+impl core::marker::Send for koru_lambda_core::projection::NeedsBoundary
+impl core::marker::Sync for koru_lambda_core::projection::NeedsBoundary
+impl core::marker::Unpin for koru_lambda_core::projection::NeedsBoundary
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::NeedsBoundary
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::NeedsBoundary
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::NeedsBoundary
+pub struct koru_lambda_core::projection::NeedsDirection
+impl core::marker::Freeze for koru_lambda_core::projection::NeedsDirection
+impl core::marker::Send for koru_lambda_core::projection::NeedsDirection
+impl core::marker::Sync for koru_lambda_core::projection::NeedsDirection
+impl core::marker::Unpin for koru_lambda_core::projection::NeedsDirection
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::NeedsDirection
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::NeedsDirection
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::NeedsDirection
+pub struct koru_lambda_core::projection::NeedsSignal
+impl core::marker::Freeze for koru_lambda_core::projection::NeedsSignal
+impl core::marker::Send for koru_lambda_core::projection::NeedsSignal
+impl core::marker::Sync for koru_lambda_core::projection::NeedsSignal
+impl core::marker::Unpin for koru_lambda_core::projection::NeedsSignal
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::NeedsSignal
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::NeedsSignal
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::NeedsSignal
+#[non_exhaustive] pub struct koru_lambda_core::projection::Projection<'e, S: koru_lambda_core::projection::Signal>
+impl<'e, S: koru_lambda_core::projection::Signal> koru_lambda_core::projection::Projection<'e, S>
+pub fn koru_lambda_core::projection::Projection<'e, S>::aggregate(&self) -> core::option::Option<<S as koru_lambda_core::projection::Signal>::Output>
+pub fn koru_lambda_core::projection::Projection<'e, S>::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn koru_lambda_core::projection::Projection<'e, S>::contains(&self, &koru_lambda_core::engine::Distinction) -> bool
+pub const fn koru_lambda_core::projection::Projection<'e, S>::output(&self) -> &koru_lambda_core::projection::ProjectionOutput<S>
+pub fn koru_lambda_core::projection::Projection<'e, S>::projection_id(&self) -> koru_lambda_core::projection::ProjectionId
+pub const fn koru_lambda_core::projection::Projection<'e, S>::spec(&self) -> &koru_lambda_core::projection::ProjectionSpec<S>
+pub fn koru_lambda_core::projection::Projection<'e, S>::try_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, koru_lambda_core::projection::SerializeError>
+impl<'e, S> core::fmt::Debug for koru_lambda_core::projection::Projection<'e, S> where S: core::fmt::Debug + koru_lambda_core::projection::Signal, <S as koru_lambda_core::projection::Signal>::Output: core::fmt::Debug
+pub fn koru_lambda_core::projection::Projection<'e, S>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'e, S> core::marker::Freeze for koru_lambda_core::projection::Projection<'e, S> where S: core::marker::Freeze
+impl<'e, S> core::marker::Send for koru_lambda_core::projection::Projection<'e, S>
+impl<'e, S> core::marker::Sync for koru_lambda_core::projection::Projection<'e, S>
+impl<'e, S> core::marker::Unpin for koru_lambda_core::projection::Projection<'e, S> where S: core::marker::Unpin
+impl<'e, S> core::marker::UnsafeUnpin for koru_lambda_core::projection::Projection<'e, S> where S: core::marker::UnsafeUnpin
+impl<'e, S> !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::Projection<'e, S>
+impl<'e, S> !core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::Projection<'e, S>
+pub struct koru_lambda_core::projection::ProjectionBuilder<'e, State>
+impl<'e> koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsBoundary>
+pub fn koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsBoundary>::boundary(self, koru_lambda_core::projection::Boundary) -> koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsSignal>
+pub fn koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsBoundary>::hops(self, usize) -> koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsSignal>
+pub fn koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsBoundary>::saturated(self) -> koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsSignal>
+impl<'e> koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsDirection>
+pub fn koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsDirection>::direction(self, koru_lambda_core::projection::Direction) -> koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsBoundary>
+impl<'e> koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsSignal>
+pub fn koru_lambda_core::projection::ProjectionBuilder<'e, koru_lambda_core::projection::NeedsSignal>::signal<S: koru_lambda_core::projection::Signal>(self, S) -> koru_lambda_core::projection::ReadyBuilder<'e, S>
+impl<'e, State> core::marker::Freeze for koru_lambda_core::projection::ProjectionBuilder<'e, State>
+impl<'e, State> core::marker::Send for koru_lambda_core::projection::ProjectionBuilder<'e, State> where State: core::marker::Send
+impl<'e, State> core::marker::Sync for koru_lambda_core::projection::ProjectionBuilder<'e, State> where State: core::marker::Sync
+impl<'e, State> core::marker::Unpin for koru_lambda_core::projection::ProjectionBuilder<'e, State> where State: core::marker::Unpin
+impl<'e, State> core::marker::UnsafeUnpin for koru_lambda_core::projection::ProjectionBuilder<'e, State>
+impl<'e, State> !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::ProjectionBuilder<'e, State>
+impl<'e, State> !core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::ProjectionBuilder<'e, State>
+#[repr(transparent)] pub struct koru_lambda_core::projection::ProjectionId(_)
+impl koru_lambda_core::projection::ProjectionId
+pub const fn koru_lambda_core::projection::ProjectionId::as_bytes(&self) -> &[u8; 32]
+impl core::clone::Clone for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::clone(&self) -> koru_lambda_core::projection::ProjectionId
+impl core::cmp::Eq for koru_lambda_core::projection::ProjectionId
+impl core::cmp::Ord for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::cmp(&self, &koru_lambda_core::projection::ProjectionId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::eq(&self, &koru_lambda_core::projection::ProjectionId) -> bool
+impl core::cmp::PartialOrd for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::partial_cmp(&self, &koru_lambda_core::projection::ProjectionId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for koru_lambda_core::projection::ProjectionId
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::ProjectionId
+impl core::marker::Freeze for koru_lambda_core::projection::ProjectionId
+impl core::marker::Send for koru_lambda_core::projection::ProjectionId
+impl core::marker::Sync for koru_lambda_core::projection::ProjectionId
+impl core::marker::Unpin for koru_lambda_core::projection::ProjectionId
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::ProjectionId
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::ProjectionId
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::ProjectionId
+#[non_exhaustive] pub struct koru_lambda_core::projection::ProjectionOutput<S: koru_lambda_core::projection::Signal>
+impl<S: koru_lambda_core::projection::Signal> koru_lambda_core::projection::ProjectionOutput<S>
+pub fn koru_lambda_core::projection::ProjectionOutput<S>::contains(&self, &koru_lambda_core::engine::Distinction) -> bool
+pub fn koru_lambda_core::projection::ProjectionOutput<S>::is_empty(&self) -> bool
+pub fn koru_lambda_core::projection::ProjectionOutput<S>::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = (koru_lambda_core::engine::Distinction, &<S as koru_lambda_core::projection::Signal>::Output)> + '_
+pub fn koru_lambda_core::projection::ProjectionOutput<S>::len(&self) -> usize
+impl<S> core::marker::Freeze for koru_lambda_core::projection::ProjectionOutput<S>
+impl<S> core::marker::Send for koru_lambda_core::projection::ProjectionOutput<S>
+impl<S> core::marker::Sync for koru_lambda_core::projection::ProjectionOutput<S>
+impl<S> core::marker::Unpin for koru_lambda_core::projection::ProjectionOutput<S>
+impl<S> core::marker::UnsafeUnpin for koru_lambda_core::projection::ProjectionOutput<S>
+impl<S> core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::ProjectionOutput<S> where <S as koru_lambda_core::projection::Signal>::Output: core::panic::unwind_safe::RefUnwindSafe
+impl<S> core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::ProjectionOutput<S> where <S as koru_lambda_core::projection::Signal>::Output: core::panic::unwind_safe::RefUnwindSafe
+#[non_exhaustive] pub struct koru_lambda_core::projection::ProjectionSpec<S: koru_lambda_core::projection::Signal>
+pub koru_lambda_core::projection::ProjectionSpec::boundary: koru_lambda_core::projection::Boundary
+pub koru_lambda_core::projection::ProjectionSpec::direction: koru_lambda_core::projection::Direction
+pub koru_lambda_core::projection::ProjectionSpec::root: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::projection::ProjectionSpec::signal: S
+impl<S: core::clone::Clone + koru_lambda_core::projection::Signal> core::clone::Clone for koru_lambda_core::projection::ProjectionSpec<S>
+pub fn koru_lambda_core::projection::ProjectionSpec<S>::clone(&self) -> koru_lambda_core::projection::ProjectionSpec<S>
+impl<S> core::marker::Freeze for koru_lambda_core::projection::ProjectionSpec<S> where S: core::marker::Freeze
+impl<S> core::marker::Send for koru_lambda_core::projection::ProjectionSpec<S>
+impl<S> core::marker::Sync for koru_lambda_core::projection::ProjectionSpec<S>
+impl<S> core::marker::Unpin for koru_lambda_core::projection::ProjectionSpec<S> where S: core::marker::Unpin
+impl<S> core::marker::UnsafeUnpin for koru_lambda_core::projection::ProjectionSpec<S> where S: core::marker::UnsafeUnpin
+impl<S> core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::ProjectionSpec<S> where S: core::panic::unwind_safe::RefUnwindSafe
+impl<S> core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::ProjectionSpec<S> where S: core::panic::unwind_safe::UnwindSafe
+pub struct koru_lambda_core::projection::ReadyBuilder<'e, S: koru_lambda_core::projection::Signal>
+impl<'e, S: koru_lambda_core::projection::Signal> koru_lambda_core::projection::ReadyBuilder<'e, S>
+pub fn koru_lambda_core::projection::ReadyBuilder<'e, S>::materialize(self) -> koru_lambda_core::projection::Projection<'e, S>
+impl<'e, S> core::marker::Freeze for koru_lambda_core::projection::ReadyBuilder<'e, S> where S: core::marker::Freeze
+impl<'e, S> core::marker::Send for koru_lambda_core::projection::ReadyBuilder<'e, S>
+impl<'e, S> core::marker::Sync for koru_lambda_core::projection::ReadyBuilder<'e, S>
+impl<'e, S> core::marker::Unpin for koru_lambda_core::projection::ReadyBuilder<'e, S> where S: core::marker::Unpin
+impl<'e, S> core::marker::UnsafeUnpin for koru_lambda_core::projection::ReadyBuilder<'e, S> where S: core::marker::UnsafeUnpin
+impl<'e, S> !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::ReadyBuilder<'e, S>
+impl<'e, S> !core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::ReadyBuilder<'e, S>
+#[non_exhaustive] pub struct koru_lambda_core::projection::SignalContext<'e>
+pub koru_lambda_core::projection::SignalContext::boundary: koru_lambda_core::projection::Boundary
+pub koru_lambda_core::projection::SignalContext::direction: koru_lambda_core::projection::Direction
+pub koru_lambda_core::projection::SignalContext::engine: &'e (dyn koru_lambda_core::projection::ReadOnlyEngine + core::marker::Send + core::marker::Sync)
+pub koru_lambda_core::projection::SignalContext::root: koru_lambda_core::engine::Distinction
+impl<'e> core::marker::Freeze for koru_lambda_core::projection::SignalContext<'e>
+impl<'e> core::marker::Send for koru_lambda_core::projection::SignalContext<'e>
+impl<'e> core::marker::Sync for koru_lambda_core::projection::SignalContext<'e>
+impl<'e> core::marker::Unpin for koru_lambda_core::projection::SignalContext<'e>
+impl<'e> core::marker::UnsafeUnpin for koru_lambda_core::projection::SignalContext<'e>
+impl<'e> !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::SignalContext<'e>
+impl<'e> !core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::SignalContext<'e>
+pub trait koru_lambda_core::projection::CanonicalBytes
+pub fn koru_lambda_core::projection::CanonicalBytes::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+impl koru_lambda_core::projection::CanonicalBytes for bool
+pub fn bool::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+impl koru_lambda_core::projection::CanonicalBytes for core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn core::option::Option<koru_lambda_core::engine::ParentPair>::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+impl koru_lambda_core::projection::CanonicalBytes for usize
+pub fn usize::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub trait koru_lambda_core::projection::CoreSignal: koru_lambda_core::projection::Signal + koru_lambda_core::projection::private::Sealed
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Adjacency
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Degree
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::HopDistance
+pub trait koru_lambda_core::projection::ReadOnlyEngine: koru_lambda_core::projection::private::Sealed + core::marker::Send + core::marker::Sync
+pub fn koru_lambda_core::projection::ReadOnlyEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
+pub fn koru_lambda_core::projection::ReadOnlyEngine::d0(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::projection::ReadOnlyEngine::d1(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::projection::ReadOnlyEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
+pub fn koru_lambda_core::projection::ReadOnlyEngine::distinction_count(&self) -> usize
+pub fn koru_lambda_core::projection::ReadOnlyEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
+pub fn koru_lambda_core::projection::ReadOnlyEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_core::projection::ReadOnlyEngine::relationship_count(&self) -> usize
+pub fn koru_lambda_core::projection::ReadOnlyEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
+pub fn koru_lambda_core::projection::ReadOnlyEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
+impl koru_lambda_core::projection::ReadOnlyEngine for koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
+pub fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::distinction_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
+pub fn koru_lambda_core::engine::DistinctionEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_core::engine::DistinctionEngine::relationship_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
+pub trait koru_lambda_core::projection::Signal: core::clone::Clone + core::marker::Send + core::marker::Sync + 'static
+pub type koru_lambda_core::projection::Signal::Output: core::marker::Send + core::marker::Sync + koru_lambda_core::projection::CanonicalBytes + 'static
+pub fn koru_lambda_core::projection::Signal::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::Signal::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::Signal::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::Adjacency
+pub type koru_lambda_core::projection::Adjacency::Output = core::option::Option<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)>
+pub fn koru_lambda_core::projection::Adjacency::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::Adjacency::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::Adjacency::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::Degree
+pub type koru_lambda_core::projection::Degree::Output = usize
+pub fn koru_lambda_core::projection::Degree::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::Degree::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::Degree::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::HopDistance
+pub type koru_lambda_core::projection::HopDistance::Output = usize
+pub fn koru_lambda_core::projection::HopDistance::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::HopDistance::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::HopDistance::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+pub fn koru_lambda_core::projection::signal_identity<S: koru_lambda_core::projection::Signal>(&S) -> [u8; 16]
+pub fn koru_lambda_core::projection::type_id_of<S: koru_lambda_core::projection::CoreSignal>() -> [u8; 16]
+pub type koru_lambda_core::projection::SignalOutputs<S> = alloc::collections::btree::map::BTreeMap<koru_lambda_core::engine::Distinction, <S as koru_lambda_core::projection::Signal>::Output>
+pub mod koru_lambda_core::recorder
+pub struct koru_lambda_core::recorder::SynthesisRecorder
+impl koru_lambda_core::recorder::SynthesisRecorder
+pub fn koru_lambda_core::recorder::SynthesisRecorder::log(&self) -> &[koru_lambda_core::engine::Distinction]
+pub fn koru_lambda_core::recorder::SynthesisRecorder::new() -> Self
+pub fn koru_lambda_core::recorder::SynthesisRecorder::synthesize(&mut self, &koru_lambda_core::engine::DistinctionEngine, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::Distinction
+impl core::default::Default for koru_lambda_core::recorder::SynthesisRecorder
+pub fn koru_lambda_core::recorder::SynthesisRecorder::default() -> Self
+impl core::marker::Freeze for koru_lambda_core::recorder::SynthesisRecorder
+impl !core::marker::Send for koru_lambda_core::recorder::SynthesisRecorder
+impl !core::marker::Sync for koru_lambda_core::recorder::SynthesisRecorder
+impl core::marker::Unpin for koru_lambda_core::recorder::SynthesisRecorder
+impl core::marker::UnsafeUnpin for koru_lambda_core::recorder::SynthesisRecorder
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::recorder::SynthesisRecorder
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::recorder::SynthesisRecorder
+pub mod koru_lambda_core::replay
+#[non_exhaustive] pub enum koru_lambda_core::replay::ReplayError
+pub koru_lambda_core::replay::ReplayError::Mismatch
+pub koru_lambda_core::replay::ReplayError::Mismatch::actual: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::replay::ReplayError::Mismatch::child: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::replay::ReplayError::Mismatch::expected: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::replay::ReplayError::MissingPrimordial
+pub koru_lambda_core::replay::ReplayError::Unreachable(usize)
+impl core::clone::Clone for koru_lambda_core::replay::ReplayError
+pub fn koru_lambda_core::replay::ReplayError::clone(&self) -> koru_lambda_core::replay::ReplayError
+impl core::cmp::Eq for koru_lambda_core::replay::ReplayError
+impl core::cmp::PartialEq for koru_lambda_core::replay::ReplayError
+pub fn koru_lambda_core::replay::ReplayError::eq(&self, &koru_lambda_core::replay::ReplayError) -> bool
+impl core::error::Error for koru_lambda_core::replay::ReplayError
+impl core::fmt::Debug for koru_lambda_core::replay::ReplayError
+pub fn koru_lambda_core::replay::ReplayError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::replay::ReplayError
+pub fn koru_lambda_core::replay::ReplayError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_core::replay::ReplayError
+impl core::marker::Freeze for koru_lambda_core::replay::ReplayError
+impl core::marker::Send for koru_lambda_core::replay::ReplayError
+impl core::marker::Sync for koru_lambda_core::replay::ReplayError
+impl core::marker::Unpin for koru_lambda_core::replay::ReplayError
+impl core::marker::UnsafeUnpin for koru_lambda_core::replay::ReplayError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::replay::ReplayError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::replay::ReplayError
+pub fn koru_lambda_core::replay::build_children_index(&[(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)]) -> std::collections::hash::map::HashMap<koru_lambda_core::engine::Distinction, alloc::vec::Vec<koru_lambda_core::engine::Distinction>>
+pub fn koru_lambda_core::replay::replay_topological(impl core::iter::traits::collect::IntoIterator<Item = (koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>) -> core::result::Result<alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, koru_lambda_core::replay::ReplayError>
+pub mod koru_lambda_core::vectors
+pub const koru_lambda_core::vectors::ADJACENCY_UPSTREAM_HOPS2_CANONICAL_HEX: &str
+pub const koru_lambda_core::vectors::C_HEX: &str
+pub const koru_lambda_core::vectors::D_HEX: &str
+pub const koru_lambda_core::vectors::E_HEX: &str
+#[non_exhaustive] pub enum koru_lambda_core::InvariantError
+pub koru_lambda_core::InvariantError::BinaryParentageMismatch
+pub koru_lambda_core::InvariantError::BinaryParentageMismatch::all_distinctions: usize
+pub koru_lambda_core::InvariantError::BinaryParentageMismatch::parents_of_plus_two: usize
+impl core::clone::Clone for koru_lambda_core::engine::InvariantError
+pub fn koru_lambda_core::engine::InvariantError::clone(&self) -> koru_lambda_core::engine::InvariantError
+impl core::cmp::Eq for koru_lambda_core::engine::InvariantError
+impl core::cmp::PartialEq for koru_lambda_core::engine::InvariantError
+pub fn koru_lambda_core::engine::InvariantError::eq(&self, &koru_lambda_core::engine::InvariantError) -> bool
+impl core::error::Error for koru_lambda_core::engine::InvariantError
+impl core::fmt::Debug for koru_lambda_core::engine::InvariantError
+pub fn koru_lambda_core::engine::InvariantError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::engine::InvariantError
+pub fn koru_lambda_core::engine::InvariantError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::InvariantError
+impl core::marker::Freeze for koru_lambda_core::engine::InvariantError
+impl core::marker::Send for koru_lambda_core::engine::InvariantError
+impl core::marker::Sync for koru_lambda_core::engine::InvariantError
+impl core::marker::Unpin for koru_lambda_core::engine::InvariantError
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::InvariantError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::InvariantError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::InvariantError
+#[non_exhaustive] pub enum koru_lambda_core::ParseError
+pub koru_lambda_core::ParseError::InvalidChar
+pub koru_lambda_core::ParseError::InvalidChar::found: char
+pub koru_lambda_core::ParseError::InvalidChar::position: usize
+pub koru_lambda_core::ParseError::InvalidLength(usize)
+pub koru_lambda_core::ParseError::NonAscii
+pub koru_lambda_core::ParseError::NonAscii::position: usize
+impl core::clone::Clone for koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::distinction_hex::ParseError::clone(&self) -> koru_lambda_core::distinction_hex::ParseError
+impl core::cmp::Eq for koru_lambda_core::distinction_hex::ParseError
+impl core::cmp::PartialEq for koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::distinction_hex::ParseError::eq(&self, &koru_lambda_core::distinction_hex::ParseError) -> bool
+impl core::error::Error for koru_lambda_core::distinction_hex::ParseError
+impl core::fmt::Debug for koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::distinction_hex::ParseError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::distinction_hex::ParseError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::Freeze for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::Send for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::Sync for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::Unpin for koru_lambda_core::distinction_hex::ParseError
+impl core::marker::UnsafeUnpin for koru_lambda_core::distinction_hex::ParseError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::distinction_hex::ParseError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::distinction_hex::ParseError
+#[non_exhaustive] pub enum koru_lambda_core::ReplayError
+pub koru_lambda_core::ReplayError::Mismatch
+pub koru_lambda_core::ReplayError::Mismatch::actual: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::ReplayError::Mismatch::child: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::ReplayError::Mismatch::expected: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::ReplayError::MissingPrimordial
+pub koru_lambda_core::ReplayError::Unreachable(usize)
+impl core::clone::Clone for koru_lambda_core::replay::ReplayError
+pub fn koru_lambda_core::replay::ReplayError::clone(&self) -> koru_lambda_core::replay::ReplayError
+impl core::cmp::Eq for koru_lambda_core::replay::ReplayError
+impl core::cmp::PartialEq for koru_lambda_core::replay::ReplayError
+pub fn koru_lambda_core::replay::ReplayError::eq(&self, &koru_lambda_core::replay::ReplayError) -> bool
+impl core::error::Error for koru_lambda_core::replay::ReplayError
+impl core::fmt::Debug for koru_lambda_core::replay::ReplayError
+pub fn koru_lambda_core::replay::ReplayError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::replay::ReplayError
+pub fn koru_lambda_core::replay::ReplayError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_core::replay::ReplayError
+impl core::marker::Freeze for koru_lambda_core::replay::ReplayError
+impl core::marker::Send for koru_lambda_core::replay::ReplayError
+impl core::marker::Sync for koru_lambda_core::replay::ReplayError
+impl core::marker::Unpin for koru_lambda_core::replay::ReplayError
+impl core::marker::UnsafeUnpin for koru_lambda_core::replay::ReplayError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::replay::ReplayError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::replay::ReplayError
+#[non_exhaustive] pub enum koru_lambda_core::SynthesisOutcome
+pub koru_lambda_core::SynthesisOutcome::Existing(koru_lambda_core::engine::Distinction)
+pub koru_lambda_core::SynthesisOutcome::Novel(koru_lambda_core::engine::Distinction)
+impl koru_lambda_core::engine::SynthesisOutcome
+pub const fn koru_lambda_core::engine::SynthesisOutcome::distinction(&self) -> koru_lambda_core::engine::Distinction
+pub const fn koru_lambda_core::engine::SynthesisOutcome::into_distinction(self) -> koru_lambda_core::engine::Distinction
+pub const fn koru_lambda_core::engine::SynthesisOutcome::is_novel(&self) -> bool
+impl core::clone::Clone for koru_lambda_core::engine::SynthesisOutcome
+pub fn koru_lambda_core::engine::SynthesisOutcome::clone(&self) -> koru_lambda_core::engine::SynthesisOutcome
+impl core::cmp::Eq for koru_lambda_core::engine::SynthesisOutcome
+impl core::cmp::PartialEq for koru_lambda_core::engine::SynthesisOutcome
+pub fn koru_lambda_core::engine::SynthesisOutcome::eq(&self, &koru_lambda_core::engine::SynthesisOutcome) -> bool
+impl core::fmt::Debug for koru_lambda_core::engine::SynthesisOutcome
+pub fn koru_lambda_core::engine::SynthesisOutcome::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::Freeze for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::Send for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::Sync for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::Unpin for koru_lambda_core::engine::SynthesisOutcome
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::SynthesisOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::SynthesisOutcome
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::SynthesisOutcome
+#[non_exhaustive] pub enum koru_lambda_core::VerifyError
+pub koru_lambda_core::VerifyError::ForeignBytes
+impl core::clone::Clone for koru_lambda_core::engine::VerifyError
+pub fn koru_lambda_core::engine::VerifyError::clone(&self) -> koru_lambda_core::engine::VerifyError
+impl core::cmp::Eq for koru_lambda_core::engine::VerifyError
+impl core::cmp::PartialEq for koru_lambda_core::engine::VerifyError
+pub fn koru_lambda_core::engine::VerifyError::eq(&self, &koru_lambda_core::engine::VerifyError) -> bool
+impl core::convert::From<koru_lambda_core::engine::VerifyError> for koru_lambda_core::projection::RestoreError
+pub fn koru_lambda_core::projection::RestoreError::from(koru_lambda_core::engine::VerifyError) -> Self
+impl core::error::Error for koru_lambda_core::engine::VerifyError
+impl core::fmt::Debug for koru_lambda_core::engine::VerifyError
+pub fn koru_lambda_core::engine::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::engine::VerifyError
+pub fn koru_lambda_core::engine::VerifyError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::engine::VerifyError
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::VerifyError
+impl core::marker::Freeze for koru_lambda_core::engine::VerifyError
+impl core::marker::Send for koru_lambda_core::engine::VerifyError
+impl core::marker::Sync for koru_lambda_core::engine::VerifyError
+impl core::marker::Unpin for koru_lambda_core::engine::VerifyError
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::VerifyError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::VerifyError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::VerifyError
+pub struct koru_lambda_core::Adjacency
+impl core::clone::Clone for koru_lambda_core::projection::Adjacency
+pub fn koru_lambda_core::projection::Adjacency::clone(&self) -> koru_lambda_core::projection::Adjacency
+impl core::cmp::Eq for koru_lambda_core::projection::Adjacency
+impl core::cmp::PartialEq for koru_lambda_core::projection::Adjacency
+pub fn koru_lambda_core::projection::Adjacency::eq(&self, &koru_lambda_core::projection::Adjacency) -> bool
+impl core::default::Default for koru_lambda_core::projection::Adjacency
+pub fn koru_lambda_core::projection::Adjacency::default() -> koru_lambda_core::projection::Adjacency
+impl core::fmt::Debug for koru_lambda_core::projection::Adjacency
+pub fn koru_lambda_core::projection::Adjacency::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::projection::Adjacency
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::Adjacency
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Adjacency
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::Adjacency
+pub type koru_lambda_core::projection::Adjacency::Output = core::option::Option<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)>
+pub fn koru_lambda_core::projection::Adjacency::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::Adjacency::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::Adjacency::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl core::marker::Freeze for koru_lambda_core::projection::Adjacency
+impl core::marker::Send for koru_lambda_core::projection::Adjacency
+impl core::marker::Sync for koru_lambda_core::projection::Adjacency
+impl core::marker::Unpin for koru_lambda_core::projection::Adjacency
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::Adjacency
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::Adjacency
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::Adjacency
+pub struct koru_lambda_core::ByteMapping
+impl koru_lambda_core::primitives::ByteMapping
+pub const koru_lambda_core::primitives::ByteMapping::BITS_PER_BYTE: usize
+pub fn koru_lambda_core::primitives::ByteMapping::map_byte_to_distinction(u8, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl core::marker::Freeze for koru_lambda_core::primitives::ByteMapping
+impl core::marker::Send for koru_lambda_core::primitives::ByteMapping
+impl core::marker::Sync for koru_lambda_core::primitives::ByteMapping
+impl core::marker::Unpin for koru_lambda_core::primitives::ByteMapping
+impl core::marker::UnsafeUnpin for koru_lambda_core::primitives::ByteMapping
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::primitives::ByteMapping
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::primitives::ByteMapping
+pub struct koru_lambda_core::Degree
+impl core::clone::Clone for koru_lambda_core::projection::Degree
+pub fn koru_lambda_core::projection::Degree::clone(&self) -> koru_lambda_core::projection::Degree
+impl core::cmp::Eq for koru_lambda_core::projection::Degree
+impl core::cmp::PartialEq for koru_lambda_core::projection::Degree
+pub fn koru_lambda_core::projection::Degree::eq(&self, &koru_lambda_core::projection::Degree) -> bool
+impl core::default::Default for koru_lambda_core::projection::Degree
+pub fn koru_lambda_core::projection::Degree::default() -> koru_lambda_core::projection::Degree
+impl core::fmt::Debug for koru_lambda_core::projection::Degree
+pub fn koru_lambda_core::projection::Degree::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::projection::Degree
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::Degree
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Degree
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::Degree
+pub type koru_lambda_core::projection::Degree::Output = usize
+pub fn koru_lambda_core::projection::Degree::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::Degree::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::Degree::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl core::marker::Freeze for koru_lambda_core::projection::Degree
+impl core::marker::Send for koru_lambda_core::projection::Degree
+impl core::marker::Sync for koru_lambda_core::projection::Degree
+impl core::marker::Unpin for koru_lambda_core::projection::Degree
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::Degree
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::Degree
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::Degree
+#[repr(transparent)] pub struct koru_lambda_core::Distinction(_)
+impl koru_lambda_core::engine::Distinction
+pub const fn koru_lambda_core::engine::Distinction::as_bytes(&self) -> &[u8; 16]
+impl koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::from_hex(&str) -> core::result::Result<Self, koru_lambda_core::distinction_hex::ParseError>
+pub fn koru_lambda_core::engine::Distinction::to_hex(self) -> alloc::string::String
+impl bytemuck::pod::Pod for koru_lambda_core::engine::Distinction
+impl bytemuck::zeroable::Zeroable for koru_lambda_core::engine::Distinction
+impl core::clone::Clone for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::clone(&self) -> koru_lambda_core::engine::Distinction
+impl core::cmp::Eq for koru_lambda_core::engine::Distinction
+impl core::cmp::Ord for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::cmp(&self, &koru_lambda_core::engine::Distinction) -> core::cmp::Ordering
+impl core::cmp::PartialEq for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::eq(&self, &koru_lambda_core::engine::Distinction) -> bool
+impl core::cmp::PartialOrd for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::partial_cmp(&self, &koru_lambda_core::engine::Distinction) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::Distinction::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for koru_lambda_core::engine::Distinction
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::Distinction
+impl core::str::traits::FromStr for koru_lambda_core::engine::Distinction
+pub type koru_lambda_core::engine::Distinction::Err = koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::engine::Distinction::from_str(&str) -> core::result::Result<Self, Self::Err>
+impl core::marker::Freeze for koru_lambda_core::engine::Distinction
+impl core::marker::Send for koru_lambda_core::engine::Distinction
+impl core::marker::Sync for koru_lambda_core::engine::Distinction
+impl core::marker::Unpin for koru_lambda_core::engine::Distinction
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::Distinction
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::Distinction
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::Distinction
+pub struct koru_lambda_core::DistinctionEngine
+impl koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
+pub const fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
+pub const fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::distinction_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
+pub fn koru_lambda_core::engine::DistinctionEngine::new() -> Self
+pub fn koru_lambda_core::engine::DistinctionEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)>
+pub fn koru_lambda_core::engine::DistinctionEngine::relationship_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
+pub fn koru_lambda_core::engine::DistinctionEngine::synthesize(&self, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::synthesize_novel(&self, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::SynthesisOutcome
+pub fn koru_lambda_core::engine::DistinctionEngine::verify(&self, koru_lambda_core::engine::RawDistinctionId) -> core::result::Result<koru_lambda_core::engine::Distinction, koru_lambda_core::engine::VerifyError>
+impl koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::project(&self, koru_lambda_core::engine::Distinction) -> koru_lambda_core::projection::ProjectionBuilder<'_, koru_lambda_core::projection::NeedsDirection>
+pub fn koru_lambda_core::engine::DistinctionEngine::project_arc<'a>(&'a alloc::sync::Arc<Self>, koru_lambda_core::engine::Distinction) -> koru_lambda_core::projection::ProjectionBuilder<'a, koru_lambda_core::projection::NeedsDirection>
+pub fn koru_lambda_core::engine::DistinctionEngine::restore_projection<S: koru_lambda_core::projection::Signal>(&self, &[u8], S) -> core::result::Result<koru_lambda_core::projection::Projection<'_, S>, koru_lambda_core::projection::RestoreError>
+impl core::default::Default for koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::default() -> Self
+impl core::fmt::Debug for koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl koru_lambda_core::projection::ReadOnlyEngine for koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
+pub fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::engine::DistinctionEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::distinction_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
+pub fn koru_lambda_core::engine::DistinctionEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_core::engine::DistinctionEngine::relationship_count(&self) -> usize
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
+pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
+impl core::marker::Freeze for koru_lambda_core::engine::DistinctionEngine
+impl core::marker::Send for koru_lambda_core::engine::DistinctionEngine
+impl core::marker::Sync for koru_lambda_core::engine::DistinctionEngine
+impl core::marker::Unpin for koru_lambda_core::engine::DistinctionEngine
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::DistinctionEngine
+impl !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::DistinctionEngine
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::DistinctionEngine
+pub struct koru_lambda_core::HopDistance
+impl core::clone::Clone for koru_lambda_core::projection::HopDistance
+pub fn koru_lambda_core::projection::HopDistance::clone(&self) -> koru_lambda_core::projection::HopDistance
+impl core::cmp::Eq for koru_lambda_core::projection::HopDistance
+impl core::cmp::PartialEq for koru_lambda_core::projection::HopDistance
+pub fn koru_lambda_core::projection::HopDistance::eq(&self, &koru_lambda_core::projection::HopDistance) -> bool
+impl core::default::Default for koru_lambda_core::projection::HopDistance
+pub fn koru_lambda_core::projection::HopDistance::default() -> koru_lambda_core::projection::HopDistance
+impl core::fmt::Debug for koru_lambda_core::projection::HopDistance
+pub fn koru_lambda_core::projection::HopDistance::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::projection::HopDistance
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::HopDistance
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::HopDistance
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::HopDistance
+pub type koru_lambda_core::projection::HopDistance::Output = usize
+pub fn koru_lambda_core::projection::HopDistance::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::HopDistance::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::HopDistance::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl core::marker::Freeze for koru_lambda_core::projection::HopDistance
+impl core::marker::Send for koru_lambda_core::projection::HopDistance
+impl core::marker::Sync for koru_lambda_core::projection::HopDistance
+impl core::marker::Unpin for koru_lambda_core::projection::HopDistance
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::HopDistance
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::HopDistance
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::HopDistance
+pub struct koru_lambda_core::IdentityHasher
+impl core::default::Default for koru_lambda_core::engine::IdentityHasher
+pub fn koru_lambda_core::engine::IdentityHasher::default() -> koru_lambda_core::engine::IdentityHasher
+impl core::hash::Hasher for koru_lambda_core::engine::IdentityHasher
+pub fn koru_lambda_core::engine::IdentityHasher::finish(&self) -> u64
+pub fn koru_lambda_core::engine::IdentityHasher::write(&mut self, &[u8])
+pub fn koru_lambda_core::engine::IdentityHasher::write_i128(&mut self, i128)
+pub fn koru_lambda_core::engine::IdentityHasher::write_i16(&mut self, i16)
+pub fn koru_lambda_core::engine::IdentityHasher::write_i32(&mut self, i32)
+pub fn koru_lambda_core::engine::IdentityHasher::write_i64(&mut self, i64)
+pub fn koru_lambda_core::engine::IdentityHasher::write_i8(&mut self, i8)
+pub fn koru_lambda_core::engine::IdentityHasher::write_isize(&mut self, isize)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u128(&mut self, u128)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u16(&mut self, u16)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u32(&mut self, u32)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u64(&mut self, u64)
+pub fn koru_lambda_core::engine::IdentityHasher::write_u8(&mut self, u8)
+pub fn koru_lambda_core::engine::IdentityHasher::write_usize(&mut self, usize)
+impl core::marker::Freeze for koru_lambda_core::engine::IdentityHasher
+impl core::marker::Send for koru_lambda_core::engine::IdentityHasher
+impl core::marker::Sync for koru_lambda_core::engine::IdentityHasher
+impl core::marker::Unpin for koru_lambda_core::engine::IdentityHasher
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::IdentityHasher
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::IdentityHasher
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::IdentityHasher
+#[non_exhaustive] pub struct koru_lambda_core::Projection<'e, S: koru_lambda_core::projection::Signal>
+impl<'e, S: koru_lambda_core::projection::Signal> koru_lambda_core::projection::Projection<'e, S>
+pub fn koru_lambda_core::projection::Projection<'e, S>::aggregate(&self) -> core::option::Option<<S as koru_lambda_core::projection::Signal>::Output>
+pub fn koru_lambda_core::projection::Projection<'e, S>::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn koru_lambda_core::projection::Projection<'e, S>::contains(&self, &koru_lambda_core::engine::Distinction) -> bool
+pub const fn koru_lambda_core::projection::Projection<'e, S>::output(&self) -> &koru_lambda_core::projection::ProjectionOutput<S>
+pub fn koru_lambda_core::projection::Projection<'e, S>::projection_id(&self) -> koru_lambda_core::projection::ProjectionId
+pub const fn koru_lambda_core::projection::Projection<'e, S>::spec(&self) -> &koru_lambda_core::projection::ProjectionSpec<S>
+pub fn koru_lambda_core::projection::Projection<'e, S>::try_canonical_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, koru_lambda_core::projection::SerializeError>
+impl<'e, S> core::fmt::Debug for koru_lambda_core::projection::Projection<'e, S> where S: core::fmt::Debug + koru_lambda_core::projection::Signal, <S as koru_lambda_core::projection::Signal>::Output: core::fmt::Debug
+pub fn koru_lambda_core::projection::Projection<'e, S>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'e, S> core::marker::Freeze for koru_lambda_core::projection::Projection<'e, S> where S: core::marker::Freeze
+impl<'e, S> core::marker::Send for koru_lambda_core::projection::Projection<'e, S>
+impl<'e, S> core::marker::Sync for koru_lambda_core::projection::Projection<'e, S>
+impl<'e, S> core::marker::Unpin for koru_lambda_core::projection::Projection<'e, S> where S: core::marker::Unpin
+impl<'e, S> core::marker::UnsafeUnpin for koru_lambda_core::projection::Projection<'e, S> where S: core::marker::UnsafeUnpin
+impl<'e, S> !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::Projection<'e, S>
+impl<'e, S> !core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::Projection<'e, S>
+#[repr(transparent)] pub struct koru_lambda_core::ProjectionId(_)
+impl koru_lambda_core::projection::ProjectionId
+pub const fn koru_lambda_core::projection::ProjectionId::as_bytes(&self) -> &[u8; 32]
+impl core::clone::Clone for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::clone(&self) -> koru_lambda_core::projection::ProjectionId
+impl core::cmp::Eq for koru_lambda_core::projection::ProjectionId
+impl core::cmp::Ord for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::cmp(&self, &koru_lambda_core::projection::ProjectionId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::eq(&self, &koru_lambda_core::projection::ProjectionId) -> bool
+impl core::cmp::PartialOrd for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::partial_cmp(&self, &koru_lambda_core::projection::ProjectionId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for koru_lambda_core::projection::ProjectionId
+pub fn koru_lambda_core::projection::ProjectionId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for koru_lambda_core::projection::ProjectionId
+impl core::marker::StructuralPartialEq for koru_lambda_core::projection::ProjectionId
+impl core::marker::Freeze for koru_lambda_core::projection::ProjectionId
+impl core::marker::Send for koru_lambda_core::projection::ProjectionId
+impl core::marker::Sync for koru_lambda_core::projection::ProjectionId
+impl core::marker::Unpin for koru_lambda_core::projection::ProjectionId
+impl core::marker::UnsafeUnpin for koru_lambda_core::projection::ProjectionId
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::ProjectionId
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::ProjectionId
+#[non_exhaustive] pub struct koru_lambda_core::ProjectionSpec<S: koru_lambda_core::projection::Signal>
+pub koru_lambda_core::ProjectionSpec::boundary: koru_lambda_core::projection::Boundary
+pub koru_lambda_core::ProjectionSpec::direction: koru_lambda_core::projection::Direction
+pub koru_lambda_core::ProjectionSpec::root: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::ProjectionSpec::signal: S
+impl<S: core::clone::Clone + koru_lambda_core::projection::Signal> core::clone::Clone for koru_lambda_core::projection::ProjectionSpec<S>
+pub fn koru_lambda_core::projection::ProjectionSpec<S>::clone(&self) -> koru_lambda_core::projection::ProjectionSpec<S>
+impl<S> core::marker::Freeze for koru_lambda_core::projection::ProjectionSpec<S> where S: core::marker::Freeze
+impl<S> core::marker::Send for koru_lambda_core::projection::ProjectionSpec<S>
+impl<S> core::marker::Sync for koru_lambda_core::projection::ProjectionSpec<S>
+impl<S> core::marker::Unpin for koru_lambda_core::projection::ProjectionSpec<S> where S: core::marker::Unpin
+impl<S> core::marker::UnsafeUnpin for koru_lambda_core::projection::ProjectionSpec<S> where S: core::marker::UnsafeUnpin
+impl<S> core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projection::ProjectionSpec<S> where S: core::panic::unwind_safe::RefUnwindSafe
+impl<S> core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::ProjectionSpec<S> where S: core::panic::unwind_safe::UnwindSafe
+#[repr(transparent)] pub struct koru_lambda_core::RawDistinctionId(_)
+impl koru_lambda_core::engine::RawDistinctionId
+pub const fn koru_lambda_core::engine::RawDistinctionId::as_bytes(&self) -> &[u8; 16]
+pub const fn koru_lambda_core::engine::RawDistinctionId::from_bytes([u8; 16]) -> Self
+impl koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::from_hex(&str) -> core::result::Result<Self, koru_lambda_core::distinction_hex::ParseError>
+pub fn koru_lambda_core::engine::RawDistinctionId::to_hex(self) -> alloc::string::String
+impl bytemuck::pod::Pod for koru_lambda_core::engine::RawDistinctionId
+impl bytemuck::zeroable::Zeroable for koru_lambda_core::engine::RawDistinctionId
+impl core::clone::Clone for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::clone(&self) -> koru_lambda_core::engine::RawDistinctionId
+impl core::cmp::Eq for koru_lambda_core::engine::RawDistinctionId
+impl core::cmp::Ord for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::cmp(&self, &koru_lambda_core::engine::RawDistinctionId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::eq(&self, &koru_lambda_core::engine::RawDistinctionId) -> bool
+impl core::cmp::PartialOrd for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::partial_cmp(&self, &koru_lambda_core::engine::RawDistinctionId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for koru_lambda_core::engine::RawDistinctionId
+pub fn koru_lambda_core::engine::RawDistinctionId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::StructuralPartialEq for koru_lambda_core::engine::RawDistinctionId
+impl core::str::traits::FromStr for koru_lambda_core::engine::RawDistinctionId
+pub type koru_lambda_core::engine::RawDistinctionId::Err = koru_lambda_core::distinction_hex::ParseError
+pub fn koru_lambda_core::engine::RawDistinctionId::from_str(&str) -> core::result::Result<Self, Self::Err>
+impl core::marker::Freeze for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::Send for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::Sync for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::Unpin for koru_lambda_core::engine::RawDistinctionId
+impl core::marker::UnsafeUnpin for koru_lambda_core::engine::RawDistinctionId
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::RawDistinctionId
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::RawDistinctionId
+pub struct koru_lambda_core::SynthesisRecorder
+impl koru_lambda_core::recorder::SynthesisRecorder
+pub fn koru_lambda_core::recorder::SynthesisRecorder::log(&self) -> &[koru_lambda_core::engine::Distinction]
+pub fn koru_lambda_core::recorder::SynthesisRecorder::new() -> Self
+pub fn koru_lambda_core::recorder::SynthesisRecorder::synthesize(&mut self, &koru_lambda_core::engine::DistinctionEngine, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::Distinction
+impl core::default::Default for koru_lambda_core::recorder::SynthesisRecorder
+pub fn koru_lambda_core::recorder::SynthesisRecorder::default() -> Self
+impl core::marker::Freeze for koru_lambda_core::recorder::SynthesisRecorder
+impl !core::marker::Send for koru_lambda_core::recorder::SynthesisRecorder
+impl !core::marker::Sync for koru_lambda_core::recorder::SynthesisRecorder
+impl core::marker::Unpin for koru_lambda_core::recorder::SynthesisRecorder
+impl core::marker::UnsafeUnpin for koru_lambda_core::recorder::SynthesisRecorder
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::recorder::SynthesisRecorder
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::recorder::SynthesisRecorder
+pub trait koru_lambda_core::Canonicalizable
+pub fn koru_lambda_core::Canonicalizable::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl koru_lambda_core::primitives::Canonicalizable for u8
+pub fn u8::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+pub trait koru_lambda_core::CoreSignal: koru_lambda_core::projection::Signal + koru_lambda_core::projection::private::Sealed
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Adjacency
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Degree
+impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::HopDistance
+pub trait koru_lambda_core::LocalCausalAgent
+pub type koru_lambda_core::LocalCausalAgent::ActionData: koru_lambda_core::primitives::Canonicalizable
+pub fn koru_lambda_core::LocalCausalAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::LocalCausalAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::LocalCausalAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
+pub trait koru_lambda_core::Signal: core::clone::Clone + core::marker::Send + core::marker::Sync + 'static
+pub type koru_lambda_core::Signal::Output: core::marker::Send + core::marker::Sync + koru_lambda_core::projection::CanonicalBytes + 'static
+pub fn koru_lambda_core::Signal::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::Signal::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::Signal::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::Adjacency
+pub type koru_lambda_core::projection::Adjacency::Output = core::option::Option<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)>
+pub fn koru_lambda_core::projection::Adjacency::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::Adjacency::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::Adjacency::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::Degree
+pub type koru_lambda_core::projection::Degree::Output = usize
+pub fn koru_lambda_core::projection::Degree::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::Degree::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::Degree::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+impl koru_lambda_core::projection::Signal for koru_lambda_core::projection::HopDistance
+pub type koru_lambda_core::projection::HopDistance::Output = usize
+pub fn koru_lambda_core::projection::HopDistance::canonical_bytes(&self) -> &[u8]
+pub fn koru_lambda_core::projection::HopDistance::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
+pub fn koru_lambda_core::projection::HopDistance::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
+pub fn koru_lambda_core::build_children_index(&[(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)]) -> std::collections::hash::map::HashMap<koru_lambda_core::engine::Distinction, alloc::vec::Vec<koru_lambda_core::engine::Distinction>>
+pub fn koru_lambda_core::replay_topological(impl core::iter::traits::collect::IntoIterator<Item = (koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>) -> core::result::Result<alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, koru_lambda_core::replay::ReplayError>
+pub fn koru_lambda_core::synthesize_causal_action<A: koru_lambda_core::primitives::Canonicalizable>(koru_lambda_core::engine::Distinction, A, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub type koru_lambda_core::IdentityBuildHasher = core::hash::BuildHasherDefault<koru_lambda_core::engine::IdentityHasher>
+pub type koru_lambda_core::ParentPair = (koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)

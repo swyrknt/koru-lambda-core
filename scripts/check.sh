@@ -16,6 +16,14 @@ step "repository gates"
 ./scripts/gates/no_suppression.sh
 ./scripts/gates/crate_boundary.sh
 ./scripts/gates/no_process_leaks.sh
+./scripts/gates/checklist_evidence.sh
+
+step "api snapshot"
+if command -v cargo-public-api >/dev/null 2>&1; then
+    ./scripts/gates/api_snapshot.sh
+else
+    echo "skipped: cargo-public-api not installed"
+fi
 
 step "format"
 cargo fmt --all --check

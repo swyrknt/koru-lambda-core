@@ -1,0 +1,452 @@
+pub mod koru_lambda_consensus
+pub mod koru_lambda_consensus::commitment
+#[non_exhaustive] pub enum koru_lambda_consensus::commitment::CommitmentError
+pub koru_lambda_consensus::commitment::CommitmentError::EmptyLeaderId
+pub koru_lambda_consensus::commitment::CommitmentError::LeaderIdTooLong
+pub koru_lambda_consensus::commitment::CommitmentError::LeaderIdTooLong::cap: usize
+pub koru_lambda_consensus::commitment::CommitmentError::LeaderIdTooLong::got: usize
+impl core::clone::Clone for koru_lambda_consensus::commitment::CommitmentError
+pub fn koru_lambda_consensus::commitment::CommitmentError::clone(&self) -> koru_lambda_consensus::commitment::CommitmentError
+impl core::cmp::Eq for koru_lambda_consensus::commitment::CommitmentError
+impl core::cmp::PartialEq for koru_lambda_consensus::commitment::CommitmentError
+pub fn koru_lambda_consensus::commitment::CommitmentError::eq(&self, &koru_lambda_consensus::commitment::CommitmentError) -> bool
+impl core::error::Error for koru_lambda_consensus::commitment::CommitmentError
+impl core::fmt::Debug for koru_lambda_consensus::commitment::CommitmentError
+pub fn koru_lambda_consensus::commitment::CommitmentError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_consensus::commitment::CommitmentError
+pub fn koru_lambda_consensus::commitment::CommitmentError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::Freeze for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::Send for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::Sync for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::Unpin for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::CommitmentError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::CommitmentError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::CommitmentError
+pub struct koru_lambda_consensus::commitment::BatchCommitment
+pub koru_lambda_consensus::commitment::BatchCommitment::batch_size: usize
+pub koru_lambda_consensus::commitment::BatchCommitment::commitment_hash: [u8; 32]
+pub koru_lambda_consensus::commitment::BatchCommitment::epoch: u64
+pub koru_lambda_consensus::commitment::BatchCommitment::leader_id: alloc::string::String
+pub koru_lambda_consensus::commitment::BatchCommitment::nonce: u64
+impl koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::compute(&koru_lambda_consensus::validator::TransactionBatch, u64, u64, alloc::string::String, &koru_lambda_core::engine::DistinctionEngine) -> core::result::Result<Self, koru_lambda_consensus::commitment::CommitmentError>
+pub fn koru_lambda_consensus::commitment::BatchCommitment::verify_batch(&self, &koru_lambda_consensus::validator::TransactionBatch, &koru_lambda_core::engine::DistinctionEngine) -> bool
+impl core::clone::Clone for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::clone(&self) -> koru_lambda_consensus::commitment::BatchCommitment
+impl core::cmp::Eq for koru_lambda_consensus::commitment::BatchCommitment
+impl core::cmp::PartialEq for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::eq(&self, &koru_lambda_consensus::commitment::BatchCommitment) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::commitment::BatchCommitment
+impl koru_lambda_core::primitives::Canonicalizable for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl serde_core::ser::Serialize for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::commitment::BatchCommitment
+impl core::marker::Send for koru_lambda_consensus::commitment::BatchCommitment
+impl core::marker::Sync for koru_lambda_consensus::commitment::BatchCommitment
+impl core::marker::Unpin for koru_lambda_consensus::commitment::BatchCommitment
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::BatchCommitment
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::BatchCommitment
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::BatchCommitment
+pub struct koru_lambda_consensus::commitment::BatchDataRequest
+pub koru_lambda_consensus::commitment::BatchDataRequest::commitment_hash: [u8; 32]
+pub koru_lambda_consensus::commitment::BatchDataRequest::requester_id: alloc::string::String
+impl koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::new([u8; 32], alloc::string::String) -> core::result::Result<Self, koru_lambda_consensus::commitment::CommitmentError>
+impl core::clone::Clone for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::clone(&self) -> koru_lambda_consensus::commitment::BatchDataRequest
+impl core::cmp::Eq for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::cmp::PartialEq for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::eq(&self, &koru_lambda_consensus::commitment::BatchDataRequest) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::commitment::BatchDataRequest
+impl serde_core::ser::Serialize for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::marker::Send for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::marker::Sync for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::marker::Unpin for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::BatchDataRequest
+pub struct koru_lambda_consensus::commitment::BatchDataResponse
+pub koru_lambda_consensus::commitment::BatchDataResponse::batch: koru_lambda_consensus::validator::TransactionBatch
+pub koru_lambda_consensus::commitment::BatchDataResponse::commitment: koru_lambda_consensus::commitment::BatchCommitment
+impl core::clone::Clone for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::clone(&self) -> koru_lambda_consensus::commitment::BatchDataResponse
+impl core::cmp::Eq for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::cmp::PartialEq for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::eq(&self, &koru_lambda_consensus::commitment::BatchDataResponse) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::commitment::BatchDataResponse
+impl serde_core::ser::Serialize for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::marker::Send for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::marker::Sync for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::marker::Unpin for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::BatchDataResponse
+pub struct koru_lambda_consensus::commitment::CommitmentAgent
+impl koru_lambda_consensus::commitment::CommitmentAgent
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::advance(&mut self, koru_lambda_consensus::commitment::BatchCommitment, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>)
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::cache_batch(&mut self, koru_lambda_consensus::validator::TransactionBatch, koru_lambda_consensus::commitment::BatchCommitment)
+pub const fn koru_lambda_consensus::commitment::CommitmentAgent::commitments_processed(&self) -> u64
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::get_cached_batch(&mut self, &[u8; 32]) -> core::option::Option<&koru_lambda_consensus::commitment::CachedBatch>
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::has_cached(&self, &[u8; 32]) -> bool
+pub const fn koru_lambda_consensus::commitment::CommitmentAgent::local_root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::new(&koru_lambda_core::engine::DistinctionEngine) -> Self
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::with_capacity(&koru_lambda_core::engine::DistinctionEngine, usize) -> Self
+impl koru_lambda_core::agent::LocalCausalAgent for koru_lambda_consensus::commitment::CommitmentAgent
+pub type koru_lambda_consensus::commitment::CommitmentAgent::ActionData = koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
+impl core::marker::Freeze for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::marker::Send for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::marker::Sync for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::marker::Unpin for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::CommitmentAgent
+pub const koru_lambda_consensus::commitment::COMMITMENT_CACHE_CAP: usize
+pub const koru_lambda_consensus::commitment::MAX_LEADER_ID_LEN: usize
+pub type koru_lambda_consensus::commitment::CachedBatch = (koru_lambda_consensus::validator::TransactionBatch, koru_lambda_consensus::commitment::BatchCommitment)
+pub mod koru_lambda_consensus::validator
+#[non_exhaustive] pub enum koru_lambda_consensus::validator::ValidatorError
+pub koru_lambda_consensus::validator::ValidatorError::BatchTooLarge
+pub koru_lambda_consensus::validator::ValidatorError::BatchTooLarge::cap: usize
+pub koru_lambda_consensus::validator::ValidatorError::BatchTooLarge::got: usize
+pub koru_lambda_consensus::validator::ValidatorError::DataTooLarge
+pub koru_lambda_consensus::validator::ValidatorError::DataTooLarge::at_tx: core::option::Option<usize>
+pub koru_lambda_consensus::validator::ValidatorError::DataTooLarge::cap: usize
+pub koru_lambda_consensus::validator::ValidatorError::DataTooLarge::got: usize
+pub koru_lambda_consensus::validator::ValidatorError::EmptyBatch
+pub koru_lambda_consensus::validator::ValidatorError::EmptyData
+pub koru_lambda_consensus::validator::ValidatorError::EmptyData::at_tx: core::option::Option<usize>
+pub koru_lambda_consensus::validator::ValidatorError::NonceMismatch
+pub koru_lambda_consensus::validator::ValidatorError::NonceMismatch::expected: u64
+pub koru_lambda_consensus::validator::ValidatorError::NonceMismatch::got: u64
+pub koru_lambda_consensus::validator::ValidatorError::NonceMismatch::tx_index: usize
+pub koru_lambda_consensus::validator::ValidatorError::RootMismatch
+pub koru_lambda_consensus::validator::ValidatorError::RootMismatch::expected: koru_lambda_core::engine::Distinction
+pub koru_lambda_consensus::validator::ValidatorError::RootMismatch::got: koru_lambda_core::engine::Distinction
+impl core::clone::Clone for koru_lambda_consensus::validator::ValidatorError
+pub fn koru_lambda_consensus::validator::ValidatorError::clone(&self) -> koru_lambda_consensus::validator::ValidatorError
+impl core::cmp::Eq for koru_lambda_consensus::validator::ValidatorError
+impl core::cmp::PartialEq for koru_lambda_consensus::validator::ValidatorError
+pub fn koru_lambda_consensus::validator::ValidatorError::eq(&self, &koru_lambda_consensus::validator::ValidatorError) -> bool
+impl core::error::Error for koru_lambda_consensus::validator::ValidatorError
+impl core::fmt::Debug for koru_lambda_consensus::validator::ValidatorError
+pub fn koru_lambda_consensus::validator::ValidatorError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_consensus::validator::ValidatorError
+pub fn koru_lambda_consensus::validator::ValidatorError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::Freeze for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::Send for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::Sync for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::Unpin for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::validator::ValidatorError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::validator::ValidatorError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::validator::ValidatorError
+pub struct koru_lambda_consensus::validator::ConsensusValidator
+impl koru_lambda_consensus::validator::ConsensusValidator
+pub const fn koru_lambda_consensus::validator::ConsensusValidator::expected_nonce(&self) -> u64
+pub const fn koru_lambda_consensus::validator::ConsensusValidator::new(&koru_lambda_core::engine::DistinctionEngine) -> Self
+pub fn koru_lambda_consensus::validator::ConsensusValidator::restore_state(&mut self, koru_lambda_core::engine::Distinction, u64)
+pub const fn koru_lambda_consensus::validator::ConsensusValidator::state_root_id(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_consensus::validator::ConsensusValidator::validate_batch(&mut self, &koru_lambda_core::engine::DistinctionEngine, &koru_lambda_consensus::validator::TransactionBatch) -> core::result::Result<koru_lambda_core::engine::Distinction, koru_lambda_consensus::validator::ValidatorError>
+impl koru_lambda_core::agent::LocalCausalAgent for koru_lambda_consensus::validator::ConsensusValidator
+pub type koru_lambda_consensus::validator::ConsensusValidator::ActionData = koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::ConsensusValidator::get_current_root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_consensus::validator::ConsensusValidator::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
+impl core::marker::Freeze for koru_lambda_consensus::validator::ConsensusValidator
+impl core::marker::Send for koru_lambda_consensus::validator::ConsensusValidator
+impl core::marker::Sync for koru_lambda_consensus::validator::ConsensusValidator
+impl core::marker::Unpin for koru_lambda_consensus::validator::ConsensusValidator
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::validator::ConsensusValidator
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::validator::ConsensusValidator
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::validator::ConsensusValidator
+pub struct koru_lambda_consensus::validator::TransactionAction
+pub koru_lambda_consensus::validator::TransactionAction::data: alloc::vec::Vec<u8>
+pub koru_lambda_consensus::validator::TransactionAction::nonce: u64
+impl koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::new(u64, alloc::vec::Vec<u8>) -> core::result::Result<Self, koru_lambda_consensus::validator::ValidatorError>
+impl core::clone::Clone for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::clone(&self) -> koru_lambda_consensus::validator::TransactionAction
+impl core::cmp::Eq for koru_lambda_consensus::validator::TransactionAction
+impl core::cmp::PartialEq for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::eq(&self, &koru_lambda_consensus::validator::TransactionAction) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::validator::TransactionAction
+impl koru_lambda_core::primitives::Canonicalizable for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl serde_core::ser::Serialize for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::validator::TransactionAction
+impl core::marker::Send for koru_lambda_consensus::validator::TransactionAction
+impl core::marker::Sync for koru_lambda_consensus::validator::TransactionAction
+impl core::marker::Unpin for koru_lambda_consensus::validator::TransactionAction
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::validator::TransactionAction
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::validator::TransactionAction
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::validator::TransactionAction
+pub struct koru_lambda_consensus::validator::TransactionBatch
+pub koru_lambda_consensus::validator::TransactionBatch::previous_root: koru_lambda_core::engine::Distinction
+pub koru_lambda_consensus::validator::TransactionBatch::transactions: alloc::vec::Vec<koru_lambda_consensus::validator::TransactionAction>
+impl core::clone::Clone for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::clone(&self) -> koru_lambda_consensus::validator::TransactionBatch
+impl core::cmp::Eq for koru_lambda_consensus::validator::TransactionBatch
+impl core::cmp::PartialEq for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::eq(&self, &koru_lambda_consensus::validator::TransactionBatch) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::validator::TransactionBatch
+impl serde_core::ser::Serialize for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::validator::TransactionBatch
+impl core::marker::Send for koru_lambda_consensus::validator::TransactionBatch
+impl core::marker::Sync for koru_lambda_consensus::validator::TransactionBatch
+impl core::marker::Unpin for koru_lambda_consensus::validator::TransactionBatch
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::validator::TransactionBatch
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::validator::TransactionBatch
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::validator::TransactionBatch
+pub const koru_lambda_consensus::validator::MAX_DATA_LEN: usize
+pub const koru_lambda_consensus::validator::MAX_TRANSACTIONS_PER_BATCH: usize
+#[non_exhaustive] pub enum koru_lambda_consensus::CommitmentError
+pub koru_lambda_consensus::CommitmentError::EmptyLeaderId
+pub koru_lambda_consensus::CommitmentError::LeaderIdTooLong
+pub koru_lambda_consensus::CommitmentError::LeaderIdTooLong::cap: usize
+pub koru_lambda_consensus::CommitmentError::LeaderIdTooLong::got: usize
+impl core::clone::Clone for koru_lambda_consensus::commitment::CommitmentError
+pub fn koru_lambda_consensus::commitment::CommitmentError::clone(&self) -> koru_lambda_consensus::commitment::CommitmentError
+impl core::cmp::Eq for koru_lambda_consensus::commitment::CommitmentError
+impl core::cmp::PartialEq for koru_lambda_consensus::commitment::CommitmentError
+pub fn koru_lambda_consensus::commitment::CommitmentError::eq(&self, &koru_lambda_consensus::commitment::CommitmentError) -> bool
+impl core::error::Error for koru_lambda_consensus::commitment::CommitmentError
+impl core::fmt::Debug for koru_lambda_consensus::commitment::CommitmentError
+pub fn koru_lambda_consensus::commitment::CommitmentError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_consensus::commitment::CommitmentError
+pub fn koru_lambda_consensus::commitment::CommitmentError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::Freeze for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::Send for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::Sync for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::Unpin for koru_lambda_consensus::commitment::CommitmentError
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::CommitmentError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::CommitmentError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::CommitmentError
+#[non_exhaustive] pub enum koru_lambda_consensus::ValidatorError
+pub koru_lambda_consensus::ValidatorError::BatchTooLarge
+pub koru_lambda_consensus::ValidatorError::BatchTooLarge::cap: usize
+pub koru_lambda_consensus::ValidatorError::BatchTooLarge::got: usize
+pub koru_lambda_consensus::ValidatorError::DataTooLarge
+pub koru_lambda_consensus::ValidatorError::DataTooLarge::at_tx: core::option::Option<usize>
+pub koru_lambda_consensus::ValidatorError::DataTooLarge::cap: usize
+pub koru_lambda_consensus::ValidatorError::DataTooLarge::got: usize
+pub koru_lambda_consensus::ValidatorError::EmptyBatch
+pub koru_lambda_consensus::ValidatorError::EmptyData
+pub koru_lambda_consensus::ValidatorError::EmptyData::at_tx: core::option::Option<usize>
+pub koru_lambda_consensus::ValidatorError::NonceMismatch
+pub koru_lambda_consensus::ValidatorError::NonceMismatch::expected: u64
+pub koru_lambda_consensus::ValidatorError::NonceMismatch::got: u64
+pub koru_lambda_consensus::ValidatorError::NonceMismatch::tx_index: usize
+pub koru_lambda_consensus::ValidatorError::RootMismatch
+pub koru_lambda_consensus::ValidatorError::RootMismatch::expected: koru_lambda_core::engine::Distinction
+pub koru_lambda_consensus::ValidatorError::RootMismatch::got: koru_lambda_core::engine::Distinction
+impl core::clone::Clone for koru_lambda_consensus::validator::ValidatorError
+pub fn koru_lambda_consensus::validator::ValidatorError::clone(&self) -> koru_lambda_consensus::validator::ValidatorError
+impl core::cmp::Eq for koru_lambda_consensus::validator::ValidatorError
+impl core::cmp::PartialEq for koru_lambda_consensus::validator::ValidatorError
+pub fn koru_lambda_consensus::validator::ValidatorError::eq(&self, &koru_lambda_consensus::validator::ValidatorError) -> bool
+impl core::error::Error for koru_lambda_consensus::validator::ValidatorError
+impl core::fmt::Debug for koru_lambda_consensus::validator::ValidatorError
+pub fn koru_lambda_consensus::validator::ValidatorError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for koru_lambda_consensus::validator::ValidatorError
+pub fn koru_lambda_consensus::validator::ValidatorError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::Freeze for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::Send for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::Sync for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::Unpin for koru_lambda_consensus::validator::ValidatorError
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::validator::ValidatorError
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::validator::ValidatorError
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::validator::ValidatorError
+pub struct koru_lambda_consensus::BatchCommitment
+pub koru_lambda_consensus::BatchCommitment::batch_size: usize
+pub koru_lambda_consensus::BatchCommitment::commitment_hash: [u8; 32]
+pub koru_lambda_consensus::BatchCommitment::epoch: u64
+pub koru_lambda_consensus::BatchCommitment::leader_id: alloc::string::String
+pub koru_lambda_consensus::BatchCommitment::nonce: u64
+impl koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::compute(&koru_lambda_consensus::validator::TransactionBatch, u64, u64, alloc::string::String, &koru_lambda_core::engine::DistinctionEngine) -> core::result::Result<Self, koru_lambda_consensus::commitment::CommitmentError>
+pub fn koru_lambda_consensus::commitment::BatchCommitment::verify_batch(&self, &koru_lambda_consensus::validator::TransactionBatch, &koru_lambda_core::engine::DistinctionEngine) -> bool
+impl core::clone::Clone for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::clone(&self) -> koru_lambda_consensus::commitment::BatchCommitment
+impl core::cmp::Eq for koru_lambda_consensus::commitment::BatchCommitment
+impl core::cmp::PartialEq for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::eq(&self, &koru_lambda_consensus::commitment::BatchCommitment) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::commitment::BatchCommitment
+impl koru_lambda_core::primitives::Canonicalizable for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl serde_core::ser::Serialize for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::BatchCommitment::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::commitment::BatchCommitment
+impl core::marker::Send for koru_lambda_consensus::commitment::BatchCommitment
+impl core::marker::Sync for koru_lambda_consensus::commitment::BatchCommitment
+impl core::marker::Unpin for koru_lambda_consensus::commitment::BatchCommitment
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::BatchCommitment
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::BatchCommitment
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::BatchCommitment
+pub struct koru_lambda_consensus::BatchDataRequest
+pub koru_lambda_consensus::BatchDataRequest::commitment_hash: [u8; 32]
+pub koru_lambda_consensus::BatchDataRequest::requester_id: alloc::string::String
+impl koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::new([u8; 32], alloc::string::String) -> core::result::Result<Self, koru_lambda_consensus::commitment::CommitmentError>
+impl core::clone::Clone for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::clone(&self) -> koru_lambda_consensus::commitment::BatchDataRequest
+impl core::cmp::Eq for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::cmp::PartialEq for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::eq(&self, &koru_lambda_consensus::commitment::BatchDataRequest) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::commitment::BatchDataRequest
+impl serde_core::ser::Serialize for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::commitment::BatchDataRequest
+pub fn koru_lambda_consensus::commitment::BatchDataRequest::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::marker::Send for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::marker::Sync for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::marker::Unpin for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::BatchDataRequest
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::BatchDataRequest
+pub struct koru_lambda_consensus::BatchDataResponse
+pub koru_lambda_consensus::BatchDataResponse::batch: koru_lambda_consensus::validator::TransactionBatch
+pub koru_lambda_consensus::BatchDataResponse::commitment: koru_lambda_consensus::commitment::BatchCommitment
+impl core::clone::Clone for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::clone(&self) -> koru_lambda_consensus::commitment::BatchDataResponse
+impl core::cmp::Eq for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::cmp::PartialEq for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::eq(&self, &koru_lambda_consensus::commitment::BatchDataResponse) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::commitment::BatchDataResponse
+impl serde_core::ser::Serialize for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::commitment::BatchDataResponse
+pub fn koru_lambda_consensus::commitment::BatchDataResponse::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::marker::Send for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::marker::Sync for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::marker::Unpin for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::BatchDataResponse
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::BatchDataResponse
+pub struct koru_lambda_consensus::CommitmentAgent
+impl koru_lambda_consensus::commitment::CommitmentAgent
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::advance(&mut self, koru_lambda_consensus::commitment::BatchCommitment, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>)
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::cache_batch(&mut self, koru_lambda_consensus::validator::TransactionBatch, koru_lambda_consensus::commitment::BatchCommitment)
+pub const fn koru_lambda_consensus::commitment::CommitmentAgent::commitments_processed(&self) -> u64
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::get_cached_batch(&mut self, &[u8; 32]) -> core::option::Option<&koru_lambda_consensus::commitment::CachedBatch>
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::has_cached(&self, &[u8; 32]) -> bool
+pub const fn koru_lambda_consensus::commitment::CommitmentAgent::local_root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::new(&koru_lambda_core::engine::DistinctionEngine) -> Self
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::with_capacity(&koru_lambda_core::engine::DistinctionEngine, usize) -> Self
+impl koru_lambda_core::agent::LocalCausalAgent for koru_lambda_consensus::commitment::CommitmentAgent
+pub type koru_lambda_consensus::commitment::CommitmentAgent::ActionData = koru_lambda_consensus::commitment::BatchCommitment
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_consensus::commitment::CommitmentAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
+impl core::marker::Freeze for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::marker::Send for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::marker::Sync for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::marker::Unpin for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::commitment::CommitmentAgent
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::commitment::CommitmentAgent
+pub struct koru_lambda_consensus::ConsensusValidator
+impl koru_lambda_consensus::validator::ConsensusValidator
+pub const fn koru_lambda_consensus::validator::ConsensusValidator::expected_nonce(&self) -> u64
+pub const fn koru_lambda_consensus::validator::ConsensusValidator::new(&koru_lambda_core::engine::DistinctionEngine) -> Self
+pub fn koru_lambda_consensus::validator::ConsensusValidator::restore_state(&mut self, koru_lambda_core::engine::Distinction, u64)
+pub const fn koru_lambda_consensus::validator::ConsensusValidator::state_root_id(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_consensus::validator::ConsensusValidator::validate_batch(&mut self, &koru_lambda_core::engine::DistinctionEngine, &koru_lambda_consensus::validator::TransactionBatch) -> core::result::Result<koru_lambda_core::engine::Distinction, koru_lambda_consensus::validator::ValidatorError>
+impl koru_lambda_core::agent::LocalCausalAgent for koru_lambda_consensus::validator::ConsensusValidator
+pub type koru_lambda_consensus::validator::ConsensusValidator::ActionData = koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::ConsensusValidator::get_current_root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_consensus::validator::ConsensusValidator::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
+impl core::marker::Freeze for koru_lambda_consensus::validator::ConsensusValidator
+impl core::marker::Send for koru_lambda_consensus::validator::ConsensusValidator
+impl core::marker::Sync for koru_lambda_consensus::validator::ConsensusValidator
+impl core::marker::Unpin for koru_lambda_consensus::validator::ConsensusValidator
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::validator::ConsensusValidator
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::validator::ConsensusValidator
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::validator::ConsensusValidator
+pub struct koru_lambda_consensus::TransactionAction
+pub koru_lambda_consensus::TransactionAction::data: alloc::vec::Vec<u8>
+pub koru_lambda_consensus::TransactionAction::nonce: u64
+impl koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::new(u64, alloc::vec::Vec<u8>) -> core::result::Result<Self, koru_lambda_consensus::validator::ValidatorError>
+impl core::clone::Clone for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::clone(&self) -> koru_lambda_consensus::validator::TransactionAction
+impl core::cmp::Eq for koru_lambda_consensus::validator::TransactionAction
+impl core::cmp::PartialEq for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::eq(&self, &koru_lambda_consensus::validator::TransactionAction) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::validator::TransactionAction
+impl koru_lambda_core::primitives::Canonicalizable for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl serde_core::ser::Serialize for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::validator::TransactionAction
+pub fn koru_lambda_consensus::validator::TransactionAction::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::validator::TransactionAction
+impl core::marker::Send for koru_lambda_consensus::validator::TransactionAction
+impl core::marker::Sync for koru_lambda_consensus::validator::TransactionAction
+impl core::marker::Unpin for koru_lambda_consensus::validator::TransactionAction
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::validator::TransactionAction
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::validator::TransactionAction
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::validator::TransactionAction
+pub struct koru_lambda_consensus::TransactionBatch
+pub koru_lambda_consensus::TransactionBatch::previous_root: koru_lambda_core::engine::Distinction
+pub koru_lambda_consensus::TransactionBatch::transactions: alloc::vec::Vec<koru_lambda_consensus::validator::TransactionAction>
+impl core::clone::Clone for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::clone(&self) -> koru_lambda_consensus::validator::TransactionBatch
+impl core::cmp::Eq for koru_lambda_consensus::validator::TransactionBatch
+impl core::cmp::PartialEq for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::eq(&self, &koru_lambda_consensus::validator::TransactionBatch) -> bool
+impl core::fmt::Debug for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for koru_lambda_consensus::validator::TransactionBatch
+impl serde_core::ser::Serialize for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_consensus::validator::TransactionBatch
+pub fn koru_lambda_consensus::validator::TransactionBatch::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for koru_lambda_consensus::validator::TransactionBatch
+impl core::marker::Send for koru_lambda_consensus::validator::TransactionBatch
+impl core::marker::Sync for koru_lambda_consensus::validator::TransactionBatch
+impl core::marker::Unpin for koru_lambda_consensus::validator::TransactionBatch
+impl core::marker::UnsafeUnpin for koru_lambda_consensus::validator::TransactionBatch
+impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_consensus::validator::TransactionBatch
+impl core::panic::unwind_safe::UnwindSafe for koru_lambda_consensus::validator::TransactionBatch

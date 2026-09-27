@@ -20,6 +20,7 @@ jobs:
       - run: ./scripts/gates/no_suppression.sh
       - run: ./scripts/gates/crate_boundary.sh
       - run: ./scripts/gates/no_process_leaks.sh
+      - run: ./scripts/gates/checklist_evidence.sh
 
   fmt:
     name: Format
@@ -124,6 +125,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with: { components: miri }
       - run: cargo miri test -p koru-lambda-core --lib
+
+  api-surface:
+    name: API snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-public-api --locked
+      - run: ./scripts/gates/api_snapshot.sh
+
+  semver:
+    name: Semver check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # Against the published baseline. Every lint skips while the bump is
+      # major, so this is close to a no-op today; it earns its place once
+      # 2.0.0 is out and 2.0.x must not break anyone.
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: koru-lambda-core
 
   supply-chain:
     name: Advisories

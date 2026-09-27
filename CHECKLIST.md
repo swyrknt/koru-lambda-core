@@ -15,9 +15,11 @@ This is the single source of truth for what 2.0.0 still needs. 2.0.0 ships only 
 Item format:
 
 ```
-- [ ] AREA-N Short statement of the required end state
-  - evidence: <test path::name | commit | CI run | file>
+  - [ ] AREA-N Short statement of the required end state
+    - evidence: <test path::name | commit | CI run | file>
 ```
+
+(Indented above so the gates do not read the template as a real item.)
 
 `file:line` references in item text describe the state found on 2026-09-21 and are not live claims; they locate the thing to fix, and go stale once the item is done or the workspace split moves the file. Evidence lines, by contrast, must resolve at the time the box is ticked.
 
@@ -61,16 +63,18 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
   - evidence: `scripts/gates/no_suppression.sh` @ 699a872; `clippy.toml` sets the flag false; the two `to_hex` signatures it hid are fixed
 - [x] PROC-5 Leak gate: CI fails on internal process references in tracked files (untracked paths, planning IDs, audit tags)
   - evidence: `scripts/gates/no_process_leaks.sh` @ 699a872 — clean at 1e4c6ea
-- [ ] PROC-6 Checklist gate: CI fails on a ticked item without resolvable evidence; the release script fails on any unticked item
+- [x] PROC-6 Checklist gate: CI fails on a ticked item without resolvable evidence; the release gate fails on any unticked item
+  - evidence: `scripts/gates/checklist_evidence.sh` (20 ticked, 51 references resolved; it caught three of its own author's evidence lines naming bare filenames), `scripts/gates/release_ready.sh`; `.github/workflows/ci.yml` gates job
 - [ ] PROC-7 Test-reference gate: every test named as evidence here or in `docs/CLAIMS.md` exists (`cargo test -- --list`)
 - [ ] PROC-8 Link gate: every relative link and file reference in tracked Markdown and rustdoc resolves to a tracked file
 - [ ] PROC-9 Doc symbol anchors resolve: every code reference in docs names an existing public item (no `file:line` anchors)
 - [ ] PROC-10 Mutation testing: `cargo mutants --in-place -- --all-features` exits 0 in CI on every PR, over every crate in the workspace, with no timeout skips and a committed budget. Each of the six known survivors has a named killing test listed here: restore byte-compare (`projection.rs:1326`), wire version check, `projection_id` derivation, Undirected children, `check_structural_invariant` always-Ok, degree `Release`→`Relaxed`. Equivalent mutants are listed in `docs/MUTANTS.md` with a written argument.
 - [ ] PROC-11 Coverage: `cargo llvm-cov --all-features --fail-under-regions 95` (region, not line), debug profile, plus a per-file floor of 90% with no file below it
-- [ ] PROC-12 Public API snapshot committed and diffed in CI
+- [x] PROC-12 Public API snapshot committed and diffed in CI, so a public signature cannot change without changing a committed file a reviewer reads. The snapshots are also the source the changelog and migration guides get derived from, rather than recollection.
+  - evidence: `api/koru-lambda-core.txt`, `api/koru-lambda-consensus.txt`, `api/koru-lambda-wasm.txt`; gate `scripts/gates/api_snapshot.sh` (verified to fail on an added public const); `.github/workflows/ci.yml` api-surface job
 - [ ] PROC-13 One release script replaces `publish_crates.sh` / `publish_npm.sh`: it runs the full gate, checks this file, builds `pkg/` with `--features wasm`, dry-runs both registries, and asks for confirmation before each real publish
 - [x] PROC-14 Feature-matrix builds: `--no-default-features`, each feature alone, `--all-features`, and `wasm32` (making `serde` optional creates combinations nothing builds today)
-  - evidence: `ci.yml` features job @ 699a872 — 4 combinations, `--all-targets` so tests compile too
+  - evidence: `.github/workflows/ci.yml` features job @ 699a872 — 4 combinations, `--all-targets` so tests compile too
 - [x] PROC-15 `rust-toolchain.toml` and `deny.toml` are committed (neither exists); doctests run under `--all-features` and on the MSRV toolchain
   - evidence: `rust-toolchain.toml`, `deny.toml` @ 699a872
 - [x] PROC-16 `[package.metadata.docs.rs]` sets `all-features = true` and the target list, so docs.rs doesn't publish a crate with half the surface missing
@@ -231,13 +235,13 @@ v1.2 shipped `WasmNetworkAgent`, `WasmValidator` and `WasmCommitmentAgent` (741-
 ## TST — Test suite
 
 - [x] TST-1 One golden-vector file, used by both native and wasm tests (child ids; projection ids and canonical bytes for every signal × direction × boundary; subsystem roots)
-  - evidence: `src/vectors.rs` @ 57d892f — native `tests/cond_d_prime.rs` and wasm `cond_d_prime_wasm.rs` both assert against it
+  - evidence: `src/vectors.rs` @ 57d892f — native `tests/cond_d_prime.rs` and wasm `crates/koru-lambda-wasm/tests/cond_d_prime_wasm.rs` both assert against it
 - [ ] TST-2 No test compares a value with the formula that produced it (the `r = 2d−3` via `relationship_count` checks are replaced by the measured ledger)
 - [ ] TST-3a The loom model covers the real `synthesize` check-then-insert ordering (the mutant kernel must still fail loom)
 - [ ] TST-3b A real-code concurrency stress test: N threads, exactly one `Novel` per child, final state equal to a serial run
 - [ ] TST-4 Every public error variant is constructed and asserted by at least one test
 - [x] TST-5 The miri subset passes and is listed in CI
-  - evidence: `ci.yml` miri job @ 699a872; `cargo +nightly miri test -p koru-lambda-core --lib` exits 0
+  - evidence: `.github/workflows/ci.yml` miri job @ 699a872; `cargo +nightly miri test -p koru-lambda-core --lib` exits 0
 
 ## API — Public surface
 
@@ -246,7 +250,8 @@ v1.2 shipped `WasmNetworkAgent`, `WasmValidator` and `WasmCommitmentAgent` (741-
 - [ ] API-3 `Debug` on every public type (asserted mechanically); `Hash` on `Boundary` and `Direction`
 - [ ] API-4 `serde` is an optional feature; adapters deserialize owned and escaped strings (tested with `from_reader` / `from_value`)
 - [ ] API-5 `crate-type` carries only what the crate needs (`rlib` for a library; `cdylib`/`staticlib` belong with the C ABI, wherever DEC-9 puts it); no documentation relies on `panic = "abort"`; the release profile's `panic` setting is reconciled with ENG-1/ENG-5's "catchable panic, zero state change" claim, since a consumer building with `abort` gets no unwind
-- [ ] API-6 `cargo semver-checks` runs in CI against the published `1.2.x` baseline, and the 2.0.0 snapshot becomes the baseline for future releases
+- [x] API-6 `cargo semver-checks` runs in CI against the published baseline, and the 2.0.0 snapshot becomes the baseline for future releases. *(Corrected 2026-09-26: this item assumed semver-checks would enumerate the v1.2 → 2.0.0 delta. It cannot — because the bump is already major, all 254 of its lints skip. It is future-facing only, preventing accidental breakage within 2.0.x. The delta comes from an API-snapshot diff instead; see PROC-12 and `api/DELTA-from-1.2.0.txt`.)*
+  - evidence: `.github/workflows/ci.yml` semver job; `cargo semver-checks check-release --baseline-version 1.2.0` runs clean (0 checks, 254 skip)
 - [ ] API-7 `#[must_use]` audit across every public function returning a value (today: 21 in `engine.rs`, 20 in `projection.rs`, 2 in `replay.rs` — the asymmetry is unexamined)
 - [ ] API-8 `unsafe` is confined and locked: `#![forbid(unsafe_code)]` everywhere except the C ABI module, which carries `#![deny(unsafe_op_in_unsafe_fn)]`, a `# Safety` contract on every function, and a CI gate that no other module gains `unsafe`. Plus `assert_impl_all!` for `Send + Sync + UnwindSafe + RefUnwindSafe` on public types.
 - [ ] API-9 No `impl Drop` in the crate, gated in CI (a panic in `Drop` under `panic = "abort"` is unrecoverable for consumers)
@@ -295,7 +300,7 @@ v1.2 shipped `WasmNetworkAgent`, `WasmValidator` and `WasmCommitmentAgent` (741-
 - [ ] DOC-3 `README.md` claims match `docs/CLAIMS.md`; the trust-boundary wording is exact
 - [ ] DOC-4 `docs/MIGRATION_JS.md` is correct for the shipped target (no stale `init` / `initSync` guidance), covers every JS change, and does not contradict the shipped surface
 - [ ] DOC-5 `docs/MIGRATION_RUST.md`: v1.x → 2.0.0 for Rust consumers, including the subsystem API mapping, the raw/verified type split, and the commitment-hash change with before/after vectors
-- [ ] DOC-6 `CHANGELOG.md` lists every breaking change
+- [ ] DOC-6 `CHANGELOG.md` lists every breaking change, derived from `api/DELTA-from-1.2.0.txt` rather than from recollection
 - [ ] DOC-7 rustdoc: no broken links; `# Errors` / `# Panics` on every public function; no stale comments
 - [ ] DOC-8 `ARCHITECTURE.md` matches the code
 - [ ] DOC-9 Example comments are accurate (tier 3 cone anchor, tier 4 header), in both languages
