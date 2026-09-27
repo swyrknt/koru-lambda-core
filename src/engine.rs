@@ -44,8 +44,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// from nothing. `from_hex` and `bytemuck::cast` are the two named
 /// hatches; both are documented above as consumer-responsibility paths.
 /// Foreign-byte injection at [`synthesize`](DistinctionEngine::synthesize)
-/// is caught by `debug_assert!` in debug builds and by the post-entry
-/// `expect` on the parent lookup in release builds.
+/// panics in every build profile, before the engine changes state.
 ///
 /// `#[repr(transparent)]`: layout-compatible with `[u8; 16]`, enabling
 /// zero-copy FFI/WASM transit (`*const Distinction` ↔ `*const [u8; 16]`).
@@ -559,10 +558,9 @@ impl DistinctionEngine {
     /// engine — either obtained from [`d0`](DistinctionEngine::d0),
     /// [`d1`](DistinctionEngine::d1), or a prior `synthesize` call on
     /// this engine, or returned by [`replay_topological`] driving this
-    /// engine. The foreign-byte `debug_assert!` enforces this in debug
-    /// builds; in release builds, the post-entry
-    /// `nodes.get(&parent).expect("(invariant)")` panics if a foreign
-    /// byte slips through. Either way: foreign-byte injection is closed.
+    /// engine. An unregistered parent panics, in every build profile, and
+    /// the check completes before any state change: the engine is
+    /// byte-identical whether or not the call panics.
     ///
     /// # Concurrency
     ///
@@ -604,8 +602,7 @@ impl DistinctionEngine {
     #[must_use]
     pub fn synthesize(&self, a: Distinction, b: Distinction) -> Distinction {
         // Thin wrapper: `synthesize_inner` centralizes the four axioms,
-        // the foreign-byte `debug_assert!` guards, and the entry-gated
-        // insert. This wrapper drops the novelty bit; consumers who
+        // the foreign-parent guards, and the entry-gated insert. This wrapper drops the novelty bit; consumers who
         // want it call [`synthesize_novel`](Self::synthesize_novel).
         self.synthesize_inner(a, b).0
     }
@@ -700,9 +697,10 @@ impl DistinctionEngine {
     ///
     /// # Panics
     ///
-    /// Does not panic under valid inputs. Foreign-byte parents trigger
-    /// the same `debug_assert!` as [`synthesize`](Self::synthesize);
-    /// both fire in debug builds only.
+    /// Panics if either parent is not registered in this engine — see
+    /// [`synthesize`](Self::synthesize). The check runs in every build
+    /// profile and completes before any state change, so the engine is
+    /// unchanged when it fires.
     ///
     /// [`replay_topological`]: crate::replay::replay_topological
     pub fn synthesize_novel(&self, a: Distinction, b: Distinction) -> SynthesisOutcome {
@@ -737,28 +735,26 @@ impl DistinctionEngine {
     /// content addressing, and the entry-gated insert with B1 lock
     /// discipline are all centralized here. Both public entrypoints
     /// route through this function so their semantics stay in sync.
-    pub(crate) fn synthesize_inner(&self, a: Distinction, b: Distinction) -> (Distinction, bool) {
-        // Foreign-byte guard (Axiom 4 enforcement at the engine boundary).
-        // The `pub(crate)` Distinction field closes mint-from-thin-air at
-        // compile time, but `Distinction::from_hex` can produce a value
-        // whose bytes aren't registered in any engine. The debug_assert
-        // catches this in debug; the post-entry `expect` (below) catches
-        // it in release on the parent lookup.
-        debug_assert!(
-            self.nodes.contains_key(&a.0),
-            "synthesize: parent `a` ({:?}) not registered in this engine — foreign-byte injection",
-            a
+    /// Panic unless `d` is registered in this engine.
+    ///
+    /// `#[inline]` because it sits on the synthesis path; the body is one
+    /// `contains_key` whose shard read lock is released before returning.
+    #[inline]
+    fn assert_registered(&self, d: Distinction, position: &str) {
+        assert!(
+            self.nodes.contains_key(&d.0),
+            "synthesize: parent `{position}` is not registered in this engine — it was not \
+             produced by this engine's operator. Cross-engine values and unverified bytes must \
+             pass through `verify` first."
         );
-        debug_assert!(
-            self.nodes.contains_key(&b.0),
-            "synthesize: parent `b` ({:?}) not registered in this engine — foreign-byte injection",
-            b
-        );
+    }
 
-        // Axiom 3 — irreflexivity. Self-synthesis is `(a, false)`:
-        // `a` is (by contract) already registered, so from the engine's
-        // perspective nothing was inserted.
+    pub(crate) fn synthesize_inner(&self, a: Distinction, b: Distinction) -> (Distinction, bool) {
+        // Axiom 3 — irreflexivity. Self-synthesis inserts nothing, but the
+        // engine must still refuse to vouch for a value it has never
+        // witnessed, so the guard applies here too.
         if a == b {
+            self.assert_registered(a, "a");
             return (a, false);
         }
 
@@ -782,6 +778,32 @@ impl DistinctionEngine {
         if self.nodes.contains_key(&new_bytes) {
             return (Distinction(new_bytes), false);
         }
+
+        // Foreign-parent guard (Axiom 4 at the engine boundary), checked in
+        // every build profile and BEFORE any state change.
+        //
+        // The ordering is load-bearing. This was a `debug_assert!` backed by
+        // an `expect` on the parent lookup below — which runs *after* the
+        // child is inserted. So in a release build an unregistered parent
+        // left a child in `nodes` whose parent did not exist, then panicked:
+        // catch that panic, or take it on another thread, and the engine
+        // kept serving a corrupted node that `check_structural_invariant`
+        // could not see. Guarding here means such a call cannot reach the
+        // insert, so the engine is byte-identical whether or not it panics.
+        //
+        // It sits after the saturation check rather than at the top because
+        // the fast path above cannot need it: the child's identity is
+        // `H(min ‖ max)` of these two parents, so a child already in `nodes`
+        // was inserted by a synthesis of these same two values, which this
+        // guard had already vetted, and `nodes` is append-only — nothing is
+        // ever removed. A registered child therefore implies registered
+        // parents, and re-checking costs a lookup on the hottest path for
+        // no additional guarantee.
+        //
+        // Both guards release their shard read locks immediately, so neither
+        // is held into the entry-gated insert below.
+        self.assert_registered(first, "a");
+        self.assert_registered(second, "b");
 
         let new_d = Distinction(new_bytes);
 
@@ -826,12 +848,12 @@ impl DistinctionEngine {
             // byte-equivalence test verifies the DashMap-shard side.
             self.nodes
                 .get(&first.0)
-                .expect("first parent registered at its insertion (invariant)")
+                .expect("parent checked registered at entry; nodes are append-only (invariant)")
                 .degree
                 .fetch_add(1, Ordering::Release);
             self.nodes
                 .get(&second.0)
-                .expect("second parent registered at its insertion (invariant)")
+                .expect("parent checked registered at entry; nodes are append-only (invariant)")
                 .degree
                 .fetch_add(1, Ordering::Release);
         }
@@ -1799,14 +1821,19 @@ mod engine_tests {
         assert_eq!(e.degree(x), x_before + 1);
     }
 
-    // ----- Foreign-byte guard (debug-only) ------------------------------
+    // ----- Foreign-parent guard -----------------------------------------
+    //
+    // Formerly `..._panics_in_debug`, gated to debug builds because the
+    // guard was a `debug_assert!`. The gate was the bug's cover: release
+    // builds inserted the child first and panicked afterwards, leaving a
+    // node whose parent did not exist. The guard is now unconditional, so
+    // this test runs in both profiles.
 
-    #[cfg(debug_assertions)]
     #[test]
-    #[should_panic(expected = "foreign-byte injection")]
-    fn foreign_byte_synthesize_panics_in_debug() {
+    #[should_panic(expected = "not registered in this engine")]
+    fn synthesize_with_unregistered_parent_panics() {
         let e = DistinctionEngine::new();
-        // A random distinction never registered in this engine.
+        // A random 16-byte value this engine has never witnessed.
         let foreign = Distinction::from_bytes_unchecked([0xCC; 16]);
         let _ = e.synthesize(foreign, e.d0());
     }
@@ -2519,5 +2546,126 @@ mod engine_tests {
                 prop_assert!(delta <= 1);
             }
         }
+    }
+
+    // ----- Foreign-parent guard: panics, and changes nothing ------------
+    //
+    // These use a value from a *different* engine rather than a
+    // hex-parsed one, so they keep working once the unchecked
+    // constructors are gone.
+
+    /// Everything about an engine that a caller can observe, for
+    /// before/after comparison.
+    #[derive(Debug, PartialEq, Eq)]
+    struct StateFingerprint {
+        distinctions: usize,
+        relationships: usize,
+        parentage: Vec<(Distinction, ParentPair)>,
+        degree_d0: usize,
+        degree_d1: usize,
+    }
+
+    fn state_fingerprint(e: &DistinctionEngine) -> StateFingerprint {
+        let mut parentage = e.snapshot_parentage();
+        parentage.sort_by_key(|(child, _)| *child.as_bytes());
+        StateFingerprint {
+            distinctions: e.distinction_count(),
+            relationships: e.relationship_count(),
+            parentage,
+            degree_d0: e.degree(e.d0()),
+            degree_d1: e.degree(e.d1()),
+        }
+    }
+
+    /// A distinction from a history the target engine has not run.
+    ///
+    /// Note what does *not* work here: `synthesize(d0, d1)` yields the same
+    /// identifier in every engine, so a shallow donor child would already be
+    /// registered in the target. The value has to come from deeper in a
+    /// history the target never performed.
+    fn unwitnessed_elsewhere(target: &DistinctionEngine) -> Distinction {
+        let donor = DistinctionEngine::new();
+        let c = donor.synthesize(donor.d0(), donor.d1());
+        let d = donor.synthesize(c, donor.d0());
+        let deep = donor.synthesize(d, c);
+        assert!(!target.has(deep), "test precondition: the value must be unwitnessed by target");
+        deep
+    }
+
+    #[test]
+    fn foreign_parent_panics_leaving_state_untouched() {
+        let target = DistinctionEngine::new();
+        // Give `target` a little history so a corrupted insert would show.
+        let target_child = target.synthesize(target.d0(), target.d1());
+        let _ = target.synthesize(target_child, target.d0());
+        let foreign = unwitnessed_elsewhere(&target);
+        let before = state_fingerprint(&target);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            target.synthesize(foreign, target.d0())
+        }));
+
+        assert!(result.is_err(), "an unregistered parent must panic");
+        assert_eq!(
+            state_fingerprint(&target),
+            before,
+            "engine state changed while rejecting a foreign parent — the insert ran before the \
+             guard, which is the corruption this guard exists to prevent"
+        );
+        assert!(
+            target.check_structural_invariant().is_ok(),
+            "structural invariant broken after a rejected synthesis"
+        );
+    }
+
+    #[test]
+    fn foreign_parent_rejected_in_either_argument_position() {
+        for swap in [false, true] {
+            let target = DistinctionEngine::new();
+            let foreign = unwitnessed_elsewhere(&target);
+            let before = state_fingerprint(&target);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if swap {
+                    target.synthesize(target.d0(), foreign)
+                } else {
+                    target.synthesize(foreign, target.d0())
+                }
+            }));
+            assert!(result.is_err(), "unregistered parent in position swap={swap} must panic");
+            assert_eq!(state_fingerprint(&target), before, "state changed (swap={swap})");
+        }
+    }
+
+    #[test]
+    fn foreign_parent_guard_also_covers_self_synthesis() {
+        // `synthesize(x, x)` returns `x` without inserting, but `x` still
+        // has to be a distinction this engine has witnessed. Without the
+        // check the engine would vouch for a value it has never seen.
+        let target = DistinctionEngine::new();
+        let foreign = unwitnessed_elsewhere(&target);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            target.synthesize(foreign, foreign)
+        }));
+        assert!(result.is_err(), "self-synthesis of an unregistered value must panic");
+    }
+
+    #[test]
+    fn same_bytes_from_another_engine_are_accepted_when_witnessed() {
+        // The other half of the rule, and the reason the guard is about
+        // registration rather than origin: engine independence means an
+        // identical history yields identical identifiers, and those are
+        // legitimate parents. Rejecting by provenance would break it.
+        let a = DistinctionEngine::new();
+        let b = DistinctionEngine::new();
+        let from_a = a.synthesize(a.d0(), a.d1());
+        let from_b = b.synthesize(b.d0(), b.d1());
+        assert_eq!(from_a.as_bytes(), from_b.as_bytes(), "engine independence");
+
+        // `from_a` is registered in `b` too, because `b` produced the same
+        // identifier. It must be usable as a parent in `b`.
+        let child = b.synthesize(from_a, b.d0());
+        assert_eq!(child.as_bytes(), b.synthesize(from_b, b.d0()).as_bytes());
+        assert!(b.check_structural_invariant().is_ok());
     }
 }
