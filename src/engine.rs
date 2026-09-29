@@ -9,6 +9,7 @@
 
 use dashmap::DashMap;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -272,6 +273,23 @@ impl Hasher for IdentityHasher {
 /// [`DashMap`]: dashmap::DashMap
 pub type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>;
 
+/// Derive a child identity from an ordered parent pair.
+///
+/// The single implementation of the content-addressing rule: SHA-256 over
+/// the canonically ordered pair, truncated to the leading 16 bytes. The
+/// operator and [`DistinctionEngine::check_structural_invariant`] both call
+/// it, so the auditor tests whether recorded parentage is *consistent*;
+/// whether the rule itself is right is what the published vectors pin.
+fn synth_bytes(first: Distinction, second: Distinction) -> [u8; 16] {
+    let mut h = Sha256::new();
+    h.update(first.0);
+    h.update(second.0);
+    let digest = h.finalize();
+    let mut out = [0u8; 16];
+    out.copy_from_slice(&digest[..16]);
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Primordials
 // ---------------------------------------------------------------------------
@@ -324,16 +342,71 @@ pub enum InvariantError {
     /// `parents: Some(...)`. Either case means the engine is internally
     /// inconsistent — a theory event, not a budget event.
     ///
-    /// Field names preserved from the pre-merge three-map design for
-    /// public-API stability: `all_distinctions` is `nodes.len()`,
-    /// `parents_of_plus_two` is `(count of nodes with parents) + 2`.
-    #[error("binary parentage violation: all_distinctions.len()={all_distinctions}, parents_of.len()+2={parents_of_plus_two}")]
+    #[error("binary parentage violation: {registered} distinctions registered, but {parented_plus_primordials} have parentage (parented + 2 primordials)")]
     BinaryParentageMismatch {
-        /// Total distinction count (`nodes.len()`).
-        all_distinctions: usize,
-        /// Count of nodes with `parents: Some(...)`, plus 2 for the
+        /// Total distinction count.
+        registered: usize,
+        /// Count of nodes carrying a parent pair, plus 2 for the
         /// primordials.
-        parents_of_plus_two: usize,
+        parented_plus_primordials: usize,
+    },
+
+    /// A registered distinction names a parent that is not itself
+    /// registered.
+    ///
+    /// The graph is append-only, so a parent can never be removed: a
+    /// dangling parent means a child was inserted before its parent was
+    /// verified. That is the shape of the release-mode corruption this
+    /// auditor previously could not see — it counted *whether* nodes had
+    /// parentage, never whether those parents existed.
+    #[error("dangling parent: {child} names parent {parent}, which is not registered")]
+    UnregisteredParent {
+        /// The child carrying the dangling reference.
+        child: Distinction,
+        /// The parent that is absent from the engine.
+        parent: Distinction,
+    },
+
+    /// A registered distinction's identity is not the hash of its own
+    /// parents.
+    ///
+    /// Axiom 4 says identity *is* the content. Re-deriving every node
+    /// from its recorded parentage is the only check that tests that
+    /// claim rather than restating it.
+    #[error("content-address mismatch: {child} is registered with parents whose synthesis yields {derived}")]
+    ContentAddressMismatch {
+        /// The identity as registered.
+        child: Distinction,
+        /// The identity its recorded parents actually produce.
+        derived: Distinction,
+    },
+
+    /// A node's stored degree disagrees with the number of registered
+    /// nodes naming it as a parent.
+    ///
+    /// Checked per node rather than as a sum: a total can balance while
+    /// individual counts are wrong, which is exactly what a
+    /// double-increment on one parent and none on the other looks like.
+    #[error("degree mismatch at {distinction}: stored {stored}, {counted} registered nodes name it as a parent")]
+    DegreeMismatch {
+        /// The node whose degree is inconsistent.
+        distinction: Distinction,
+        /// The engine's stored participation count.
+        stored: usize,
+        /// The count recomputed from recorded parentage.
+        counted: usize,
+    },
+
+    /// A registered distinction names the same parent twice.
+    ///
+    /// Axiom 3 makes self-synthesis a no-op, so no node can be the
+    /// child of a pair of identical parents.
+    #[error("irreflexivity violation: {child} names {parent} as both parents")]
+    SelfParentage {
+        /// The offending child.
+        child: Distinction,
+        /// The parent recorded in both positions.
+        parent: Distinction,
     },
 }
 
@@ -762,12 +835,7 @@ impl DistinctionEngine {
         let (first, second) = if a.0 <= b.0 { (a, b) } else { (b, a) };
 
         // Axioms 1 + 4 — content-addressed identity via SHA-256 leading-16.
-        let mut h = Sha256::new();
-        h.update(first.0);
-        h.update(second.0);
-        let digest = h.finalize();
-        let mut new_bytes = [0u8; 16];
-        new_bytes.copy_from_slice(&digest[..16]);
+        let new_bytes = synth_bytes(first, second);
 
         // Law 7 — saturation. Fast path: if the child already exists,
         // return it without taking any shard write-lock. This is load-
@@ -919,6 +987,13 @@ impl DistinctionEngine {
     }
 
     /// Number of relationships in the engine.
+    ///
+    /// **Definitional, not measured.** This is arithmetic over
+    /// `distinction_count()`, so it cannot disagree with the graph and a
+    /// test asserting `r == 2d - 3` through it is checking the formula
+    /// against itself. The measured equivalent — degree recomputed from
+    /// recorded parentage, per node — lives in
+    /// [`check_structural_invariant`](Self::check_structural_invariant).
     ///
     /// Each non-primordial child contributes 2 edges (one to each parent).
     /// Plus 1 for the genesis d₀↔d₁ edge. The primordials are always
@@ -1085,19 +1160,73 @@ impl DistinctionEngine {
     ///
     /// # Errors
     ///
-    /// Returns [`InvariantError::BinaryParentageMismatch`] if the
-    /// counts don't match.
+    /// - [`InvariantError::BinaryParentageMismatch`] — the number of
+    ///   nodes carrying parentage does not account for every
+    ///   non-primordial.
+    /// - [`InvariantError::UnregisteredParent`] — a node names a parent
+    ///   that is absent. `nodes` is append-only, so this can only mean a
+    ///   child was inserted before its parent was verified.
+    /// - [`InvariantError::ContentAddressMismatch`] — a node's identity
+    ///   is not what its recorded parents synthesize to (Axiom 4).
+    /// - [`InvariantError::DegreeMismatch`] — a node's stored degree
+    ///   disagrees with the number of nodes naming it as a parent.
+    /// - [`InvariantError::SelfParentage`] — a node names one value in
+    ///   both parent positions (Axiom 3).
     pub fn check_structural_invariant(&self) -> Result<(), InvariantError> {
-        let d_count = self.nodes.len();
-        let with_parents =
-            self.nodes.iter().filter(|entry| entry.value().parents.is_some()).count();
-        let p_plus_two = with_parents + 2;
-        if d_count != p_plus_two {
+        // One pass to collect parentage, then the checks. Collecting first
+        // keeps shard guards from being held while other shards are read.
+        let parentage: Vec<(Distinction, ParentPair)> = self.snapshot_parentage();
+
+        let registered = self.nodes.len();
+        let parented_plus_primordials = parentage.len() + 2;
+        if registered != parented_plus_primordials {
             return Err(InvariantError::BinaryParentageMismatch {
-                all_distinctions: d_count,
-                parents_of_plus_two: p_plus_two,
+                registered,
+                parented_plus_primordials,
             });
         }
+
+        // Recount degree from recorded parentage as we go, so the per-node
+        // comparison below is against a figure derived independently of the
+        // counters it is checking.
+        let mut counted_degree: HashMap<[u8; 16], usize> = HashMap::new();
+
+        for (child, (first, second)) in &parentage {
+            if first == second {
+                return Err(InvariantError::SelfParentage { child: *child, parent: *first });
+            }
+            for parent in [first, second] {
+                if !self.nodes.contains_key(&parent.0) {
+                    return Err(InvariantError::UnregisteredParent {
+                        child: *child,
+                        parent: *parent,
+                    });
+                }
+                *counted_degree.entry(parent.0).or_insert(0) += 1;
+            }
+
+            // Axiom 4, re-derived rather than trusted.
+            let derived = synth_bytes(*first, *second);
+            if derived != child.0 {
+                return Err(InvariantError::ContentAddressMismatch {
+                    child: *child,
+                    derived: Distinction(derived),
+                });
+            }
+        }
+
+        for entry in self.nodes.iter() {
+            let stored = entry.value().degree.load(Ordering::Acquire);
+            let counted = counted_degree.get(entry.key()).copied().unwrap_or(0);
+            if stored != counted {
+                return Err(InvariantError::DegreeMismatch {
+                    distinction: Distinction(*entry.key()),
+                    stored,
+                    counted,
+                });
+            }
+        }
+
         Ok(())
     }
 }
@@ -1923,10 +2052,112 @@ mod engine_tests {
     #[test]
     fn invariant_error_message_includes_counts() {
         let err =
-            InvariantError::BinaryParentageMismatch { all_distinctions: 5, parents_of_plus_two: 7 };
+            InvariantError::BinaryParentageMismatch { registered: 5, parented_plus_primordials: 7 };
         let msg = format!("{err}");
-        assert!(msg.contains("5"));
-        assert!(msg.contains("7"));
+        assert!(msg.contains('5'));
+        assert!(msg.contains('7'));
+    }
+
+    // ----- The auditor, tested by corrupting state on purpose -----------
+    //
+    // A checker nobody has watched fail is decoration. The previous version
+    // passed on every violation below: it counted whether nodes carried
+    // parentage, never whether that parentage was true. Each test plants one
+    // specific inconsistency by writing to `nodes` directly — which only
+    // in-crate tests can do — and asserts the matching variant.
+
+    /// Insert a node without going through the operator.
+    fn plant(e: &DistinctionEngine, id: [u8; 16], parents: Option<ParentPair>, degree: usize) {
+        e.nodes.insert(id, EngineNode { parents, degree: AtomicUsize::new(degree) });
+    }
+
+    #[test]
+    fn auditor_accepts_an_honest_engine() {
+        let e = DistinctionEngine::new();
+        let c = e.synthesize(e.d0(), e.d1());
+        let d = e.synthesize(c, e.d0());
+        let _ = e.synthesize(d, e.d1());
+        assert!(e.check_structural_invariant().is_ok(), "a legitimately built engine must pass");
+    }
+
+    #[test]
+    fn auditor_catches_a_non_primordial_without_parentage() {
+        let e = DistinctionEngine::new();
+        plant(&e, [0x11; 16], None, 0);
+        assert!(matches!(
+            e.check_structural_invariant(),
+            Err(InvariantError::BinaryParentageMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn auditor_catches_a_dangling_parent() {
+        // The residue of the release-mode bug: a child inserted while one of
+        // its parents was never registered. The old auditor returned Ok here.
+        let e = DistinctionEngine::new();
+        let absent = Distinction([0xAB; 16]);
+        let child = synth_bytes(absent, e.d0());
+        plant(&e, child, Some((absent, e.d0())), 0);
+
+        match e.check_structural_invariant() {
+            Err(InvariantError::UnregisteredParent { parent, .. }) => {
+                assert_eq!(parent.as_bytes(), absent.as_bytes());
+            },
+            other => panic!("expected a dangling-parent report, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn auditor_catches_an_identity_that_is_not_its_parents_hash() {
+        let e = DistinctionEngine::new();
+        // Parents both registered, identity fabricated.
+        plant(&e, [0x22; 16], Some((e.d0(), e.d1())), 0);
+        match e.check_structural_invariant() {
+            Err(InvariantError::ContentAddressMismatch { derived, .. }) => {
+                assert_eq!(derived.as_bytes(), &synth_bytes(e.d0(), e.d1()));
+            },
+            other => panic!("expected a content-address report, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn auditor_catches_a_degree_that_does_not_match_parentage() {
+        // A well-formed child whose parents' participation counts were never
+        // bumped. A sum-only check can be fooled by compensating errors; this
+        // is checked per node.
+        let e = DistinctionEngine::new();
+        let child = synth_bytes(e.d0(), e.d1());
+        plant(&e, child, Some((e.d0(), e.d1())), 0);
+        match e.check_structural_invariant() {
+            Err(InvariantError::DegreeMismatch { stored, counted, .. }) => {
+                assert_eq!((stored, counted), (0, 1));
+            },
+            other => panic!("expected a degree report, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn auditor_catches_a_node_parented_by_one_value_twice() {
+        let e = DistinctionEngine::new();
+        plant(&e, [0x33; 16], Some((e.d0(), e.d0())), 0);
+        assert!(matches!(
+            e.check_structural_invariant(),
+            Err(InvariantError::SelfParentage { .. })
+        ));
+    }
+
+    #[test]
+    fn auditor_catches_a_lopsided_degree_pair() {
+        // The mutant a sum check survives: one parent bumped twice, the
+        // other not at all. Sum is right; both nodes are wrong.
+        let e = DistinctionEngine::new();
+        let child = synth_bytes(e.d0(), e.d1());
+        plant(&e, child, Some((e.d0(), e.d1())), 0);
+        e.nodes.get(&e.d0().0).expect("primordial present").degree.store(2, Ordering::Release);
+        assert!(matches!(
+            e.check_structural_invariant(),
+            Err(InvariantError::DegreeMismatch { .. })
+        ));
     }
 
     // ----- Lock-ordering and in-flight probes -----------------------

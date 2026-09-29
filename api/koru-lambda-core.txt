@@ -35,8 +35,21 @@ impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::distinction_hex:
 pub mod koru_lambda_core::engine
 #[non_exhaustive] pub enum koru_lambda_core::engine::InvariantError
 pub koru_lambda_core::engine::InvariantError::BinaryParentageMismatch
-pub koru_lambda_core::engine::InvariantError::BinaryParentageMismatch::all_distinctions: usize
-pub koru_lambda_core::engine::InvariantError::BinaryParentageMismatch::parents_of_plus_two: usize
+pub koru_lambda_core::engine::InvariantError::BinaryParentageMismatch::parented_plus_primordials: usize
+pub koru_lambda_core::engine::InvariantError::BinaryParentageMismatch::registered: usize
+pub koru_lambda_core::engine::InvariantError::ContentAddressMismatch
+pub koru_lambda_core::engine::InvariantError::ContentAddressMismatch::child: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::engine::InvariantError::ContentAddressMismatch::derived: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::engine::InvariantError::DegreeMismatch
+pub koru_lambda_core::engine::InvariantError::DegreeMismatch::counted: usize
+pub koru_lambda_core::engine::InvariantError::DegreeMismatch::distinction: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::engine::InvariantError::DegreeMismatch::stored: usize
+pub koru_lambda_core::engine::InvariantError::SelfParentage
+pub koru_lambda_core::engine::InvariantError::SelfParentage::child: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::engine::InvariantError::SelfParentage::parent: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::engine::InvariantError::UnregisteredParent
+pub koru_lambda_core::engine::InvariantError::UnregisteredParent::child: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::engine::InvariantError::UnregisteredParent::parent: koru_lambda_core::engine::Distinction
 impl core::clone::Clone for koru_lambda_core::engine::InvariantError
 pub fn koru_lambda_core::engine::InvariantError::clone(&self) -> koru_lambda_core::engine::InvariantError
 impl core::cmp::Eq for koru_lambda_core::engine::InvariantError
@@ -664,8 +677,21 @@ pub const koru_lambda_core::vectors::D_HEX: &str
 pub const koru_lambda_core::vectors::E_HEX: &str
 #[non_exhaustive] pub enum koru_lambda_core::InvariantError
 pub koru_lambda_core::InvariantError::BinaryParentageMismatch
-pub koru_lambda_core::InvariantError::BinaryParentageMismatch::all_distinctions: usize
-pub koru_lambda_core::InvariantError::BinaryParentageMismatch::parents_of_plus_two: usize
+pub koru_lambda_core::InvariantError::BinaryParentageMismatch::parented_plus_primordials: usize
+pub koru_lambda_core::InvariantError::BinaryParentageMismatch::registered: usize
+pub koru_lambda_core::InvariantError::ContentAddressMismatch
+pub koru_lambda_core::InvariantError::ContentAddressMismatch::child: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::InvariantError::ContentAddressMismatch::derived: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::InvariantError::DegreeMismatch
+pub koru_lambda_core::InvariantError::DegreeMismatch::counted: usize
+pub koru_lambda_core::InvariantError::DegreeMismatch::distinction: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::InvariantError::DegreeMismatch::stored: usize
+pub koru_lambda_core::InvariantError::SelfParentage
+pub koru_lambda_core::InvariantError::SelfParentage::child: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::InvariantError::SelfParentage::parent: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::InvariantError::UnregisteredParent
+pub koru_lambda_core::InvariantError::UnregisteredParent::child: koru_lambda_core::engine::Distinction
+pub koru_lambda_core::InvariantError::UnregisteredParent::parent: koru_lambda_core::engine::Distinction
 impl core::clone::Clone for koru_lambda_core::engine::InvariantError
 pub fn koru_lambda_core::engine::InvariantError::clone(&self) -> koru_lambda_core::engine::InvariantError
 impl core::cmp::Eq for koru_lambda_core::engine::InvariantError
