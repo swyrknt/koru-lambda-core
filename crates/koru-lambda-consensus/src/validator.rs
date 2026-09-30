@@ -25,7 +25,9 @@
 //! - **V8 (empty-data by design)** — `TransactionAction::data` must be
 //!   non-empty. Enforced in pre-validation AND at deserialize-time.
 
-use koru_lambda_core::primitives::{ByteMapping, Canonicalizable};
+use crate::DOMAIN_TRANSACTION;
+use koru_lambda_core::domain_anchor;
+use koru_lambda_core::primitives::{ByteFold, Canonicalizable};
 use koru_lambda_core::{Distinction, DistinctionEngine, LocalCausalAgent};
 
 // --- Constants ---------------------------------------------------------
@@ -92,20 +94,36 @@ impl TransactionAction {
     /// [`commitment::BatchCommitment::compute`](super::commitment)
     /// to fold each transaction without cloning.
     ///
-    /// Folds nonce (8 bytes LE) then data bytes into a distinction.
-    /// Every intermediate registers in `engine` via `ByteMapping`.
+    /// Folds nonce (8 bytes little-endian) followed by the data bytes,
+    /// through the substrate's anchored fold.
+    ///
+    /// Builds a [`ByteFold`] per call. Loops over many transactions should
+    /// use [`Self::canonicalize_with`] and share one.
     pub(crate) fn canonicalize(&self, engine: &DistinctionEngine) -> Distinction {
-        let bytes = self.nonce.to_le_bytes();
-        let mut acc = ByteMapping::map_byte_to_distinction(bytes[0], engine);
-        for &b in &bytes[1..] {
-            let d = ByteMapping::map_byte_to_distinction(b, engine);
-            acc = engine.synthesize(acc, d);
-        }
-        for &b in &self.data {
-            let d = ByteMapping::map_byte_to_distinction(b, engine);
-            acc = engine.synthesize(acc, d);
-        }
-        acc
+        self.canonicalize_with(&ByteFold::new(engine), engine)
+    }
+
+    /// Fold against an already-built [`ByteFold`].
+    ///
+    /// The sequence is `nonce ‖ data`. The nonce is a fixed eight bytes,
+    /// so the boundary between the two is unambiguous, and the fold binds
+    /// the total length.
+    ///
+    /// This previously seeded the accumulator with the first byte's tip,
+    /// which left the first two positions unordered and let a leading run
+    /// of equal bytes collapse — nonce 1 and nonce 256 folded to the same
+    /// distinction, and so did data `[0x00]` and `[0x00, 0x00]`. The
+    /// anchored fold is the fix, and the anchor also separates
+    /// transactions from other folded types.
+    pub(crate) fn canonicalize_with(
+        &self,
+        fold: &ByteFold,
+        engine: &DistinctionEngine,
+    ) -> Distinction {
+        let mut bytes = Vec::with_capacity(8 + self.data.len());
+        bytes.extend_from_slice(&self.nonce.to_le_bytes());
+        bytes.extend_from_slice(&self.data);
+        fold.fold(domain_anchor(engine, fold, DOMAIN_TRANSACTION), &bytes, engine)
     }
 }
 
@@ -623,5 +641,71 @@ mod tests {
         let json = serde_json::to_string(&original).expect("serialize");
         let recovered: TransactionBatch = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original, recovered);
+    }
+
+    // ----- Fold injectivity: the collision, as regression --------------
+
+    fn root_of(nonce: u64, data: &[u8]) -> [u8; 16] {
+        let e = DistinctionEngine::new();
+        *TransactionAction::new(nonce, data.to_vec())
+            .expect("valid action")
+            .canonicalize(&e)
+            .as_bytes()
+    }
+
+    #[test]
+    fn nonce_byte_order_is_not_lost() {
+        // 1 is `01 00 ..` and 256 is `00 01 ..`. The old fold seeded the
+        // accumulator with the first byte's tip, leaving the first two
+        // positions an unordered pair, so these folded identically and
+        // `verify_batch` accepted a batch whose nonces had been swapped.
+        assert_ne!(root_of(1, &[7]), root_of(256, &[7]));
+        assert_ne!(root_of(2, &[9, 9]), root_of(512, &[9, 9]));
+    }
+
+    #[test]
+    fn a_repeated_leading_byte_is_not_absorbed() {
+        // `synthesize(x, x) == x`, so a leading run of equal bytes used to
+        // vanish: with nonce 0, data `[0x00]` and `[0x00, 0x00]` produced
+        // the same root.
+        assert_ne!(root_of(0, &[0x00]), root_of(0, &[0x00, 0x00]));
+        assert_ne!(root_of(0, &[0x00, 0x00]), root_of(0, &[0x00, 0x00, 0x00]));
+    }
+
+    #[test]
+    fn nonce_and_data_do_not_bleed_into_each_other() {
+        // The nonce is a fixed eight bytes, so the boundary is
+        // unambiguous; shifting a byte across it must change the root.
+        assert_ne!(root_of(0x0102, &[0x03]), root_of(0x01, &[0x02, 0x03]));
+    }
+
+    #[test]
+    fn distinct_transactions_have_distinct_roots() {
+        // Exhaustive over a small space, which is what actually would have
+        // caught this: determinism was tested, injectivity never was.
+        let mut seen = std::collections::HashMap::new();
+        for nonce in [0u64, 1, 2, 255, 256, 257, 512] {
+            for data in
+                [vec![0x00], vec![0x00, 0x00], vec![0x01], vec![0x01, 0x00], vec![0x00, 0x01]]
+            {
+                let root = root_of(nonce, &data);
+                if let Some(prev) = seen.insert(root, (nonce, data.clone())) {
+                    panic!("({nonce}, {data:?}) collides with {prev:?}");
+                }
+            }
+        }
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn distinct_inputs_give_distinct_roots(
+            n1 in proptest::prelude::any::<u64>(),
+            n2 in proptest::prelude::any::<u64>(),
+            d1 in proptest::collection::vec(proptest::prelude::any::<u8>(), 1..12),
+            d2 in proptest::collection::vec(proptest::prelude::any::<u8>(), 1..12),
+        ) {
+            proptest::prop_assume!((n1, &d1) != (n2, &d2));
+            proptest::prop_assert_ne!(root_of(n1, &d1), root_of(n2, &d2));
+        }
     }
 }

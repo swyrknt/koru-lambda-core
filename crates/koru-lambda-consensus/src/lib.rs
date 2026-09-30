@@ -19,3 +19,9 @@ pub use commitment::{
     BatchCommitment, BatchDataRequest, BatchDataResponse, CommitmentAgent, CommitmentError,
 };
 pub use validator::{ConsensusValidator, TransactionAction, TransactionBatch, ValidatorError};
+
+/// Domain labels for this crate's anchored folds, so a transaction and a
+/// commitment carrying identical bytes fold to different distinctions.
+pub(crate) const DOMAIN_TRANSACTION: koru_lambda_core::DomainLabel = 0x01;
+/// See [`DOMAIN_TRANSACTION`].
+pub(crate) const DOMAIN_COMMITMENT: koru_lambda_core::DomainLabel = 0x02;

@@ -17,7 +17,9 @@
 //!   recomputed hash won't match the stored `commitment_hash`.
 
 use crate::validator::TransactionBatch;
-use koru_lambda_core::primitives::{ByteMapping, Canonicalizable};
+use crate::DOMAIN_COMMITMENT;
+use koru_lambda_core::domain_anchor;
+use koru_lambda_core::primitives::{ByteFold, Canonicalizable};
 use koru_lambda_core::{Distinction, DistinctionEngine, LocalCausalAgent};
 use lru::LruCache;
 use sha2::{Digest, Sha256};
@@ -230,20 +232,22 @@ impl Canonicalizable for BatchCommitment {
     /// use this to advance an LCA's local root after processing a
     /// commitment.
     fn to_canonical_structure(self, engine: &DistinctionEngine) -> Distinction {
-        let mut acc = ByteMapping::map_byte_to_distinction(self.commitment_hash[0], engine);
-        for &b in &self.commitment_hash[1..] {
-            let d = ByteMapping::map_byte_to_distinction(b, engine);
-            acc = engine.synthesize(acc, d);
-        }
-        acc
+        // Anchored, and under a different domain than a transaction, so a
+        // commitment and a transaction carrying identical bytes do not
+        // fold to the same distinction.
+        let fold = ByteFold::new(engine);
+        fold.fold(domain_anchor(engine, &fold, DOMAIN_COMMITMENT), &self.commitment_hash, engine)
     }
 }
 
 /// Chain-fold every transaction starting from `batch.previous_root`.
 fn compute_batch_root(batch: &TransactionBatch, engine: &DistinctionEngine) -> Distinction {
+    // One fold for the whole batch: building the 256-tip table per
+    // transaction would dominate a 1024-transaction batch.
+    let fold = ByteFold::new(engine);
     let mut current = batch.previous_root;
     for tx in &batch.transactions {
-        let tx_d = tx.canonicalize(engine);
+        let tx_d = tx.canonicalize_with(&fold, engine);
         current = engine.synthesize(current, tx_d);
     }
     current

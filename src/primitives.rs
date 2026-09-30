@@ -215,6 +215,33 @@ impl ByteFold {
     }
 }
 
+/// Domain label for a consumer's anchored folds.
+///
+/// Two folds of the same bytes under different domains give different
+/// distinctions. This is the separation mechanism the substrate offers,
+/// and it is deliberately *not* part of identity: mixing a domain tag
+/// into the hash would be a naming layer above content addressing, and
+/// would end the property that two engines performing the same
+/// operations agree. Anchoring keeps separation in the structure that is
+/// synthesized instead.
+pub type DomainLabel = u8;
+
+/// A domain anchor to fold against.
+///
+/// Returns a shallow synthesized node — never an element tip, so it is a
+/// legal anchor for [`ByteFold::fold`], which checks that anyway.
+/// Consumers that carry a perspective should anchor on their own root
+/// instead; this is for folds with no natural anchor of their own.
+#[must_use]
+pub fn domain_anchor(
+    engine: &DistinctionEngine,
+    fold: &ByteFold,
+    domain: DomainLabel,
+) -> Distinction {
+    let base = engine.synthesize(engine.d0(), engine.d1());
+    engine.synthesize(base, fold.tip(domain))
+}
+
 impl ByteMapping {
     /// Number of bit-steps per byte fold. Each step performs two
     /// `synthesize` calls (one with d₀, one with d₁); the bit value

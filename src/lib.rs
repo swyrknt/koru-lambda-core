@@ -165,7 +165,7 @@ pub use engine::{
     Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher, InvariantError,
     ParentPair, RawDistinctionId, SynthesisOutcome, VerifyError,
 };
-pub use primitives::{ByteFold, ByteMapping, Canonicalizable};
+pub use primitives::{domain_anchor, ByteFold, ByteMapping, Canonicalizable, DomainLabel};
 // Curated re-exports at crate root (Option B — approved). The remaining
 // 12 projection items live under `koru_lambda_core::projection::*`.
 pub use projection::{

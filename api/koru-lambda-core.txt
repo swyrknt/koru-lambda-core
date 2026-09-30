@@ -283,6 +283,8 @@ pub trait koru_lambda_core::primitives::Canonicalizable
 pub fn koru_lambda_core::primitives::Canonicalizable::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
 impl koru_lambda_core::primitives::Canonicalizable for u8
 pub fn u8::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_core::primitives::domain_anchor(&koru_lambda_core::engine::DistinctionEngine, &koru_lambda_core::primitives::ByteFold, koru_lambda_core::primitives::DomainLabel) -> koru_lambda_core::engine::Distinction
+pub type koru_lambda_core::primitives::DomainLabel = u8
 pub mod koru_lambda_core::projection
 #[non_exhaustive] pub enum koru_lambda_core::projection::Boundary
 pub koru_lambda_core::projection::Boundary::Hops(usize)
@@ -1161,7 +1163,9 @@ pub fn koru_lambda_core::projection::HopDistance::canonical_bytes(&self) -> &[u8
 pub fn koru_lambda_core::projection::HopDistance::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
 pub fn koru_lambda_core::projection::HopDistance::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
 pub fn koru_lambda_core::build_children_index(&[(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)]) -> std::collections::hash::map::HashMap<koru_lambda_core::engine::Distinction, alloc::vec::Vec<koru_lambda_core::engine::Distinction>>
+pub fn koru_lambda_core::domain_anchor(&koru_lambda_core::engine::DistinctionEngine, &koru_lambda_core::primitives::ByteFold, koru_lambda_core::primitives::DomainLabel) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::replay_topological(impl core::iter::traits::collect::IntoIterator<Item = (koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>) -> core::result::Result<alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, koru_lambda_core::replay::ReplayError>
 pub fn koru_lambda_core::synthesize_causal_action<A: koru_lambda_core::primitives::Canonicalizable>(koru_lambda_core::engine::Distinction, A, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub type koru_lambda_core::DomainLabel = u8
 pub type koru_lambda_core::IdentityBuildHasher = core::hash::BuildHasherDefault<koru_lambda_core::engine::IdentityHasher>
 pub type koru_lambda_core::ParentPair = (koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)
