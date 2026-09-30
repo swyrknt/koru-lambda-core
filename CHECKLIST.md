@@ -3,10 +3,21 @@
 This is the single source of truth for what 2.0.0 still needs. 2.0.0 ships only when every box is ticked.
 
 > **Scope, settled 2026-09-30.** 2.0.0 publishes the substrate and nothing else:
-> `koru-lambda-core`, plus `koru-lambda-wasm` as the second target that makes
-> cross-target byte equality demonstrable rather than asserted. Everything
-> below the `Not blocking 2.0.0` line stays in the repository and ships when
-> it is ready.
+> `koru-lambda-core`, plus `koru-lambda-wasm` — **a first-class product
+> surface, not a test fixture.** It ships to npm alongside the crate.
+> Accessibility is the argument: a reader reproduces a child id in a browser
+> console with no toolchain at all, which is the shortest path from the claim
+> to someone checking it, and a Rust-only release would confine the theory to
+> people who already have a Rust toolchain. It also happens to be the second
+> target that makes cross-target byte equality demonstrable rather than
+> asserted. Everything below the `Not blocking 2.0.0` line stays in the
+> repository and ships when it is ready.
+>
+> The obligation that comes with shipping it: the JS surface has to be good.
+> Today a JS consumer cannot get their own data into the engine at all
+> (JS-9), which makes the package a demonstration rather than a tool. What we
+> do *not* take on is compatibility with v1.2's JS consumers — downstream is
+> out of scope, so the surface should be right rather than backward-compatible.
 >
 > The number that decided it: the published v1.2.0 is 4,489 source lines, of
 > which engine, primitives and lib are **409 — nine percent**. The rest is
@@ -339,7 +350,7 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
   - requires: ANA-2
 - [ ] DEC-6 **Unbounded growth.** The eviction branch is foreclosed by ENG-3 (evicting an interior node fails the engine's own auditor), so the real question is whether a peer can drive an engine out of memory. Decide: accepted and documented with measured costs and the recommended consumer pattern, or hostile-input memory bounds become their own items.
   - requires: ANA-3
-- [ ] DEC-7 **Published wasm target.** v1.2 shipped `--target web`; 2.0.0 ships `--target bundler`, which breaks the only npm consumer. Decide the target strategy (single target, or multiple entry points) — see JS-8.
+- [ ] DEC-7 **Published wasm target.** *(Framing settled 2026-09-30: the wasm crate ships to npm as a product, so this is decided on technical merit — which target best serves a reader with no toolchain — and not by what v1.2 consumers used. Verify a packed tarball before publishing; npm's unpublish window is 72 hours.)* v1.2 shipped `--target web`; 2.0.0 ships `--target bundler`, which breaks the only npm consumer. Decide the target strategy (single target, or multiple entry points) — see JS-8.
 - [ ] DEC-8 **`BatchSynthesizer` (SUB-10). Decided (owner, 2026-09-21): port it to the full standard.** No consumer today; shipped anyway. Ticks when the reasoning is recorded per DOC-13.
 - [ ] DEC-9 **Crate boundary. Decided (owner, 2026-09-21): four crates**, one workspace, one release, same bar — `koru-lambda-core` (engine, projection, replay, lift), `koru-lambda-consensus` (validator, commitment, network, classifier, batch), `koru-lambda-wasm` (JS/TS bindings; extracted 2026-09-22 because `wasm-pack` requires `cdylib`), `koru-lambda-ffi` (C ABI). Nothing is dropped. Implemented by PKG-1..7. Viability was measured first: the classifier and batch paths both compile against the public API from an external crate, with no internal access. Ticks when the reasoning is recorded per DOC-13.
   - requires: ANA-4 (records the measured basis: 7→5 direct deps, `lru` and mandatory `serde` leave the substrate, ~37 KB of wasm no longer paid by browser users who don't use consensus, and a consumer-layer bug stops forcing a substrate major)
