@@ -107,9 +107,11 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 
 ## ENG — Engine and trust boundary
 
-- [ ] ENG-1 `synthesize` checks both parents are registered before any state change; an unregistered parent panics with zero state change (documented under `# Panics`), tested in debug and release by comparing full state snapshots
+- [x] ENG-1 `synthesize` checks both parents are registered before any state change; an unregistered parent panics with zero state change (documented under `# Panics`), tested in debug and release by comparing full state snapshots
+  - evidence: `src/engine.rs` @ 5e9cb8c — `assert_registered` before the insert; tests `engine_tests::foreign_parent_panics_leaving_state_untouched`, `..._rejected_in_either_argument_position`, `..._guard_also_covers_self_synthesis`, `synthesize_with_unregistered_parent_panics` (both profiles)
 - [ ] ENG-2 `synthesize` throughput: `criterion` `synthesize/hot`, median of 3 runs, ≤ 3% slower than baseline commit `e88e824`, on the pinned CI runner; a regression fails the job
-- [ ] ENG-3 `check_structural_invariant` verifies, in one pass:
+- [x] ENG-3 `check_structural_invariant` verifies, in one pass:
+  - evidence: `src/engine.rs` @ bd79412 — four checks in one pass; seven negative tests `engine_tests::auditor_*`, six of which the previous auditor passed
   - binary parentage
   - every parent registered
   - every id equals the hash of its parents (full content-address recomputation)
@@ -120,8 +122,10 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [ ] ENG-4 Only the engine can create a `Distinction`. There is no `Pod`/`Zeroable`, `from_hex`, `FromStr` or `Deserialize` on `Distinction`; external bytes enter only through `RawDistinctionId` → `verify`. Compile-fail tests cover each removed path, and the positive `assert_impl_all!(Distinction: Pod, Zeroable)` at `engine.rs:1161` is inverted to `assert_not_impl_any!`.
 - [ ] ENG-5 A `RawDistinctionId` **not registered in the receiving engine** is rejected, and an unregistered `Distinction` reaching `synthesize` panics before any state change. A distinction with equal bytes that *is* registered in the receiving engine is accepted (Law 8). Both directions tested.
 - [ ] ENG-6 `IdentityHasher` / `IdentityBuildHasher` are crate-private
-- [ ] ENG-7 `relationship_count` is documented as a definitional count; the measured check lives in ENG-3
-- [ ] ENG-8 Comments describing foreign-byte behavior match the code in both build profiles
+- [x] ENG-7 `relationship_count` is documented as a definitional count; the measured check lives in ENG-3
+  - evidence: `src/engine.rs` @ bd79412 — `relationship_count` documented as definitional arithmetic; the measured equivalent is the auditor's per-node degree recount
+- [x] ENG-8 Comments describing foreign-byte behavior match the code in both build profiles
+  - evidence: `src/engine.rs` @ 5e9cb8c — no debug-only foreign-byte claims remain (verified by grep); the guard is unconditional
 
 ## ENC — Canonical encoding
 
@@ -181,7 +185,8 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [ ] SUB-4 `verify_batch` does not mutate the caller's engine (tested: engine state byte-identical before and after)
 - [ ] SUB-5 `ConsensusValidator`'s agent path enforces nonce validation (no route advances the root without it)
 - [ ] SUB-6 `TransactionAction` fields are private, with getters; `CommitmentAgent::with_capacity(NonZeroUsize)`; wire sizes are `u64`; `Debug` on all public types
-- [ ] SUB-7 The `lru` advisories are resolved (fixed version or an audited bounded map, reason stated)
+- [x] SUB-7 The `lru` advisories are resolved (fixed version or an audited bounded map, reason stated)
+  - evidence: `crates/koru-lambda-consensus/Cargo.toml` @ e201dc1 — lru 0.18; `cargo audit` reports 0
 - [ ] SUB-8 `NetworkAgent` + `PeerIdentity` ported to 2.0.0, covering the v1.2 surface used downstream (`new`, `from_state`, `join_peer`, `propose_commitment`, `check_commitment`, `finalize_batch`, `advance_epoch`, `get_current_leader`, `current_epoch`, `validator_count`, `validator_set`, `consensus_state_root`, `get_stats`, nonce restore). Required properties:
   - typed peer-id construction with bounds
   - joint (id, distinction) dedupe
