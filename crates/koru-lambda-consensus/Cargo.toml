@@ -8,6 +8,13 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/swyrknt/koru-lambda-core"
 keywords = ["consensus", "validator", "commitment", "content-addressed"]
 categories = ["data-structures"]
+# Not published with 2.0.0. This crate is a reference consumer, not the
+# substrate, and it still carries known wire-facing defects: an unverified
+# `previous_root`, unbounded deserialization, a read path that mutates the
+# caller's engine, and a nonce-validation bypass. Without this line a single
+# `cargo publish --workspace` would put all of that on crates.io, where the
+# only remedy is a yank that does not remove the code.
+publish = false
 
 [dependencies]
 koru-lambda-core = { path = "../..", version = "=2.0.0", features = ["serde"] }

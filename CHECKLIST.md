@@ -2,6 +2,17 @@
 
 This is the single source of truth for what 2.0.0 still needs. 2.0.0 ships only when every box is ticked.
 
+> **Scope, settled 2026-09-30.** 2.0.0 publishes the substrate and nothing else:
+> `koru-lambda-core`, plus `koru-lambda-wasm` as the second target that makes
+> cross-target byte equality demonstrable rather than asserted. Everything
+> below the `Not blocking 2.0.0` line stays in the repository and ships when
+> it is ready.
+>
+> The number that decided it: the published v1.2.0 is 4,489 source lines, of
+> which engine, primitives and lib are **409 — nine percent**. The rest is
+> consensus machinery, a C ABI and bindings. Carrying that forward would have
+> reproduced a crate in which the theory is a rounding error.
+
 ## Rules
 
 1. **An unticked box blocks the release.** The release script refuses to publish while any `- [ ]` remains in this file.
@@ -124,10 +135,13 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [ ] ENG-6 `IdentityHasher` / `IdentityBuildHasher` are crate-private
 - [x] ENG-7 `relationship_count` is documented as a definitional count; the measured check lives in ENG-3
   - evidence: `src/engine.rs` @ bd79412 — `relationship_count` documented as definitional arithmetic; the measured equivalent is the auditor's per-node degree recount
-- [x] ENG-8 Comments describing foreign-byte behavior match the code in both build profiles
-  - evidence: `src/engine.rs` @ 5e9cb8c — no debug-only foreign-byte claims remain (verified by grep); the guard is unconditional
+- [ ] ENG-8 Documentation describing foreign-byte behavior matches the code in both build profiles — **in the docs as well as the source**. *(Un-ticked 2026-09-30: I ticked this having grepped `src/*.rs` only. `DESIGN.md:141` still calls the guard "the debug-mode `debug_assert!`" and `ARCHITECTURE.md:112,121` say the same, so a reader of either would believe release builds accept foreign parents — the exact opposite of what now ships, and drift in the dangerous direction. Source is clean; the docs are not.)*
 
 ## ENC — Canonical encoding
+
+- [ ] ENC-8 **One lift, applied recursively.** `ByteMapping` is re-derived as the anchored fold over the two-letter alphabet `{d₀, d₁}`, so the substrate ships one lift instead of two and `BITS_PER_BYTE` stops being a constant. Measured before adopting: the derived 8-step fold produces the same 256 distinct tips as the shipped 17-step one, with `deg(d₀) = 257` against 512 and 513 nodes against 1023 — the nine extra steps buy no injectivity and exactly double the graph. Published vectors are unaffected (they involve no byte folding; verified). Law 11's magnitude and the corresponding design gate re-baseline; see THY-4.
+- [ ] ENC-9 `Canonicalizable::to_canonical_structure` takes the `ByteFold`. The current signature cannot carry one, so every call rebuilds the 256-tip table — and the only real consumer already routed around the trait: `compute_batch_root` calls a `canonicalize_with` helper instead. A trait its own implementors bypass is the wrong shape.
+- [ ] ENC-10 `DomainLabel` is a newtype with a documented reservation table, not a bare `u8` alias. Two crates picking `0x01` independently is a silent collision.
 
 - [x] ENC-1 One anchored, order-preserving sequence fold, with a written spec: the anchor is a **parameter**, not a constant; the spec states and proves accumulator/element lineage disjointness **including nested folds** (a fold's result used as another fold's element, which is what the subsystems do); injectivity holds modulo the 128-bit bound. Tests:
   - evidence: `src/primitives.rs` @ b3475a0 — `ByteFold`; tests `primitives::tests::all_256_element_tips_are_distinct`, `..._the_cases_that_collided_before`, `..._order_length_and_repetition_all_change_the_result`, `..._prefixes_do_not_fold_alike`, `..._an_anchor_that_is_an_element_tip_is_rejected` (degenerate case constructed directly), `..._the_anchor_changes_the_result`
@@ -149,6 +163,13 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [ ] AGT-2 The agent contract advances through the canonical lift only: a multi-element advance uses the anchored fold (ENC-1) seeded at the agent's root, never a fold seeded from its first element. A CI gate rejects the latter shape.
 - [ ] AGT-3 The trait and `synthesize_causal_action` ship in `koru-lambda-core` alongside the lift they anchor; their consensus implementations ship in `koru-lambda-consensus`
 - [ ] AGT-4 The docs state why the agent is the recommended write path for perspective-carrying consumers **and** why it is not the only one: replay reconstructs from raw parent pairs, cross-runtime convergence compares histories rather than perspectives, and the theory admits multi-root and non-root consumers. A reader should not have to guess whether raw synthesis is a mistake.
+
+## TRIM — What leaves the substrate
+
+- [ ] TRIM-1 `SynthesisRecorder` leaves the core. Its log is chronology — exactly the order-bearing state the substrate is defined not to hold — and its own module header already says "Consumer pattern, **not substrate**." Zero consumers in the repo; a consumer rebuilds it in about twenty lines.
+- [ ] TRIM-2 `IdentityHasher` and `IdentityBuildHasher` become crate-private. A hashing optimisation is not axiom-bearing, no public signature mentions either, and the bench keeps its own mock copy. Order matters: the recorder is the only non-engine user, so it goes first.
+- [ ] TRIM-3 The agent contract leaves the core for the consensus crate. Its own docs say the axioms constrain `synthesize`, not consumer shape, and justify substrate residence with "every consumer we've shipped uses it" — an argument from convenience whose only user is the crate no longer in the release.
+- [ ] TRIM-4 `build_children_index` leaves the public surface: its own doc calls it a convenience for consumers who need children iteration.
 
 ## PRJ — Projection
 
@@ -176,7 +197,207 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [ ] REP-3 `ReplayError` has no redundant fields
 - [ ] REP-4 `SynthesisRecorder` → replay round-trip is tested; the docs state that the log holds children only
 
+## JS — wasm / TypeScript surface
+
+- [ ] JS-1 Counts and degrees are `number` everywhere (not `bigint`); the 2^53 bound is documented; `docs/MIGRATION_JS.md` is corrected in the same change (it currently documents `bigint` as the 2.0 shape)
+- [ ] JS-2 Every thrown error has a stable, documented `name` / `code`; tests assert them
+- [ ] JS-3 A hex helper for 32-byte ids (projection ids)
+- [ ] JS-4 `snapshotParentage`, `WasmEngine.replay`, `checkStructuralInvariant` and the sequence fold are exposed and tested
+- [ ] JS-5 Every rejection path is tested from JS (invalid direction, each `restoreProjection*` failure, verify, hex parse)
+- [ ] JS-6 Projection wrappers don't clone their full contents on every getter call
+- [ ] JS-7 The generated `.d.ts` is reviewed; the demos typecheck against it under `strict`
+- [ ] JS-8 The published wasm target is a deliberate, documented decision and is verified against a real consumer. v1.2 shipped `--target web` (default `init` export); 2.0.0 currently ships `--target bundler` (no such export), which silently breaks the only npm consumer (`canon-cpg/cli/engine.js` calls `await initWasm({module_or_path})`). Whatever is chosen — single target or multiple entry points — a test consumes the packed tarball the way that consumer does. See DEC-7.
+- [x] JS-10 The bindings handle `#[non_exhaustive]` substrate enums across the crate boundary: an unknown `SynthesisOutcome` variant surfaces to the caller instead of failing to compile against a future substrate release.
+  - evidence: `crates/koru-lambda-wasm/src/lib.rs` @ 57d892f — wildcard arm returns a JS error
+- [ ] JS-9 The lift layer is reachable from JS: the fold, `Canonicalizable`-style byte/string lifting, and an agent advance are exposed and tested. Today a JS consumer cannot get domain data into the engine at all.
+
+## TST — Test suite
+
+- [ ] TST-6 `tests/scale.rs` stops claiming a falsification it does not perform: the message reads "r = 2d − 3 holds with zero deviations at 5M synths" on an assertion that checks parentage, identity and degree — not that relation.
+
+- [x] TST-1 One golden-vector file, used by both native and wasm tests (child ids; projection ids and canonical bytes for every signal × direction × boundary; subsystem roots)
+  - evidence: `src/vectors.rs` @ 57d892f — native `tests/cond_d_prime.rs` and wasm `crates/koru-lambda-wasm/tests/cond_d_prime_wasm.rs` both assert against it
+- [ ] TST-2 No test compares a value with the formula that produced it (the `r = 2d−3` via `relationship_count` checks are replaced by the measured ledger)
+- [ ] TST-3a The loom model covers the real `synthesize` check-then-insert ordering (the mutant kernel must still fail loom)
+- [ ] TST-3b A real-code concurrency stress test: N threads, exactly one `Novel` per child, final state equal to a serial run
+- [ ] TST-4 Every public error variant is constructed and asserted by at least one test
+- [x] TST-5 The miri subset passes and is listed in CI
+  - evidence: `.github/workflows/ci.yml` miri job @ 699a872; `cargo +nightly miri test -p koru-lambda-core --lib` exits 0
+
+## API — Public surface
+
+- [ ] API-1 Every public error enum is `#[non_exhaustive]` and asserted mechanically (`assert_impl_all!(E: Debug + Display + Error + Send + Sync + 'static)`), with each `Display` string pinned against a golden so message drift fails a test
+- [ ] API-2 `InvariantError` field names describe what they hold
+- [ ] API-3 `Debug` on every public type (asserted mechanically); `Hash` on `Boundary` and `Direction`
+- [ ] API-4 `serde` is an optional feature; adapters deserialize owned and escaped strings (tested with `from_reader` / `from_value`)
+- [ ] API-5 `crate-type` carries only what the crate needs (`rlib` for a library; `cdylib`/`staticlib` belong with the C ABI, wherever DEC-9 puts it); no documentation relies on `panic = "abort"`; the release profile's `panic` setting is reconciled with ENG-1/ENG-5's "catchable panic, zero state change" claim, since a consumer building with `abort` gets no unwind
+- [x] API-6 `cargo semver-checks` runs in CI against the published baseline, and the 2.0.0 snapshot becomes the baseline for future releases. *(Corrected 2026-09-26: this item assumed semver-checks would enumerate the v1.2 → 2.0.0 delta. It cannot — because the bump is already major, all 254 of its lints skip. It is future-facing only, preventing accidental breakage within 2.0.x. The delta comes from an API-snapshot diff instead; see PROC-12 and `api/DELTA-from-1.2.0.txt`.)*
+  - evidence: `.github/workflows/ci.yml` semver job; `cargo semver-checks check-release --baseline-version 1.2.0` runs clean (0 checks, 254 skip)
+- [ ] API-7 `#[must_use]` audit across every public function returning a value (today: 21 in `engine.rs`, 20 in `projection.rs`, 2 in `replay.rs` — the asymmetry is unexamined)
+- [ ] API-8 `unsafe` is confined and locked: `#![forbid(unsafe_code)]` everywhere except the C ABI module, which carries `#![deny(unsafe_op_in_unsafe_fn)]`, a `# Safety` contract on every function, and a CI gate that no other module gains `unsafe`. Plus `assert_impl_all!` for `Send + Sync + UnwindSafe + RefUnwindSafe` on public types.
+- [ ] API-9 No `impl Drop` in the crate, gated in CI (a panic in `Drop` under `panic = "abort"` is unrecoverable for consumers)
+
+## THY — Theory alignment
+
+- [ ] THY-1 Every law in `THEORY.md` states its status: definitional, derived (with proof sketch), property of an encoding, empirical (with probe), or conjecture
+- [ ] THY-2 *(not blocking)* `docs/CLAIMS.md`: every claim in THEORY, DESIGN, ARCHITECTURE, README and rustdoc maps to a definition, proof sketch, named test or named probe
+- [ ] THY-3 Law 10 (mediated self-reference) has a runnable probe with a recorded result. The v1-era probe source exists at commit `2b1c323` (`experiments/runner/src/exp19_mediated_self_reference.rs`) and is restored and ported, not rewritten from scratch. THEORY's citation resolves to it.
+- [ ] THY-4 Law 11 text matches the shipped fold (syntheses per byte, depth). Sequenced **after** ENC-1/ENC-2, since the fold shape changes the hub gates.
+- [ ] THY-5 *(not blocking)* Law 8 says "execution interleavings of the same operations"; Law 7's projection-stability claim is scoped to where it holds
+- [ ] THY-6 *(not blocking)* THEORY states that Laws 5–12 continue the axiom numbering
+- [ ] THY-7 No shipped capability is still marked as future work
+- [ ] THY-8 *(not blocking)* Coding Law evidence paths are correct
+- [ ] THY-9 *(not blocking)* Subsystem theory review has named tests as its evidence: subsystem-derived roots are order-independent, and no read path mutates engine state (before/after snapshot equality)
+- [ ] THY-10 *(not blocking)* Every empirical claim has a runnable probe that names its **falsifying observation**, runs in CI, and records commit and seed
+- [ ] THY-11 *(not blocking)* **Sequence Law.** THEORY states order encoding as a derived law: in a commutative, irreflexive, content-addressed substrate, sequence injectivity requires an anchor disjoint from element lineage, and nesting depth carries length. ENC-1 is its implementation, not a private utility.
+- [ ] THY-12 *(not blocking)* Each of Axioms 1–4 has a named test that fails if only that axiom breaks, listed in `docs/CLAIMS.md`
+- [ ] THY-13 THEORY and SPEC state which laws are conditional on id injectivity, and that an in-engine collision is undetectable (it presents as saturation, and content-address recomputation still passes)
+- [ ] THY-14 *(not blocking)* Law 10's precondition is stated (the observation must lie outside the chain, or `synth(synth(x,obs),x)` collapses to a fixed point when `obs == x`), or Law 10 is labelled a conjecture
+- [ ] THY-15 *(not blocking)* **Degree conservation.** Σ degree = 4N−6, so mean degree → 4 at every scale under every workload; hub degree is paid for by leaves, and the Coding Law is a variance claim under a fixed mean. Definitional, with one test.
+- [ ] THY-16 **Lift Law.** THEORY names the lift — the map from non-distinction values into the graph — as the substrate's third forced object and its only free parameter, with two sub-parameters: the seed-anchor (which buys injectivity) and the alphabet (which shapes topology). `Canonicalizable` is its trait, the anchored fold its instance. Status: definitional.
+- [ ] THY-17 *(not blocking)* THEORY's two statements about the LCA are reconciled: it is called "a pattern, not an axiom" at one point and "a substrate-level construct" at another. The resolution states which is binding and why, since it decides where the trait ships.
+- [ ] THY-18 Law 11 is re-derived after ENC-1/ENC-2 land: under a fixed Σdeg, the Fold Law names where degree concentrates, and PRB-2 tests whether that is the alphabet rather than primordiality. Independent-law status is withdrawn if it is a corollary.
+
+## PRB — Probes
+
+- [ ] PRB-1 Mediated self-reference: 100K depth, with constant-observation, cycling-observation and observation-drawn-from-chain variants. Falsified by any repeat or fixed point before the birthday bound.
+- [ ] PRB-2 Anchor-hub: the same corpus folded under k different seeds **and** alphabets, varied independently, measuring whether top-degree rank tracks the alphabet. If it does, Law 11 demotes to a corollary of THY-16 and THEORY says so.
+- [ ] PRB-3 Projection idempotence for an arbitrary signal (see PRJ-8), shipped as the consumer self-test
+- [ ] PRB-4 THEORY's own falsifier, run and recorded: two engines fed the same parent pairs in different orders, queried at quiescence with the same `{root, direction, boundary, signal}`, produce byte-identical `canonical_bytes`. THEORY names this as the experiment that would refute its central claim, and nothing in the crate runs it.
+
+## DOC — Documentation
+
+- [ ] DOC-16 `docs/SPEC.md` covers the Fold Law and the Coding Law. It currently mentions neither — two of the twelve laws are absent from the document shipped as the theory instrument.
+- [ ] DOC-17 The 23 stale claims found by the claims inventory are corrected. The dangerous one: `DESIGN.md:141` and `ARCHITECTURE.md:112,121` still describe the foreign-byte guard as a debug-only `debug_assert!`, so a reader would conclude release builds accept foreign parents — the opposite of what ships.
+- [ ] DOC-18 Six of eight `[SHIPPED @ src/…:NNN]` anchors in DESIGN are off by 70–110 lines, and nine code comments cite design gates that no longer exist. Symbol anchors replace line anchors (see DOC-2).
+- [ ] DOC-19 The cross-target claim states only what it falsifies. Two compilations of one source are not two witnesses: what the wasm suite actually establishes is 32-bit pointer width and an independent codegen backend, continuously. Byte-order independence rests on explicit little-endian encoding, not on a big-endian target.
+
+- [x] DOC-1 `docs/SPEC.md`:
+  - evidence: `docs/SPEC.md` @ 1e4c6ea — all 15 citations repointed; independently reimplemented from the document alone, reproducing every golden vector and the 150-byte wire form
+  - exact synthesis hash (concatenation, no separator, lexicographic min, 16-byte prefix, collision bound)
+  - primordials
+  - the anchored sequence fold and the byte-tip derivation (without these, commitment roots cannot be reproduced by a second implementation)
+  - wire format
+  - projection conditions A–F and the cross-target condition
+  - golden vectors
+
+  Every spec reference in source, tests and Cargo.toml points to it.
+- [ ] DOC-2 `DESIGN.md` uses symbol anchors only; the type-level trust-boundary claim is true; the subsystem sections match the code; nothing is marked for a later version; and its non-goals do not contradict shipped items (non-goal 6 "no byte-fold changes" contradicts ENC-1; non-goal 8 "no networking stack" contradicts SUB-8)
+- [ ] DOC-3 `README.md` claims match `docs/CLAIMS.md`; the trust-boundary wording is exact
+- [ ] DOC-4 `docs/MIGRATION_JS.md` is correct for the shipped target (no stale `init` / `initSync` guidance), covers every JS change, and does not contradict the shipped surface
+- [ ] DOC-5 `docs/MIGRATION_RUST.md`: v1.x → 2.0.0 for Rust consumers, including the subsystem API mapping, the raw/verified type split, and the commitment-hash change with before/after vectors
+- [ ] DOC-6 `CHANGELOG.md` lists every breaking change, derived from `api/DELTA-from-1.2.0.txt` rather than from recollection
+- [ ] DOC-7 rustdoc: no broken links; `# Errors` / `# Panics` on every public function; no stale comments
+- [ ] DOC-8 `ARCHITECTURE.md` matches the code
+- [ ] DOC-9 Example comments are accurate (tier 3 cone anchor, tier 4 header), in both languages
+- [ ] DOC-10 `docs/BENCHMARKS.md` numbers re-measured after all changes
+- [~] DOC-11 **[cut]** `docs/development/*` is accurate and current (restored 2026-09-21: nothing is dropped; HYG-4 decides whether it ships, this item keeps it correct either way)
+  - cut 2026-09-30: Merged into HYG-4, which already decides what ships file by file.
+- [ ] DOC-12 `docs/SPEC.md` states the engine model explicitly: an engine is a witness of what it has synthesized, not a namespace; primordials are the same constants everywhere; identity is engine-independent by construction; ids carry no origin and are not scoped to an application; an unregistered distinction reaching `synthesize` is a caller error caught before any state change
+- [ ] DOC-13 `docs/SPEC.md` records the outcome and reasoning of every closed `DEC-*` item, so a reader finds the limits stated rather than discovering them
+
+- [ ] DOC-14 `docs/MIGRATION_JS.md` stops describing the subsystem classes as retired, since FFIJS-* restores them, and documents their new shape
+- [ ] DOC-15 README and rustdoc carry a "lifting your data" section: a domain value folded to a root, then used to advance an agent — the path a stranger needs and cannot currently find
+
+## LAND — The published artifact
+
+- [ ] LAND-11 A "Built on this" section names the downstream projects — spatial, cognitive, physical — with links. It shows the substrate's reach without shipping any of their weight, which is the whole argument for the minimal core.
+
+- [ ] LAND-1 README first screen, in order: the ≤25-word claim (LAND-4), a runnable example with its printed output, then the cross-runtime byte-equality claim in one sentence. Theory is linked below the fold, not led with.
+- [ ] LAND-2 DEMO-1 and DEMO-4 run against the **published** npm tarball and crates.io package in CI, with no `wasm-pack` step. Today every demo requires a Rust toolchain and a local build, so no demo is runnable by someone who installs the package.
+- [ ] LAND-3 The npm landing page (`pkg/README.md`) is JS-first, not the Rust README
+- [ ] LAND-4 One claim, ≤ 25 words, naming content-addressed folding and cross-runtime byte-equality, identical in README, crate description, npm description, npm landing page and crate rustdoc; a gate diffs all five
+- [ ] LAND-5 "What this is not": grow-only set rather than a general CRDT; Merkle determinism rather than consensus; 128-bit ids; and not a consensus protocol — the consensus agents are reference consumers, named and linked as such
+- [ ] LAND-6 A 60-second quickstart, timed by someone who has not seen the repo
+- [ ] LAND-7 npm keywords, description and rendering verified on the real package page before publish
+- [ ] LAND-8 Crate description, keywords and categories name the capability, not the theory and not a protocol category. Today the description is "a minimal axiomatic system for distributed computation" and the keywords include "consensus", which files the substrate in the wrong aisle and invites comparison to protocols it is not.
+- [ ] LAND-9 The hook runs with no toolchain: a reader reproduces a child id against their own SHA-256 in under 60 seconds from a browser or a single command, without installing Rust
+- [ ] LAND-10 Neither "distinction theory" nor "axiom" appears above the first runnable example in the README, the npm landing page or the crate-level rustdoc
+
+## HYG — Hygiene and packaging
+
+- [x] HYG-1 No internal planning or audit tags in source, tests, benches or manifests
+  - evidence: `scripts/gates/no_process_leaks.sh` clean @ 1e4c6ea
+- [ ] HYG-2 `scripts/build_universal.sh` removed
+- [x] HYG-3 `cargo audit` and `cargo deny` clean (crossbeam-epoch ≥ 0.9.20; rand advisory; duplicate versions resolved)
+  - evidence: `cargo audit` reports 0 @ e201dc1 — crossbeam-epoch 0.9.21, lru 0.18, rand pin =0.9.5
+- [ ] HYG-4 Crate tarball and npm package contents reviewed file by file, including whether `docs/development/*` ships
+- [ ] HYG-5 The whole workspace (including `experiments/`) builds and tests in CI
+- [x] HYG-7 The corpus generator writes where the gate reads. The two had drifted apart when the gate test moved crates, so a regeneration would have written to the workspace root — a path nothing reads — leaving the pinned corpus stale while appearing to succeed.
+  - evidence: `experiments/runner/src/bin/gen_exp18_corpus.rs` @ e201dc1; regeneration reproduces the pinned digests in place
+- [~] HYG-6 **[cut]** `cargo publish --dry-run` output is byte-compared against a committed manifest; `Cargo.lock` is committed; a clean checkout reproduces the same tarball
+  - cut 2026-09-30: Reproducible-tarball byte-comparison for a crate that publishes a few times a year.
+
+## DEC — Owner decisions
+
+- [ ] DEC-1 **C FFI. Decided (owner, 2026-09-21): restore to the full standard.** Nothing is dropped, regardless of current consumer count. Implemented by FFI-1..9. Ticks when the reasoning is recorded per DOC-13.
+- [ ] DEC-2 **JS bindings for the subsystems. Decided (owner, 2026-09-21): build them to the full standard.** Implemented by FFIJS-1..5 and DOC-14. Ticks when the reasoning is recorded per DOC-13.
+- [ ] DEC-3 **Demo scope. Decided (owner, 2026-09-21): keep all four; nothing folded.** DEMO-4 is the flagship and DEMO-1 the hook, but DEMO-3 stays a separate demo.
+- [ ] DEC-4 **Domain separation.** The hash-tag branch is **closed on theory grounds** (theory veto, 2026-09-21): a domain tag in the hash is exactly the separate naming layer Axiom 4 excludes. Domain separation is an anchor parameter of the fold. ANA-1 documents the consequences; it does not reopen the choice.
+  - requires: ANA-1
+- [ ] DEC-5 **Identifier width.** Ids are SHA-256 truncated to 128 bits (collision search bounded near 2^64), and the width is **unversioned**: the wire format has a version field, an id does not, so a later widening cannot be migrated. Decide: accepted with a written threat model and that non-goal stated, or widened now.
+  - requires: ANA-2
+- [ ] DEC-6 **Unbounded growth.** The eviction branch is foreclosed by ENG-3 (evicting an interior node fails the engine's own auditor), so the real question is whether a peer can drive an engine out of memory. Decide: accepted and documented with measured costs and the recommended consumer pattern, or hostile-input memory bounds become their own items.
+  - requires: ANA-3
+- [ ] DEC-7 **Published wasm target.** v1.2 shipped `--target web`; 2.0.0 ships `--target bundler`, which breaks the only npm consumer. Decide the target strategy (single target, or multiple entry points) — see JS-8.
+- [ ] DEC-8 **`BatchSynthesizer` (SUB-10). Decided (owner, 2026-09-21): port it to the full standard.** No consumer today; shipped anyway. Ticks when the reasoning is recorded per DOC-13.
+- [ ] DEC-9 **Crate boundary. Decided (owner, 2026-09-21): four crates**, one workspace, one release, same bar — `koru-lambda-core` (engine, projection, replay, lift), `koru-lambda-consensus` (validator, commitment, network, classifier, batch), `koru-lambda-wasm` (JS/TS bindings; extracted 2026-09-22 because `wasm-pack` requires `cdylib`), `koru-lambda-ffi` (C ABI). Nothing is dropped. Implemented by PKG-1..7. Viability was measured first: the classifier and batch paths both compile against the public API from an external crate, with no internal access. Ticks when the reasoning is recorded per DOC-13.
+  - requires: ANA-4 (records the measured basis: 7→5 direct deps, `lru` and mandatory `serde` leave the substrate, ~37 KB of wasm no longer paid by browser users who don't use consensus, and a consumer-layer bug stops forcing a substrate major)
+- [ ] DEC-10 **Sealing.** Measured 2026-09-21 from an external crate against the public API only: a sibling **can** define its own `Signal`, materialize it, get canonical bytes and a projection id, achieve cross-engine byte equality, and `restore_projection` its own type — no escape hatch needed. Sealing blocks exactly three things, permanently at 2.0.0:
+  1. implementing `CoreSignal` (substrate-internal dispatch)
+  2. implementing `ReadOnlyEngine` — so no alternative engine ever: no mock, no disk-backed, no remote
+  3. adding `Boundary` / `Direction` variants — so no threshold or other custom traversal bound
+
+  **Decided (owner, 2026-09-21): unseal `ReadOnlyEngine`; `CoreSignal` stays sealed; `Boundary`/`Direction` stay closed.** Implemented by SEAL-1..3. Ticks when the reasoning is recorded per DOC-13.
+
+## ANA — Analyses backing the decisions
+
+- [~] ANA-1 **[cut]** Domain separation: what collides today across applications, what an anchor-based separation gives, what a hash-level domain tag would cost (identity change, vector churn, loss of cross-application convergence, naming layer), and which downstream projects are affected
+  - cut 2026-09-30: Retroactive minute-taking: DEC-4's hash-tag branch is closed on theory grounds and needs no separate analysis.
+- [ ] ANA-2 Collision analysis: the birthday bound at 128 bits, accidental-collision probability at realistic and extreme counts, the adversarial case, what an attacker gains, and the consequence of ids being unversioned and unmigratable
+- [~] ANA-3 **[cut]** Growth analysis: measured bytes per distinction and per relationship at 1K/1M scale, peak allocation for a maximum-size hostile batch, whether a peer can drive an engine past available memory, and the recommended consumer pattern
+  - cut 2026-09-30: Folded into DEC-6's written outcome; a separate growth analysis for an append-only graph is ceremony.
+- [~] ANA-4 **[cut]** Crate-boundary analysis: what each crate's name promises and what a stranger searching for it finds; the semver blast radius of a consumer-layer bug under each layout; the dependency surface (`lru`, `serde`, `unsafe`) each layout forces on a substrate user; feature-matrix and wasm size effects; publish mechanics; and the cost of the migration the split itself creates
+  - cut 2026-09-30: The crate-boundary decision is made and implemented; an analysis justifying it after the fact serves nobody.
+
+## REV — Independent review (after everything above)
+
+- [ ] REV-1 Code review from reviewers who see only the code: no must-fix findings
+- [ ] REV-2 Test-quality review: no must-fix findings; mutation report clean
+- [~] REV-3 **[cut]** Theory alignment: a reviewer given only `THEORY.md` and the code produces a written finding list with zero must-fix items
+  - cut 2026-09-30: Theory alignment is covered by THY-1 and the probes, which are falsifiable where a review pass is not.
+- [~] REV-4 **[cut]** Drift sweep: no stale names, paths or claims in tracked files
+  - cut 2026-09-30: Drift is now gated mechanically (`no_process_leaks`, `api_snapshot`, link and anchor checks).
+- [~] REV-5 **[cut]** Every finding raised by REV-1..4, the mutation run, the probes and the downstream check has become an item here and that item is ticked. No open finding remains at release.
+  - cut 2026-09-30: A closure loop that cannot terminate on its own terms: it requires every finding to become a ticked item, including findings about itself.
+
+## DEMO — Demonstrations (Rust and TypeScript, identical output, run in CI)
+
+- [ ] DEMO-1 Predict-and-confirm: child ids reproduced with a plain SHA-256 call (the hook — checkable by hand in seconds)
+- [ ] DEMO-2 *(not blocking: ships when ready)* Trust boundary: verify rejection, projection restore round-trip, tamper rejection
+- [ ] DEMO-3 *(not blocking: ships when ready)* Order independence: shuffled, repeated and argument-swapped histories give identical bytes
+- [ ] DEMO-4 Cross-runtime convergence (**flagship**): Rust writes the history; a separate Node process replays it shuffled and reproduces the same projection id; tampering fails
+- [ ] DEMO-5 *(not blocking: ships when ready)* An independent re-implementation written from `docs/SPEC.md` alone (a standalone script, not this crate) reproduces every golden vector: child ids, fold roots, projection ids. This is the only item that can falsify "the spec is sufficient"; DEMO-4 compiles the same source twice and cannot.
+- [ ] DEMO-6 Lifting domain data: a domain struct folded to a root and used to advance an agent, in Rust and TypeScript, with identical output. Every demo today synthesizes primordials; none shows a reader how their own data gets in.
+
+## REL — Release (each step needs explicit owner approval)
+
+- [ ] REL-1 `pkg/` rebuilt with `--features wasm`; version and exports verified
+- [ ] REL-2 `cargo publish`
+- [ ] REL-3 `npm login` (owner) and `npm publish`
+- [ ] REL-4 Annotated tag `v2.0.0` created and pushed
+- [ ] REL-5 Yank criteria agreed in writing before publish: what would justify yanking 2.0.0 and who decides
+
+---
+
+# Not blocking 2.0.0
+
+Retained in the repository, out of the release. Nothing here is abandoned; it is unscheduled.
+
 ## SUB — Consensus reference consumers (ships in `koru-lambda-consensus`)
+
+*Deferred 2026-09-30: `koru-lambda-consensus` is a reference consumer, not the substrate. It keeps its collision fix and carries `publish = false`; its remaining wire-facing defects (SUB-2..6) are recorded and unfixed, and it must not be published until they are.*
+
 
 - [x] SUB-1 Transaction and commitment folds use ENC-1. Tests:
   - evidence: `crates/koru-lambda-consensus/src/{validator,commitment}.rs` @ e354591 — both folds anchored; tests `validator::tests::nonce_byte_order_is_not_lost`, `..._a_repeated_leading_byte_is_not_absorbed`, `..._nonce_and_data_do_not_bleed_into_each_other`, `..._distinct_transactions_have_distinct_roots`, `..._distinct_inputs_give_distinct_roots` (proptest); reproduction program now reports all three cases distinct
@@ -214,21 +435,10 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [x] SUB-12 Consensus tests build distinctions through the engine, not through an internal constructor. Found when the crate split made `Distinction::from_bytes_unchecked` unreachable from outside the substrate — three tests had been fabricating identifiers from raw bytes.
   - evidence: `crates/koru-lambda-consensus/src/{validator,commitment}.rs` @ 57d892f — no `from_bytes_unchecked` remains; the crate compiles only against the public API
 
-## JS — wasm / TypeScript surface
-
-- [ ] JS-1 Counts and degrees are `number` everywhere (not `bigint`); the 2^53 bound is documented; `docs/MIGRATION_JS.md` is corrected in the same change (it currently documents `bigint` as the 2.0 shape)
-- [ ] JS-2 Every thrown error has a stable, documented `name` / `code`; tests assert them
-- [ ] JS-3 A hex helper for 32-byte ids (projection ids)
-- [ ] JS-4 `snapshotParentage`, `WasmEngine.replay`, `checkStructuralInvariant` and the sequence fold are exposed and tested
-- [ ] JS-5 Every rejection path is tested from JS (invalid direction, each `restoreProjection*` failure, verify, hex parse)
-- [ ] JS-6 Projection wrappers don't clone their full contents on every getter call
-- [ ] JS-7 The generated `.d.ts` is reviewed; the demos typecheck against it under `strict`
-- [ ] JS-8 The published wasm target is a deliberate, documented decision and is verified against a real consumer. v1.2 shipped `--target web` (default `init` export); 2.0.0 currently ships `--target bundler` (no such export), which silently breaks the only npm consumer (`canon-cpg/cli/engine.js` calls `await initWasm({module_or_path})`). Whatever is chosen — single target or multiple entry points — a test consumes the packed tarball the way that consumer does. See DEC-7.
-- [x] JS-10 The bindings handle `#[non_exhaustive]` substrate enums across the crate boundary: an unknown `SynthesisOutcome` variant surfaces to the caller instead of failing to compile against a future substrate release.
-  - evidence: `crates/koru-lambda-wasm/src/lib.rs` @ 57d892f — wildcard arm returns a JS error
-- [ ] JS-9 The lift layer is reachable from JS: the fold, `Canonicalizable`-style byte/string lifting, and an agent advance are exposed and tested. Today a JS consumer cannot get domain data into the engine at all.
-
 ## FFI — C ABI (ships in `koru-lambda-ffi`; restored by owner decision 2026-09-21)
+
+*Deferred 2026-09-30: No consumer exists, and the C ABI was 20% of the published v1.2 by line count. Restoring it would rebuild the ratio that made v1.2 nine percent substrate.*
+
 
 v1.2 shipped `src/ffi.rs`: 22 `extern "C"` functions over the engine and the network agent, using `Arc::into_raw` / `Box::into_raw`, `CString` returns, and **no `catch_unwind` anywhere**. It is restored to the same standard as the rest of the crate, not copied forward.
 
@@ -244,6 +454,9 @@ v1.2 shipped `src/ffi.rs`: 22 `extern "C"` functions over the engine and the net
 
 ## FFIJS — JS bindings for the consensus consumers (ships in `koru-lambda-consensus`; restored by owner decision 2026-09-21)
 
+*Deferred 2026-09-30: Mirrors of a consensus layer that is itself no longer in the release.*
+
+
 v1.2 shipped `WasmNetworkAgent`, `WasmValidator` and `WasmCommitmentAgent` (741-line `wasm.rs`) over string ids and JSON strings. They are restored on the 2.0.0 types, not copied forward.
 
 - [ ] FFIJS-1 The three classes are rebuilt on the 2.0.0 surface: `Uint8Array` ids, the raw/verified split, typed errors with stable `name`/`code` (no JSON-string or hex-string parameters carried over)
@@ -252,113 +465,10 @@ v1.2 shipped `WasmNetworkAgent`, `WasmValidator` and `WasmCommitmentAgent` (741-
 - [ ] FFIJS-4 They are covered by the same mutation, coverage and error-variant bars as the core
 - [ ] FFIJS-5 The `pkg/` package size impact is measured and recorded (the wasm binary grows; LAND-* depends on the landing page staying honest about it)
 
-## TST — Test suite
-
-- [x] TST-1 One golden-vector file, used by both native and wasm tests (child ids; projection ids and canonical bytes for every signal × direction × boundary; subsystem roots)
-  - evidence: `src/vectors.rs` @ 57d892f — native `tests/cond_d_prime.rs` and wasm `crates/koru-lambda-wasm/tests/cond_d_prime_wasm.rs` both assert against it
-- [ ] TST-2 No test compares a value with the formula that produced it (the `r = 2d−3` via `relationship_count` checks are replaced by the measured ledger)
-- [ ] TST-3a The loom model covers the real `synthesize` check-then-insert ordering (the mutant kernel must still fail loom)
-- [ ] TST-3b A real-code concurrency stress test: N threads, exactly one `Novel` per child, final state equal to a serial run
-- [ ] TST-4 Every public error variant is constructed and asserted by at least one test
-- [x] TST-5 The miri subset passes and is listed in CI
-  - evidence: `.github/workflows/ci.yml` miri job @ 699a872; `cargo +nightly miri test -p koru-lambda-core --lib` exits 0
-
-## API — Public surface
-
-- [ ] API-1 Every public error enum is `#[non_exhaustive]` and asserted mechanically (`assert_impl_all!(E: Debug + Display + Error + Send + Sync + 'static)`), with each `Display` string pinned against a golden so message drift fails a test
-- [ ] API-2 `InvariantError` field names describe what they hold
-- [ ] API-3 `Debug` on every public type (asserted mechanically); `Hash` on `Boundary` and `Direction`
-- [ ] API-4 `serde` is an optional feature; adapters deserialize owned and escaped strings (tested with `from_reader` / `from_value`)
-- [ ] API-5 `crate-type` carries only what the crate needs (`rlib` for a library; `cdylib`/`staticlib` belong with the C ABI, wherever DEC-9 puts it); no documentation relies on `panic = "abort"`; the release profile's `panic` setting is reconciled with ENG-1/ENG-5's "catchable panic, zero state change" claim, since a consumer building with `abort` gets no unwind
-- [x] API-6 `cargo semver-checks` runs in CI against the published baseline, and the 2.0.0 snapshot becomes the baseline for future releases. *(Corrected 2026-09-26: this item assumed semver-checks would enumerate the v1.2 → 2.0.0 delta. It cannot — because the bump is already major, all 254 of its lints skip. It is future-facing only, preventing accidental breakage within 2.0.x. The delta comes from an API-snapshot diff instead; see PROC-12 and `api/DELTA-from-1.2.0.txt`.)*
-  - evidence: `.github/workflows/ci.yml` semver job; `cargo semver-checks check-release --baseline-version 1.2.0` runs clean (0 checks, 254 skip)
-- [ ] API-7 `#[must_use]` audit across every public function returning a value (today: 21 in `engine.rs`, 20 in `projection.rs`, 2 in `replay.rs` — the asymmetry is unexamined)
-- [ ] API-8 `unsafe` is confined and locked: `#![forbid(unsafe_code)]` everywhere except the C ABI module, which carries `#![deny(unsafe_op_in_unsafe_fn)]`, a `# Safety` contract on every function, and a CI gate that no other module gains `unsafe`. Plus `assert_impl_all!` for `Send + Sync + UnwindSafe + RefUnwindSafe` on public types.
-- [ ] API-9 No `impl Drop` in the crate, gated in CI (a panic in `Drop` under `panic = "abort"` is unrecoverable for consumers)
-
-## THY — Theory alignment
-
-- [ ] THY-1 Every law in `THEORY.md` states its status: definitional, derived (with proof sketch), property of an encoding, empirical (with probe), or conjecture
-- [ ] THY-2 `docs/CLAIMS.md`: every claim in THEORY, DESIGN, ARCHITECTURE, README and rustdoc maps to a definition, proof sketch, named test or named probe
-- [ ] THY-3 Law 10 (mediated self-reference) has a runnable probe with a recorded result. The v1-era probe source exists at commit `2b1c323` (`experiments/runner/src/exp19_mediated_self_reference.rs`) and is restored and ported, not rewritten from scratch. THEORY's citation resolves to it.
-- [ ] THY-4 Law 11 text matches the shipped fold (syntheses per byte, depth). Sequenced **after** ENC-1/ENC-2, since the fold shape changes the hub gates.
-- [ ] THY-5 Law 8 says "execution interleavings of the same operations"; Law 7's projection-stability claim is scoped to where it holds
-- [ ] THY-6 THEORY states that Laws 5–12 continue the axiom numbering
-- [ ] THY-7 No shipped capability is still marked as future work
-- [ ] THY-8 Coding Law evidence paths are correct
-- [ ] THY-9 Subsystem theory review has named tests as its evidence: subsystem-derived roots are order-independent, and no read path mutates engine state (before/after snapshot equality)
-- [ ] THY-10 Every empirical claim has a runnable probe that names its **falsifying observation**, runs in CI, and records commit and seed
-- [ ] THY-11 **Sequence Law.** THEORY states order encoding as a derived law: in a commutative, irreflexive, content-addressed substrate, sequence injectivity requires an anchor disjoint from element lineage, and nesting depth carries length. ENC-1 is its implementation, not a private utility.
-- [ ] THY-12 Each of Axioms 1–4 has a named test that fails if only that axiom breaks, listed in `docs/CLAIMS.md`
-- [ ] THY-13 THEORY and SPEC state which laws are conditional on id injectivity, and that an in-engine collision is undetectable (it presents as saturation, and content-address recomputation still passes)
-- [ ] THY-14 Law 10's precondition is stated (the observation must lie outside the chain, or `synth(synth(x,obs),x)` collapses to a fixed point when `obs == x`), or Law 10 is labelled a conjecture
-- [ ] THY-15 **Degree conservation.** Σ degree = 4N−6, so mean degree → 4 at every scale under every workload; hub degree is paid for by leaves, and the Coding Law is a variance claim under a fixed mean. Definitional, with one test.
-- [ ] THY-16 **Lift Law.** THEORY names the lift — the map from non-distinction values into the graph — as the substrate's third forced object and its only free parameter, with two sub-parameters: the seed-anchor (which buys injectivity) and the alphabet (which shapes topology). `Canonicalizable` is its trait, the anchored fold its instance. Status: definitional.
-- [ ] THY-17 THEORY's two statements about the LCA are reconciled: it is called "a pattern, not an axiom" at one point and "a substrate-level construct" at another. The resolution states which is binding and why, since it decides where the trait ships.
-- [ ] THY-18 Law 11 is re-derived after ENC-1/ENC-2 land: under a fixed Σdeg, the Fold Law names where degree concentrates, and PRB-2 tests whether that is the alphabet rather than primordiality. Independent-law status is withdrawn if it is a corollary.
-
-## PRB — Probes
-
-- [ ] PRB-1 Mediated self-reference: 100K depth, with constant-observation, cycling-observation and observation-drawn-from-chain variants. Falsified by any repeat or fixed point before the birthday bound.
-- [ ] PRB-2 Anchor-hub: the same corpus folded under k different seeds **and** alphabets, varied independently, measuring whether top-degree rank tracks the alphabet. If it does, Law 11 demotes to a corollary of THY-16 and THEORY says so.
-- [ ] PRB-3 Projection idempotence for an arbitrary signal (see PRJ-8), shipped as the consumer self-test
-- [ ] PRB-4 THEORY's own falsifier, run and recorded: two engines fed the same parent pairs in different orders, queried at quiescence with the same `{root, direction, boundary, signal}`, produce byte-identical `canonical_bytes`. THEORY names this as the experiment that would refute its central claim, and nothing in the crate runs it.
-
-## DOC — Documentation
-
-- [x] DOC-1 `docs/SPEC.md`:
-  - evidence: `docs/SPEC.md` @ 1e4c6ea — all 15 citations repointed; independently reimplemented from the document alone, reproducing every golden vector and the 150-byte wire form
-  - exact synthesis hash (concatenation, no separator, lexicographic min, 16-byte prefix, collision bound)
-  - primordials
-  - the anchored sequence fold and the byte-tip derivation (without these, commitment roots cannot be reproduced by a second implementation)
-  - wire format
-  - projection conditions A–F and the cross-target condition
-  - golden vectors
-
-  Every spec reference in source, tests and Cargo.toml points to it.
-- [ ] DOC-2 `DESIGN.md` uses symbol anchors only; the type-level trust-boundary claim is true; the subsystem sections match the code; nothing is marked for a later version; and its non-goals do not contradict shipped items (non-goal 6 "no byte-fold changes" contradicts ENC-1; non-goal 8 "no networking stack" contradicts SUB-8)
-- [ ] DOC-3 `README.md` claims match `docs/CLAIMS.md`; the trust-boundary wording is exact
-- [ ] DOC-4 `docs/MIGRATION_JS.md` is correct for the shipped target (no stale `init` / `initSync` guidance), covers every JS change, and does not contradict the shipped surface
-- [ ] DOC-5 `docs/MIGRATION_RUST.md`: v1.x → 2.0.0 for Rust consumers, including the subsystem API mapping, the raw/verified type split, and the commitment-hash change with before/after vectors
-- [ ] DOC-6 `CHANGELOG.md` lists every breaking change, derived from `api/DELTA-from-1.2.0.txt` rather than from recollection
-- [ ] DOC-7 rustdoc: no broken links; `# Errors` / `# Panics` on every public function; no stale comments
-- [ ] DOC-8 `ARCHITECTURE.md` matches the code
-- [ ] DOC-9 Example comments are accurate (tier 3 cone anchor, tier 4 header), in both languages
-- [ ] DOC-10 `docs/BENCHMARKS.md` numbers re-measured after all changes
-- [ ] DOC-11 `docs/development/*` is accurate and current (restored 2026-09-21: nothing is dropped; HYG-4 decides whether it ships, this item keeps it correct either way)
-- [ ] DOC-12 `docs/SPEC.md` states the engine model explicitly: an engine is a witness of what it has synthesized, not a namespace; primordials are the same constants everywhere; identity is engine-independent by construction; ids carry no origin and are not scoped to an application; an unregistered distinction reaching `synthesize` is a caller error caught before any state change
-- [ ] DOC-13 `docs/SPEC.md` records the outcome and reasoning of every closed `DEC-*` item, so a reader finds the limits stated rather than discovering them
-
-- [ ] DOC-14 `docs/MIGRATION_JS.md` stops describing the subsystem classes as retired, since FFIJS-* restores them, and documents their new shape
-- [ ] DOC-15 README and rustdoc carry a "lifting your data" section: a domain value folded to a root, then used to advance an agent — the path a stranger needs and cannot currently find
-
-## LAND — The published artifact
-
-- [ ] LAND-1 README first screen, in order: the ≤25-word claim (LAND-4), a runnable example with its printed output, then the cross-runtime byte-equality claim in one sentence. Theory is linked below the fold, not led with.
-- [ ] LAND-2 DEMO-1 and DEMO-4 run against the **published** npm tarball and crates.io package in CI, with no `wasm-pack` step. Today every demo requires a Rust toolchain and a local build, so no demo is runnable by someone who installs the package.
-- [ ] LAND-3 The npm landing page (`pkg/README.md`) is JS-first, not the Rust README
-- [ ] LAND-4 One claim, ≤ 25 words, naming content-addressed folding and cross-runtime byte-equality, identical in README, crate description, npm description, npm landing page and crate rustdoc; a gate diffs all five
-- [ ] LAND-5 "What this is not": grow-only set rather than a general CRDT; Merkle determinism rather than consensus; 128-bit ids; and not a consensus protocol — the consensus agents are reference consumers, named and linked as such
-- [ ] LAND-6 A 60-second quickstart, timed by someone who has not seen the repo
-- [ ] LAND-7 npm keywords, description and rendering verified on the real package page before publish
-- [ ] LAND-8 Crate description, keywords and categories name the capability, not the theory and not a protocol category. Today the description is "a minimal axiomatic system for distributed computation" and the keywords include "consensus", which files the substrate in the wrong aisle and invites comparison to protocols it is not.
-- [ ] LAND-9 The hook runs with no toolchain: a reader reproduces a child id against their own SHA-256 in under 60 seconds from a browser or a single command, without installing Rust
-- [ ] LAND-10 Neither "distinction theory" nor "axiom" appears above the first runnable example in the README, the npm landing page or the crate-level rustdoc
-
-## HYG — Hygiene and packaging
-
-- [x] HYG-1 No internal planning or audit tags in source, tests, benches or manifests
-  - evidence: `scripts/gates/no_process_leaks.sh` clean @ 1e4c6ea
-- [ ] HYG-2 `scripts/build_universal.sh` removed
-- [x] HYG-3 `cargo audit` and `cargo deny` clean (crossbeam-epoch ≥ 0.9.20; rand advisory; duplicate versions resolved)
-  - evidence: `cargo audit` reports 0 @ e201dc1 — crossbeam-epoch 0.9.21, lru 0.18, rand pin =0.9.5
-- [ ] HYG-4 Crate tarball and npm package contents reviewed file by file, including whether `docs/development/*` ships
-- [ ] HYG-5 The whole workspace (including `experiments/`) builds and tests in CI
-- [x] HYG-7 The corpus generator writes where the gate reads. The two had drifted apart when the gate test moved crates, so a regeneration would have written to the workspace root — a path nothing reads — leaving the pinned corpus stale while appearing to succeed.
-  - evidence: `experiments/runner/src/bin/gen_exp18_corpus.rs` @ e201dc1; regeneration reproduces the pinned digests in place
-- [ ] HYG-6 `cargo publish --dry-run` output is byte-compared against a committed manifest; `Cargo.lock` is committed; a clean checkout reproduces the same tarball
-
 ## MIG — Downstream migration
+
+*Deferred 2026-09-30: Downstream projects are another team's concern as of 2026-09-30. The generated `api/DELTA-from-1.2.0.txt` stays in the repo as the raw material whenever someone wants it.*
+
 
 - [ ] MIG-1 Following only `docs/MIGRATION_RUST.md`, scratch copies of `koru-node`, `koru/koru-protocol`, `koru-protocol`, `hashy-protocol`, `koru-mesh` and `stele` compile and pass their tests against 2.0.0 (the consumer repos themselves are not modified)
 - [ ] MIG-2 Per-consumer breakage inventory: for every downstream project pinned to a 0.x/1.x version, the APIs it uses that changed, and the migration step for each. Anything with no migration path is raised as its own item.
@@ -368,56 +478,3 @@ v1.2 shipped `WasmNetworkAgent`, `WasmValidator` and `WasmCommitmentAgent` (741-
 - [ ] MIG-6 Every type re-exported by a downstream project's public API is inventoried (e.g. `koru-mesh` re-exports `NetworkAgent`), so transitive semver breaks are counted
 - [ ] MIG-7 `docs/MIGRATION_RUST.md` states the crate rename for every consumer-layer import, with a before/after `Cargo.toml`
 
-## DEC — Owner decisions
-
-- [ ] DEC-1 **C FFI. Decided (owner, 2026-09-21): restore to the full standard.** Nothing is dropped, regardless of current consumer count. Implemented by FFI-1..9. Ticks when the reasoning is recorded per DOC-13.
-- [ ] DEC-2 **JS bindings for the subsystems. Decided (owner, 2026-09-21): build them to the full standard.** Implemented by FFIJS-1..5 and DOC-14. Ticks when the reasoning is recorded per DOC-13.
-- [ ] DEC-3 **Demo scope. Decided (owner, 2026-09-21): keep all four; nothing folded.** DEMO-4 is the flagship and DEMO-1 the hook, but DEMO-3 stays a separate demo.
-- [ ] DEC-4 **Domain separation.** The hash-tag branch is **closed on theory grounds** (theory veto, 2026-09-21): a domain tag in the hash is exactly the separate naming layer Axiom 4 excludes. Domain separation is an anchor parameter of the fold. ANA-1 documents the consequences; it does not reopen the choice.
-  - requires: ANA-1
-- [ ] DEC-5 **Identifier width.** Ids are SHA-256 truncated to 128 bits (collision search bounded near 2^64), and the width is **unversioned**: the wire format has a version field, an id does not, so a later widening cannot be migrated. Decide: accepted with a written threat model and that non-goal stated, or widened now.
-  - requires: ANA-2
-- [ ] DEC-6 **Unbounded growth.** The eviction branch is foreclosed by ENG-3 (evicting an interior node fails the engine's own auditor), so the real question is whether a peer can drive an engine out of memory. Decide: accepted and documented with measured costs and the recommended consumer pattern, or hostile-input memory bounds become their own items.
-  - requires: ANA-3
-- [ ] DEC-7 **Published wasm target.** v1.2 shipped `--target web`; 2.0.0 ships `--target bundler`, which breaks the only npm consumer. Decide the target strategy (single target, or multiple entry points) — see JS-8.
-- [ ] DEC-8 **`BatchSynthesizer` (SUB-10). Decided (owner, 2026-09-21): port it to the full standard.** No consumer today; shipped anyway. Ticks when the reasoning is recorded per DOC-13.
-- [ ] DEC-9 **Crate boundary. Decided (owner, 2026-09-21): four crates**, one workspace, one release, same bar — `koru-lambda-core` (engine, projection, replay, lift), `koru-lambda-consensus` (validator, commitment, network, classifier, batch), `koru-lambda-wasm` (JS/TS bindings; extracted 2026-09-22 because `wasm-pack` requires `cdylib`), `koru-lambda-ffi` (C ABI). Nothing is dropped. Implemented by PKG-1..7. Viability was measured first: the classifier and batch paths both compile against the public API from an external crate, with no internal access. Ticks when the reasoning is recorded per DOC-13.
-  - requires: ANA-4 (records the measured basis: 7→5 direct deps, `lru` and mandatory `serde` leave the substrate, ~37 KB of wasm no longer paid by browser users who don't use consensus, and a consumer-layer bug stops forcing a substrate major)
-- [ ] DEC-10 **Sealing.** Measured 2026-09-21 from an external crate against the public API only: a sibling **can** define its own `Signal`, materialize it, get canonical bytes and a projection id, achieve cross-engine byte equality, and `restore_projection` its own type — no escape hatch needed. Sealing blocks exactly three things, permanently at 2.0.0:
-  1. implementing `CoreSignal` (substrate-internal dispatch)
-  2. implementing `ReadOnlyEngine` — so no alternative engine ever: no mock, no disk-backed, no remote
-  3. adding `Boundary` / `Direction` variants — so no threshold or other custom traversal bound
-
-  **Decided (owner, 2026-09-21): unseal `ReadOnlyEngine`; `CoreSignal` stays sealed; `Boundary`/`Direction` stay closed.** Implemented by SEAL-1..3. Ticks when the reasoning is recorded per DOC-13.
-
-## ANA — Analyses backing the decisions
-
-- [ ] ANA-1 Domain separation: what collides today across applications, what an anchor-based separation gives, what a hash-level domain tag would cost (identity change, vector churn, loss of cross-application convergence, naming layer), and which downstream projects are affected
-- [ ] ANA-2 Collision analysis: the birthday bound at 128 bits, accidental-collision probability at realistic and extreme counts, the adversarial case, what an attacker gains, and the consequence of ids being unversioned and unmigratable
-- [ ] ANA-3 Growth analysis: measured bytes per distinction and per relationship at 1K/1M scale, peak allocation for a maximum-size hostile batch, whether a peer can drive an engine past available memory, and the recommended consumer pattern
-- [ ] ANA-4 Crate-boundary analysis: what each crate's name promises and what a stranger searching for it finds; the semver blast radius of a consumer-layer bug under each layout; the dependency surface (`lru`, `serde`, `unsafe`) each layout forces on a substrate user; feature-matrix and wasm size effects; publish mechanics; and the cost of the migration the split itself creates
-
-## REV — Independent review (after everything above)
-
-- [ ] REV-1 Code review from reviewers who see only the code: no must-fix findings
-- [ ] REV-2 Test-quality review: no must-fix findings; mutation report clean
-- [ ] REV-3 Theory alignment: a reviewer given only `THEORY.md` and the code produces a written finding list with zero must-fix items
-- [ ] REV-4 Drift sweep: no stale names, paths or claims in tracked files
-- [ ] REV-5 Every finding raised by REV-1..4, the mutation run, the probes and the downstream check has become an item here and that item is ticked. No open finding remains at release.
-
-## DEMO — Demonstrations (Rust and TypeScript, identical output, run in CI)
-
-- [ ] DEMO-1 Predict-and-confirm: child ids reproduced with a plain SHA-256 call (the hook — checkable by hand in seconds)
-- [ ] DEMO-2 Trust boundary: verify rejection, projection restore round-trip, tamper rejection
-- [ ] DEMO-3 Order independence: shuffled, repeated and argument-swapped histories give identical bytes
-- [ ] DEMO-4 Cross-runtime convergence (**flagship**): Rust writes the history; a separate Node process replays it shuffled and reproduces the same projection id; tampering fails
-- [ ] DEMO-5 An independent re-implementation written from `docs/SPEC.md` alone (a standalone script, not this crate) reproduces every golden vector: child ids, fold roots, projection ids. This is the only item that can falsify "the spec is sufficient"; DEMO-4 compiles the same source twice and cannot.
-- [ ] DEMO-6 Lifting domain data: a domain struct folded to a root and used to advance an agent, in Rust and TypeScript, with identical output. Every demo today synthesizes primordials; none shows a reader how their own data gets in.
-
-## REL — Release (each step needs explicit owner approval)
-
-- [ ] REL-1 `pkg/` rebuilt with `--features wasm`; version and exports verified
-- [ ] REL-2 `cargo publish`
-- [ ] REL-3 `npm login` (owner) and `npm publish`
-- [ ] REL-4 Annotated tag `v2.0.0` created and pushed
-- [ ] REL-5 Yank criteria agreed in writing before publish: what would justify yanking 2.0.0 and who decides

@@ -13,8 +13,11 @@ cd "$(dirname "$0")/../.."
 
 CHECKLIST="${1:-CHECKLIST.md}"
 
-open_count=$(grep -cE '^- \[ \] ' "$CHECKLIST" || true)
-done_count=$(grep -cE '^- \[x\] ' "$CHECKLIST" || true)
+# Only items above the "Not blocking 2.0.0" line count. Items marked
+# `- [~]` were cut with a written reason and are not blockers either.
+blocking=$(awk '/^# Not blocking/{exit} {print}' "$CHECKLIST")
+open_count=$(printf '%s\n' "$blocking" | grep -cE '^- \[ \] ' || true)
+done_count=$(printf '%s\n' "$blocking" | grep -cE '^- \[x\] ' || true)
 
 if [ "$open_count" -eq 0 ]; then
     echo "release_ready: all $done_count items complete"
@@ -23,7 +26,7 @@ fi
 
 echo "release blocked: $open_count of $((open_count + done_count)) items are still open"
 echo
-grep -E '^- \[ \] ' "$CHECKLIST" \
+printf '%s\n' "$blocking" | grep -E '^- \[ \] ' \
     | sed -E 's/^- \[ \] ([A-Z]+-[0-9]+[a-b]?) (.{0,72}).*/  \1  \2/' \
     | head -30
 if [ "$open_count" -gt 30 ]; then
