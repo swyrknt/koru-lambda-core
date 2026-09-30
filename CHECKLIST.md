@@ -193,8 +193,20 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
   - bounded pending commitments, cleared on epoch advance
   - atomic restore
   - verified wire ids
-- [ ] SUB-9 Compaction resolved honestly. The v1.2 `StructuralCompactor` never removed anything from the engine — it classified nodes by degree threshold and tracked its own archived set. So it is a read over a degree signal, which is what a projection is. Either port it as an explicitly consumer-side classifier, or express it as a projection boundary/signal; the "compactor" name goes if it evicts nothing. Required: classification is a pure function of engine state (shuffled replay yields identical stats).
-- [ ] SUB-10 `BatchSynthesizer` ported; the result representation (`Option` vs sentinel) is justified; concurrency is tested. *(No downstream consumer today; owner decided 2026-09-21 to ship it anyway — it meets the same bar as everything else.)*
+- [ ] SUB-9 Compaction resolved honestly, **derived rather than ported** (amended 2026-09-29).
+  The v1.2 `StructuralCompactor` is 503 lines that read the graph their own way. Reading the
+  graph by root, direction, boundary and signal is what a projection *is*, and the classification
+  was demonstrated working from an external crate against the public API alone: a thermal signal
+  over `degree` materialises, produces canonical bytes and a projection id, achieves cross-engine
+  byte equality, and restores. The threshold belongs to the signal, not the boundary, so the
+  closed `Boundary` enum (DEC-10) does not block it.
+  **Nothing is dropped and no consumer breaks:** the name and the five methods actually used
+  downstream — `new`, `set_hot_threshold`, `compact`, `get_stats`, `synthesize_action` — are kept
+  as the facade. Only the implementation changes: a projection for the classification, plus the
+  threshold and archived set, which are genuinely consumer state. Expect roughly 100 lines in
+  place of 503.
+  Original requirements still apply: The v1.2 `StructuralCompactor` never removed anything from the engine — it classified nodes by degree threshold and tracked its own archived set. So it is a read over a degree signal, which is what a projection is. Either port it as an explicitly consumer-side classifier, or express it as a projection boundary/signal; the "compactor" name goes if it evicts nothing. Required: classification is a pure function of engine state (shuffled replay yields identical stats).
+- [ ] SUB-10 `BatchSynthesizer` ships **as a thin helper, not a port** (amended 2026-09-29). Batching is scheduling, not substrate: the engine is already `Send + Sync`, so a batch is a fold over calls across threads. The v1.2 type was 379 lines wrapping what a consumer writes in a handful; expect roughly 30. The result representation (`Option` vs sentinel) is justified, and concurrency is tested to the same bar as everything else. *(Zero downstream consumers found in any sibling project; the owner decided 2026-09-21 to ship it regardless, and it keeps its name.)*
 - [ ] SUB-11 Every subsystem meets the same mutation, coverage and error-variant bar as the core
 - [x] SUB-12 Consensus tests build distinctions through the engine, not through an internal constructor. Found when the crate split made `Distinction::from_bytes_unchecked` unreachable from outside the substrate — three tests had been fabricating identifiers from raw bytes.
   - evidence: `crates/koru-lambda-consensus/src/{validator,commitment}.rs` @ 57d892f — no `from_bytes_unchecked` remains; the crate compiles only against the public API
