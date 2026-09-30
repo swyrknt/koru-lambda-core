@@ -129,13 +129,15 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 
 ## ENC — Canonical encoding
 
-- [ ] ENC-1 One anchored, order-preserving sequence fold, with a written spec: the anchor is a **parameter**, not a constant; the spec states and proves accumulator/element lineage disjointness **including nested folds** (a fold's result used as another fold's element, which is what the subsystems do); injectivity holds modulo the 128-bit bound. Tests:
+- [x] ENC-1 One anchored, order-preserving sequence fold, with a written spec: the anchor is a **parameter**, not a constant; the spec states and proves accumulator/element lineage disjointness **including nested folds** (a fold's result used as another fold's element, which is what the subsystems do); injectivity holds modulo the 128-bit bound. Tests:
+  - evidence: `src/primitives.rs` @ b3475a0 — `ByteFold`; tests `primitives::tests::all_256_element_tips_are_distinct`, `..._the_cases_that_collided_before`, `..._order_length_and_repetition_all_change_the_result`, `..._prefixes_do_not_fold_alike`, `..._an_anchor_that_is_an_element_tip_is_rejected` (degenerate case constructed directly), `..._the_anchor_changes_the_result`
   - all 256 byte tips are distinct
   - property test: distinct sequences give distinct results
   - a directly-constructed degenerate case where an accumulator equals the next element tip (a random proptest reaches this with probability 2⁻¹²⁸, so it must be constructed)
   - prefix, permutation and repeat regression vectors
   - golden vectors
-- [ ] ENC-2 Byte folding uses a **per-engine memoized** tip table (registration cached per engine, never identity cached globally — a shared table would hand ENG-1 unregistered parents and panic)
+- [x] ENC-2 Byte folding uses a **per-engine memoized** tip table (registration cached per engine, never identity cached globally — a shared table would hand ENG-1 unregistered parents and panic)
+  - evidence: `src/primitives.rs` @ b3475a0 — `ByteFold::new` computes the 256 tips once per engine; test `primitives::tests::tips_are_engine_independent_but_folds_need_their_own_engine` covers the registration trap
 - [ ] ENC-3 `LocalCausalAgent` / `synthesize_causal_action` take `&DistinctionEngine`; roots accepted from outside are engine-verified; the trait is documented as an anchored-fold contract, not a perspective abstraction
 - [ ] ENC-4 The anchored fold is **public and re-exported at the crate root**, and `Canonicalizable` ships impls for `u64`, `&[u8]`, `Vec<u8>` and `&str`. Today the only stdlib impl is `u8`, so a consumer with domain data has nothing to call.
 - [ ] ENC-5 The two private folds are deleted and call the public one (`validator.rs:97-109`, `commitment.rs:232-238`); a CI gate fails on any remaining hand-rolled `synthesize(acc, …)` left-fold in tracked code
@@ -176,7 +178,8 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 
 ## SUB — Consensus reference consumers (ships in `koru-lambda-consensus`)
 
-- [ ] SUB-1 Transaction and commitment folds use ENC-1. Tests:
+- [x] SUB-1 Transaction and commitment folds use ENC-1. Tests:
+  - evidence: `crates/koru-lambda-consensus/src/{validator,commitment}.rs` @ e354591 — both folds anchored; tests `validator::tests::nonce_byte_order_is_not_lost`, `..._a_repeated_leading_byte_is_not_absorbed`, `..._nonce_and_data_do_not_bleed_into_each_other`, `..._distinct_transactions_have_distinct_roots`, `..._distinct_inputs_give_distinct_roots` (proptest); reproduction program now reports all three cases distinct
   - regression vectors: nonce 1 vs 256, 2 vs 512; `[0x00]` vs `[0x00,0x00]`
   - pinned roots
   - property test: distinct inputs give distinct roots
