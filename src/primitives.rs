@@ -101,6 +101,120 @@ pub trait Canonicalizable {
 /// topological mega-hubs (Law 11, Fold Law).
 pub struct ByteMapping;
 
+/// An ordered sequence of bytes, folded into one distinction.
+///
+/// # Why this exists as a primitive
+///
+/// The operator is commutative and irreflexive, so a sequence cannot be
+/// folded naively: `synthesize` cannot tell `(x, y)` from `(y, x)`, and
+/// `synthesize(x, x)` returns `x`. An ordered encoding therefore has to
+/// carry order in the *nesting* — each step folds the running
+/// accumulator with the next element, so position is recorded by depth.
+///
+/// Two consumers wrote that fold by hand and both wrote it the same way
+/// and wrong: they seeded the accumulator with the **first element's**
+/// tip. That makes the first two positions an unordered pair, and a
+/// leading run of equal bytes vanishes through irreflexivity. Nonce 1
+/// and nonce 256 produced identical commitments. The encoding is one
+/// primitive here so that it is specified once, tested once, and cannot
+/// be reinvented differently.
+///
+/// # The rules that make it injective
+///
+/// - **The accumulator starts at an anchor, never at an element.** The
+///   anchor is a parameter: a consumer with a perspective passes its own
+///   root, so two consumers folding the same bytes from different
+///   anchors get different results. Domain separation is an anchor
+///   choice, which is why it does not need to enter the hash.
+/// - **The anchor may not be an element tip.** If it were, the first
+///   step could collapse through irreflexivity and silently drop an
+///   element. This is checked, not assumed: the alphabet is 256 known
+///   values, so membership is a lookup.
+/// - **Length is folded in before the elements.** Without it, a fold is
+///   only injective among sequences of equal length.
+///
+/// Beyond the first step, an accumulator is a hash-chain node while
+/// elements come from a fixed 256-value alphabet, so a later collapse
+/// would require landing on one of 256 specific 128-bit values — the
+/// collision bound in the specification, not a structural hole.
+pub struct ByteFold {
+    /// The 256 element tips, one per byte value, for this engine.
+    tips: [Distinction; 256],
+    /// Tip bytes, for the anchor check.
+    tip_bytes: std::collections::HashSet<[u8; 16]>,
+}
+
+impl ByteFold {
+    /// Build the fold for `engine`, computing all 256 element tips once.
+    ///
+    /// Tips are engine-independent as *values* — identical histories give
+    /// identical identifiers — but every tip must be **registered in the
+    /// engine it will be folded against**, or it would reach `synthesize`
+    /// as an unregistered parent. That is why this is per engine and not
+    /// a global table.
+    ///
+    /// Cost is paid once: 256 byte folds, most of which saturate
+    /// immediately after the first. Afterwards a tip is an array index
+    /// rather than 17 synthesis calls.
+    #[must_use]
+    pub fn new(engine: &DistinctionEngine) -> Self {
+        let tips: [Distinction; 256] =
+            std::array::from_fn(|i| ByteMapping::map_byte_to_distinction(i as u8, engine));
+        let tip_bytes = tips.iter().map(|d| *d.as_bytes()).collect();
+        Self { tips, tip_bytes }
+    }
+
+    /// The tip distinction for one byte value.
+    #[must_use]
+    pub const fn tip(&self, byte: u8) -> Distinction {
+        self.tips[byte as usize]
+    }
+
+    /// Whether `d` is one of the 256 element tips.
+    ///
+    /// Public because it is the precondition on [`Self::fold`]'s anchor,
+    /// and a caller choosing an anchor should be able to check it.
+    #[must_use]
+    pub fn is_tip(&self, d: Distinction) -> bool {
+        self.tip_bytes.contains(d.as_bytes())
+    }
+
+    /// Fold `bytes` into a single distinction, anchored at `anchor`.
+    ///
+    /// Distinct sequences give distinct results: order is carried by
+    /// nesting depth, length is folded in first, and the accumulator
+    /// never starts at an element.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `anchor` is an element tip, which would let the first
+    /// step collapse and drop an element, or if `anchor` is not
+    /// registered in `engine`.
+    #[must_use]
+    pub fn fold(
+        &self,
+        anchor: Distinction,
+        bytes: &[u8],
+        engine: &DistinctionEngine,
+    ) -> Distinction {
+        assert!(
+            !self.is_tip(anchor),
+            "fold: the anchor is an element tip, so the first step could collapse through \
+             irreflexivity and drop an element. Anchor on a synthesized root instead."
+        );
+
+        // Length first, so sequences of different lengths cannot coincide.
+        let mut acc = anchor;
+        for len_byte in (bytes.len() as u64).to_le_bytes() {
+            acc = engine.synthesize(acc, self.tip(len_byte));
+        }
+        for &b in bytes {
+            acc = engine.synthesize(acc, self.tip(b));
+        }
+        acc
+    }
+}
+
 impl ByteMapping {
     /// Number of bit-steps per byte fold. Each step performs two
     /// `synthesize` calls (one with d₀, one with d₁); the bit value
@@ -389,5 +503,153 @@ mod tests {
         let via_trait = 0x42_u8.to_canonical_structure(&e);
         let via_direct = ByteMapping::map_byte_to_distinction(0x42, &e);
         assert_eq!(via_trait, via_direct);
+    }
+
+    // ----- The anchored fold -------------------------------------------
+
+    /// An anchor that is not an element tip: a synthesized root, which is
+    /// what a consumer with a perspective actually holds.
+    fn anchor_for(e: &DistinctionEngine) -> Distinction {
+        let c = e.synthesize(e.d0(), e.d1());
+        e.synthesize(c, e.d0())
+    }
+
+    #[test]
+    fn all_256_element_tips_are_distinct() {
+        let e = DistinctionEngine::new();
+        let fold = ByteFold::new(&e);
+        let mut seen = std::collections::HashSet::new();
+        for b in 0..=255u8 {
+            assert!(seen.insert(*fold.tip(b).as_bytes()), "two byte values share a tip: {b}");
+        }
+        assert_eq!(seen.len(), 256);
+    }
+
+    #[test]
+    fn the_cases_that_collided_before() {
+        // The reported failures, as regression vectors. Each pair folded
+        // to the same distinction under the hand-rolled fold.
+        let e = DistinctionEngine::new();
+        let fold = ByteFold::new(&e);
+        let anchor = anchor_for(&e);
+
+        // Byte order in the first two positions was unordered.
+        let nonce_1 = 1u64.to_le_bytes();
+        let nonce_256 = 256u64.to_le_bytes();
+        assert_ne!(
+            fold.fold(anchor, &nonce_1, &e),
+            fold.fold(anchor, &nonce_256, &e),
+            "nonce 1 and nonce 256 differ only by byte order and must not fold alike"
+        );
+
+        let nonce_2 = 2u64.to_le_bytes();
+        let nonce_512 = 512u64.to_le_bytes();
+        assert_ne!(fold.fold(anchor, &nonce_2, &e), fold.fold(anchor, &nonce_512, &e));
+
+        // A leading run of equal bytes vanished through irreflexivity.
+        assert_ne!(
+            fold.fold(anchor, &[0x00], &e),
+            fold.fold(anchor, &[0x00, 0x00], &e),
+            "a repeated leading byte must not be absorbed"
+        );
+    }
+
+    #[test]
+    fn order_length_and_repetition_all_change_the_result() {
+        let e = DistinctionEngine::new();
+        let fold = ByteFold::new(&e);
+        let anchor = anchor_for(&e);
+        let cases: [&[u8]; 8] = [
+            &[],
+            &[0x01],
+            &[0x02],
+            &[0x01, 0x02],
+            &[0x02, 0x01],
+            &[0x01, 0x01],
+            &[0x01, 0x02, 0x03],
+            &[0x03, 0x02, 0x01],
+        ];
+        let mut seen = std::collections::HashMap::new();
+        for case in cases {
+            let d = fold.fold(anchor, case, &e);
+            if let Some(prev) = seen.insert(*d.as_bytes(), case) {
+                panic!("{case:?} folds the same as {prev:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn prefixes_do_not_fold_alike() {
+        // Length is folded in first precisely so that a sequence and its
+        // prefix cannot coincide.
+        let e = DistinctionEngine::new();
+        let fold = ByteFold::new(&e);
+        let anchor = anchor_for(&e);
+        let full = [0xAA, 0xBB, 0xCC, 0xDD];
+        let mut seen = std::collections::HashSet::new();
+        for n in 0..=full.len() {
+            assert!(
+                seen.insert(*fold.fold(anchor, &full[..n], &e).as_bytes()),
+                "prefix of length {n} collides with a shorter one"
+            );
+        }
+    }
+
+    #[test]
+    fn the_anchor_changes_the_result() {
+        // Domain separation without touching identity: the same bytes
+        // under two anchors are two different distinctions.
+        let e = DistinctionEngine::new();
+        let fold = ByteFold::new(&e);
+        let a1 = anchor_for(&e);
+        let a2 = e.synthesize(a1, e.d1());
+        assert_ne!(fold.fold(a1, b"same bytes", &e), fold.fold(a2, b"same bytes", &e));
+    }
+
+    #[test]
+    #[should_panic(expected = "the anchor is an element tip")]
+    fn an_anchor_that_is_an_element_tip_is_rejected() {
+        // The degenerate case, constructed directly. A property test would
+        // reach it with probability 2^-128, so it has to be built by hand:
+        // an anchor drawn from the element alphabet lets the first step
+        // collapse through irreflexivity and drop an element.
+        let e = DistinctionEngine::new();
+        let fold = ByteFold::new(&e);
+        let _ = fold.fold(fold.tip(0x41), &[0x41, 0x42], &e);
+    }
+
+    #[test]
+    fn folding_registers_every_intermediate() {
+        // A fold whose output is not registered would be unusable as a
+        // parent — the reason a shared, engine-independent tip table
+        // would be wrong.
+        let e = DistinctionEngine::new();
+        let fold = ByteFold::new(&e);
+        let anchor = anchor_for(&e);
+        let out = fold.fold(anchor, b"registered?", &e);
+        assert!(e.has(out));
+        assert!(e.check_structural_invariant().is_ok());
+        // And it can be used as a parent without tripping the guard.
+        let _ = e.synthesize(out, e.d0());
+    }
+
+    #[test]
+    fn tips_are_engine_independent_but_folds_need_their_own_engine() {
+        let e1 = DistinctionEngine::new();
+        let e2 = DistinctionEngine::new();
+        let f1 = ByteFold::new(&e1);
+        let f2 = ByteFold::new(&e2);
+        for b in [0u8, 1, 0x7F, 0xFF] {
+            assert_eq!(
+                f1.tip(b).as_bytes(),
+                f2.tip(b).as_bytes(),
+                "tips must be engine-independent"
+            );
+        }
+        // Same anchor history, same bytes, two engines: same result.
+        let a1 = anchor_for(&e1);
+        let a2 = anchor_for(&e2);
+        assert_eq!(a1.as_bytes(), a2.as_bytes());
+        assert_eq!(f1.fold(a1, b"abc", &e1).as_bytes(), f2.fold(a2, b"abc", &e2).as_bytes());
     }
 }
