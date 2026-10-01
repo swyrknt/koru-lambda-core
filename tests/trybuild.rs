@@ -3,7 +3,7 @@
 //!
 //! Currently one probe: `dyn Signal` must not be object-safe. See
 //! `tests/trybuild/dyn_signal_unsafe.rs` for the compile-fail source
-//! and `docs/SPEC.md` §5 for the design rationale.
+//! and `docs/SPEC.md` §6 for the design rationale.
 
 // Native-only: `trybuild` is not wasm32-compatible (spawns rustc as a
 // subprocess). Gated so `wasm-pack test` compiles without dragging its

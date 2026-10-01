@@ -2,7 +2,7 @@
 //! discharges `THEORY.md § The synthesis/projection dual` from a spec
 //! claim into a CI-attested theorem.
 //!
-//! Corresponds to the cross-engine condition in `docs/SPEC.md` §8. The probe fails
+//! Corresponds to the cross-engine condition in `docs/SPEC.md` §9. The probe fails
 //! loudly if two independent engines with identical synthesis histories
 //! produce byte-different projection output for the same spec at
 //! quiescence — i.e. if projection materialization turns out to be an
@@ -137,6 +137,6 @@ fn cond_d_cross_engine_projection_independence() {
     assert_eq!(
         proj1.canonical_bytes(),
         proj2.canonical_bytes(),
-        "Cond D violation: cross-engine projection determinism broken — replay/wire/snapshot consumers will fail; see docs/SPEC.md §8 and THEORY.md"
+        "Cond D violation: cross-engine projection determinism broken — replay/wire/snapshot consumers will fail; see docs/SPEC.md §9 and THEORY.md"
     );
 }

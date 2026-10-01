@@ -7,7 +7,7 @@ format, and the conditions the projection primitive must satisfy.
 
 It is written so that an independent implementation, working from this
 document and a SHA-256 library alone, can reproduce the golden vectors in
-§9. If it cannot, this document is wrong — that is the intended failure
+§10. If it cannot, this document is wrong — that is the intended failure
 mode, and it is checked by a test rather than assumed.
 
 Nothing here describes intent or future work. Every statement describes
@@ -33,7 +33,7 @@ are distinct.
 
 **Identifier width is 128 bits and is not versioned.** A distinction is
 self-describing to nobody: there is no version field inside an id. A
-collision search is bounded near 2^64 by the birthday bound. See §10.
+collision search is bounded near 2^64 by the birthday bound. See §11.
 
 ## 2. The synthesis operator
 
@@ -104,7 +104,92 @@ same thing.
 Passing a distinction that the receiving engine has not witnessed to
 `synthesize` is a programmer error, not a runtime condition to handle.
 
-## 4. Projections
+## 4. The lift
+
+The operator combines distinctions. Getting a value that is *not* a
+distinction into the graph is the lift, and it is the substrate's only
+free parameter: everything downstream of the primordials is forced, so
+the lift is the single place where a choice enters.
+
+It is specified here because two implementations that lift differently
+agree on nothing, even though both follow §2 exactly.
+
+### 4.1 Why a naive fold does not work
+
+The operator is commutative and irreflexive. So for an ordered sequence:
+
+- `synthesize(x, y)` cannot be told from `synthesize(y, x)`, and
+- `synthesize(x, x)` returns `x`, dropping an element entirely.
+
+Order therefore has to be carried by **nesting**: fold the running
+accumulator with the next element, so an element's position is recorded
+by its depth in the chain.
+
+Two rules make that fold injective:
+
+1. **The accumulator starts at an anchor, never at an element.** Seeding
+   with the first element makes the first two positions an unordered
+   pair, and lets a leading run of equal elements collapse through
+   irreflexivity. This is not hypothetical: it produced identical
+   commitments for the integers 1 and 256, whose little-endian bytes are
+   reorderings of each other.
+2. **The anchor may not be an element of the alphabet.** Otherwise the
+   first step can collapse for the same reason.
+
+Beyond the first step an accumulator is a hash-chain node while elements
+come from a fixed alphabet, so a later collapse would require landing on
+one of finitely many specific 128-bit values: the collision bound of
+§11, not a structural hole.
+
+### 4.2 The anchored fold
+
+Over an alphabet `Σ` with a tip function `tip: Σ → Distinction`:
+
+```
+fold(anchor, [e₀ … e_{n-1}]):
+    require anchor ∉ tip(Σ)
+    acc = anchor
+    for b in u64_le(n):           # length first
+        acc = synthesize(acc, tip_of_byte(b))
+    for e in [e₀ … e_{n-1}]:
+        acc = synthesize(acc, tip(e))
+    return acc
+```
+
+Length is folded in before the elements so that a sequence and a prefix
+of it cannot coincide. Where the width is fixed and known to both
+parties, the length prefix may be omitted; §4.3 is that case.
+
+The anchor is a **parameter**. Two consumers folding identical bytes
+from different anchors obtain different distinctions, which is how
+domains separate. That separation lives in synthesized structure and
+deliberately not in the hash: a domain tag mixed into §2 would be a
+naming layer above content addressing, and would end the property that
+two engines performing the same operations agree.
+
+### 4.3 The byte lift
+
+The byte lift is §4.2 instantiated one level down, with `Σ = {d₀, d₁}`
+and the eight bits of the byte as elements. Width is fixed at eight, so
+no length is folded in:
+
+```
+tip_of_byte(v):
+    acc = synthesize(d₀, d₁)          # the anchor; not an element of Σ
+    for i in 0 … 7:                    # least significant bit first
+        acc = synthesize(acc, d₁ if (v >> i) & 1 else d₀)
+    return acc
+```
+
+Eight synthesize calls per byte, and 256 distinct tips.
+
+So the substrate has one lift rule applied at two levels: bytes fold
+over the primordials, sequences fold over the byte tips. An
+implementation reproducing §10's vectors must implement this exactly;
+an encoding that produces distinct tips by some other route is a
+different substrate.
+
+## 5. Projections
 
 A projection is a read of the graph. Every projection commits to four
 axes, and those four axes alone determine its identity:
@@ -114,7 +199,7 @@ axes, and those four axes alone determine its identity:
 | `root` | any witnessed distinction |
 | `direction` | `Upstream`, `Downstream`, `Undirected` |
 | `boundary` | `Hops(n)`, `Saturated` |
-| `signal` | a per-node function (see §5) |
+| `signal` | a per-node function (see §6) |
 
 `Upstream` walks parent edges, `Downstream` walks child edges,
 `Undirected` walks both. `Hops(0)` yields the root alone. `Saturated`
@@ -123,7 +208,7 @@ walks until the frontier stops growing.
 Output is ordered by the bytewise ordering of §2 — the same ordering the
 operator uses — which is what makes the wire form canonical.
 
-## 5. Signals
+## 6. Signals
 
 A signal computes one value per node in the cone. It must be a pure
 function of `(signal, context, node)`.
@@ -154,7 +239,7 @@ A consumer may define its own signal. Its identity on the wire is
 `SHA-256(signal.canonical_bytes())[0..16]`, so a consumer signal must
 return stable bytes that do not vary across runs or machines.
 
-## 6. Canonical wire format
+## 7. Canonical wire format
 
 `canonical_bytes` serialises a materialised projection. This is the sole
 canonical form; any other encoding is not this format.
@@ -169,7 +254,7 @@ Header:
 | 21 | 1 | boundary tag: `0x00` hops, `0x01` saturated |
 | 22 | 8 | boundary payload, u64 little-endian (hop count; `0` when saturated) |
 | 30 | 1 | direction tag: `0x00` upstream, `0x01` downstream, `0x02` undirected |
-| 31 | 16 | signal identity (§5) |
+| 31 | 16 | signal identity (§6) |
 | 47 | 8 | entry count, u64 little-endian |
 
 Then `entry count` entries, in ascending bytewise order of identifier:
@@ -178,7 +263,7 @@ Then `entry count` entries, in ascending bytewise order of identifier:
 |---:|---|
 | 16 | node identifier |
 | 4 | output length in bytes, u32 little-endian |
-| *n* | output bytes, per §5 |
+| *n* | output bytes, per §6 |
 
 Every integer is little-endian. The entry count is `u64` so that a
 32-bit target and a 64-bit target produce identical bytes.
@@ -189,7 +274,7 @@ result byte for byte. Bytes that do not match what this engine would
 have produced are rejected, so a well-formed forgery fails as surely as
 a malformed one.
 
-## 7. Projection identity
+## 8. Projection identity
 
 ```
 projection_id = SHA-256(
@@ -198,7 +283,7 @@ projection_id = SHA-256(
     ‖ boundary_tag                  //  1 byte
     ‖ boundary_payload              //  8 bytes, u64 little-endian
     ‖ direction_tag                 //  1 byte
-    ‖ signal.canonical_bytes()      // variable, the tag from §5
+    ‖ signal.canonical_bytes()      // variable, the tag from §6
 )
 ```
 
@@ -207,9 +292,9 @@ The result is 32 bytes, untruncated.
 The identity covers **the specification, not the output**. Two
 projections with the same four axes share an identity even if the graph
 grew between them, and changing any single axis changes it. A reader who
-needs the contents to be identical compares §6 bytes, not this value.
+needs the contents to be identical compares §7 bytes, not this value.
 
-## 8. Conditions
+## 9. Conditions
 
 These are the properties the projection primitive must satisfy. They are
 named here because the code refers to them.
@@ -217,10 +302,10 @@ named here because the code refers to them.
 | | Condition | How it holds |
 |---|---|---|
 | A | Determinism — a signal is a pure function of its inputs | Required by the signal contract; a consumer signal is responsible for its own purity |
-| B | Content addressing — identity is derived from the specification | §7, by construction |
+| B | Content addressing — identity is derived from the specification | §8, by construction |
 | C | Idempotence — materialising twice yields identical output | Ordered output over engine state |
-| D | Cross-engine byte equivalence — two engines with the same history produce identical bytes | §6 fixes every width and order; verified by test |
-| D′ | Cross-target byte equivalence — a native build and a WebAssembly build produce identical bytes | §6 fixes widths that would otherwise differ by target; verified by two test suites asserting against §9 |
+| D | Cross-engine byte equivalence — two engines with the same history produce identical bytes | §7 fixes every width and order; verified by test |
+| D′ | Cross-target byte equivalence — a native build and a WebAssembly build produce identical bytes | §7 fixes widths that would otherwise differ by target; verified by two test suites asserting against §10 |
 | E | Read-only — materialising a projection does not modify the engine | The engine interface exposed to signals contains no mutating operation |
 | F | No order-bearing engine state — projections add nothing to the engine | Projection state lives on the projection |
 
@@ -228,7 +313,7 @@ Condition D holds **at quiescence**: while writes are in flight, two
 engines are not expected to agree, because they have not yet performed
 the same operations.
 
-## 9. Golden vectors
+## 10. Golden vectors
 
 These are the canonical test values. They are published in code as
 `koru_lambda_core::vectors`, and both the native and WebAssembly test
@@ -251,7 +336,7 @@ e       = synthesize(d, d₁)
 | `e` | `5f02c8386c05dc7311e0c73a011e18be` |
 
 Then, with `root = c`, `direction = Upstream`, `boundary = Hops(2)`,
-`signal = Adjacency`, the canonical bytes of §6 are:
+`signal = Adjacency`, the canonical bytes of §7 are:
 
 ```
 4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d256
@@ -264,10 +349,10 @@ Then, with `root = c`, `direction = Upstream`, `boundary = Hops(2)`,
 (The line breaks are presentational; the value is one continuous byte
 string.)
 
-Reading the first bytes against §6: `4b 50 52 4a` is `KPRJ`, `02` is the
+Reading the first bytes against §7: `4b 50 52 4a` is `KPRJ`, `02` is the
 version, and the next 16 bytes are `c`.
 
-## 10. Limits
+## 11. Limits
 
 Stated here so that a reader finds them rather than discovers them.
 

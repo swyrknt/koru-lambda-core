@@ -26,7 +26,7 @@
 //!
 //! # Cond A-F axiom-condition closures
 //!
-//! See `docs/SPEC.md` §8. The types below carry the mechanisms:
+//! See `docs/SPEC.md` §9. The types below carry the mechanisms:
 //!
 //! - **Cond A (determinism):** `Signal: Clone + Send + Sync + 'static`
 //!   with a documented purity contract on `compute` / `canonical_bytes`.
@@ -181,7 +181,7 @@ pub type SignalOutputs<S> = BTreeMap<Distinction, <S as Signal>::Output>;
 /// that state or `ProjectionId` collisions occur across different
 /// instances.
 ///
-/// # Example: consumer signal (see `docs/SPEC.md` §5)
+/// # Example: consumer signal (see `docs/SPEC.md` §6)
 ///
 /// Consumer signals can't close Cond D by construction — that would
 /// require substrate-level canonicalization, which sealing forbids.
@@ -493,7 +493,7 @@ pub enum Direction {
 
 /// Content-addressed 32-byte identity of a `ProjectionSpec<S>`. SHA-256
 /// over the domain-separated, canonically ordered input set specified
-/// in `docs/SPEC.md` §7.
+/// in `docs/SPEC.md` §8.
 ///
 /// Note: `Distinction` is 16 bytes; `ProjectionId` is 32 bytes. The
 /// widths differ intentionally.
@@ -670,7 +670,7 @@ where
 }
 
 impl<'e, S: Signal> Projection<'e, S> {
-    /// Compute the content-addressed identity per `docs/SPEC.md` §7.
+    /// Compute the content-addressed identity per `docs/SPEC.md` §8.
     ///
     /// ```text
     /// SHA-256(
@@ -685,7 +685,7 @@ impl<'e, S: Signal> Projection<'e, S> {
     ///
     /// Cheap: SHA-256 over the fixed-shape spec header. Does NOT depend
     /// on cone contents — same across engines that produce the same
-    /// spec. Order matches `docs/SPEC.md` §7 verbatim; the inline
+    /// spec. Order matches `docs/SPEC.md` §8 verbatim; the inline
     /// `projection_id_is_deterministic_across_engines` test is the
     /// drift guard.
     pub fn projection_id(&self) -> ProjectionId {
@@ -703,7 +703,7 @@ impl<'e, S: Signal> Projection<'e, S> {
         ProjectionId(out)
     }
 
-    /// Serialize to canonical wire bytes per `docs/SPEC.md` §6.
+    /// Serialize to canonical wire bytes per `docs/SPEC.md` §7.
     ///
     /// Panics only via `expect` if an entry's `S::Output` exceeds
     /// `u32::MAX` bytes — that path is exercised only by pathological

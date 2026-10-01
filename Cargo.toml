@@ -103,7 +103,7 @@ rand = { workspace = true } # see [workspace.dependencies] for the pin rationale
 loom = "0.7"
 dhat = "0.3"
 # `trybuild` — compile-fail harness used by `tests/trybuild.rs` to prove
-# `dyn Signal` is object-unsafe by design (docs/SPEC.md §5).
+# `dyn Signal` is object-unsafe by design (docs/SPEC.md §6).
 trybuild = "1"
 
 # wasm32-only dev-deps.

@@ -401,7 +401,7 @@ impl WasmEngine {
     /// Restore an `Adjacency` projection from canonical wire bytes.
     ///
     /// Round-trips the substrate's `restore_projection::<Adjacency>` —
-    /// see `docs/SPEC.md` §6. Errors surface as `JsError` with the
+    /// see `docs/SPEC.md` §7. Errors surface as `JsError` with the
     /// `RestoreError` variant name preserved for JS-side triage.
     #[wasm_bindgen(js_name = restoreProjectionAdjacency)]
     pub fn restore_projection_adjacency(
@@ -540,7 +540,7 @@ impl AdjacencyProjection {
         Ok(self.contains_set.contains(&arr))
     }
 
-    /// Canonical wire bytes per `docs/SPEC.md` §6. The SOLE canonical
+    /// Canonical wire bytes per `docs/SPEC.md` §7. The SOLE canonical
     /// form of this projection.
     #[wasm_bindgen(js_name = canonicalBytes)]
     #[must_use]
@@ -549,7 +549,7 @@ impl AdjacencyProjection {
     }
 
     /// 32-byte content-addressed [`koru_lambda_core::projection::ProjectionId`] per
-    /// `docs/SPEC.md` §7.
+    /// `docs/SPEC.md` §8.
     #[wasm_bindgen(js_name = projectionId)]
     #[must_use]
     pub fn projection_id(&self) -> Vec<u8> {
@@ -605,7 +605,7 @@ impl DegreeProjection {
         Ok(self.contains_set.contains(&arr))
     }
 
-    /// Canonical wire bytes per `docs/SPEC.md` §6.
+    /// Canonical wire bytes per `docs/SPEC.md` §7.
     #[wasm_bindgen(js_name = canonicalBytes)]
     #[must_use]
     pub fn canonical_bytes(&self) -> Vec<u8> {
@@ -668,7 +668,7 @@ impl HopDistanceProjection {
         Ok(self.contains_set.contains(&arr))
     }
 
-    /// Canonical wire bytes per `docs/SPEC.md` §6.
+    /// Canonical wire bytes per `docs/SPEC.md` §7.
     #[wasm_bindgen(js_name = canonicalBytes)]
     #[must_use]
     pub fn canonical_bytes(&self) -> Vec<u8> {

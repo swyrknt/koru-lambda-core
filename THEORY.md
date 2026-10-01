@@ -188,14 +188,30 @@ the self-reference loophole. "Unbounded" means "not bounded by the
 irreflexivity axiom," not literally infinite.
 
 ### Law 11 — Fold Law
-The two primordials become topological mega-hubs. By construction, byte
-folding through `synthesize` routes every byte through `d₀` and `d₁`
-multiple times, making them appear on every derivation path. The
-"depth ≤ 8" bound is **structural**: the canonical byte-folding
-construction folds each input byte through exactly 8 `synthesize`
-steps (one per bit), with `d₀` and `d₁` participating in every step.
-The bound is a direct consequence of that construction, not a workload
-artifact.
+
+*Status: a property of an encoding, not a consequence of the axioms.
+See the note on magnitude below.*
+
+The two primordials become topological hubs. Byte folding routes every
+byte through `d₀` and `d₁`, so they appear on every derivation path.
+The "depth ≤ 8" bound is **structural**: the canonical byte fold takes
+each input byte through exactly 8 `synthesize` steps, one per bit, and
+each step folds the accumulator with the one primordial that bit
+selects. The bound follows from that construction, not from a workload.
+
+**On magnitude.** After folding all 256 byte values, `degree(d₀)` and
+`degree(d₁)` reach 257 against a maximum of 4 for any other node — a
+ratio of about 64. Those numbers describe the encoding, and changing it
+changes them: an earlier byte fold ran *both* primordials at every step
+and reached 512 with twice as many nodes, while producing the same 256
+distinct tips. The extra work bought no injectivity. Fold sequences over
+a larger alphabet, such as the 256 byte tips, and the tips take the hub
+positions instead, with the primordials retaining the top ranks only
+because constructing that alphabet routes through them.
+
+So what the law names is the *shape* — the lift concentrates degree
+wherever it routes — and not a particular number. Any specific figure
+quoted here is a measurement of the shipped encoding.
 
 **Fold Law and Coding Law both operate at all depths.** They're not
 sequential — there's no "handoff" at depth 8. Fold Law dominates the

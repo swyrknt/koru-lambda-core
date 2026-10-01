@@ -138,9 +138,14 @@ convention: raw bytes admitted only as `RawDistinctionId`, converted to
 `Distinction` via `engine.verify()`, foreclosing foreign-byte injection at
 the type level. That API surface is `[SHIPPED @ src/engine.rs:158-177]`
 (`RawDistinctionId`) and `[SHIPPED @ src/engine.rs:991]` (`verify`).
-The runtime closure remains as the debug-mode `debug_assert!`
-foreign-byte guard at `[SHIPPED @ src/engine.rs:747-756]`; release
-builds trust the contract.
+The runtime closure is the foreign-parent guard in
+`engine::DistinctionEngine::synthesize`, and it runs in **every build
+profile**. It was a debug-only `debug_assert!` backed by an `expect` on
+the parent lookup, which ran after the child had been inserted: in a
+release build an unregistered parent therefore left a node whose parent
+did not exist and then panicked. The guard now completes before any
+state change, so the engine is byte-identical whether or not the call
+panics. Release builds do not trust the contract; they check it.
 
 ### The Distinction type
 
@@ -615,8 +620,14 @@ Enumerated. No hedging.
    lands, "wave = perspective + TTL" is a consumer subsystem.
 5. **No persistence rewrite.** `snapshot_parentage` +
    `replay_topological` are the persistence surface, unchanged.
-6. **No byte-fold / Fold Law changes.** `ByteMapping` semantics stay
-   what the substrate baseline shipped.
+6. **~~No byte-fold / Fold Law changes.~~** Withdrawn 2026-09-30. The
+   byte fold changed: it is now the anchored sequence fold instantiated
+   on the two-letter alphabet `{d₀, d₁}`, 8 synthesize calls per byte
+   rather than 17, so the substrate carries one lift rule applied
+   recursively instead of a sequence fold plus a special-cased byte
+   encoding. Measurement drove it: both shapes produce 256 distinct
+   tips, so the extra calls bought no injectivity while doubling the
+   graph. See Law 11 on what that does to the quoted magnitudes.
 7. **No production BFT consensus layer.**
    `[SHIPPED @ src/subsystems/validator.rs]` and
    `[SHIPPED @ src/subsystems/commitment.rs]` are reference LCA

@@ -118,8 +118,10 @@ body, mostly happens-before contract bookkeeping):
 ```rust
 #[must_use]
 pub fn synthesize(&self, a: Distinction, b: Distinction) -> Distinction {
-    // foreign-byte guard (debug_assert on nodes.contains_key)
-    if a == b { return a; }                              // Axiom 3
+    // Axiom 3, and the foreign-parent guard that covers it
+    if a == b { self.assert_registered(a); return a; }
+    // (the guard for the two-parent path runs below, after the
+    //  saturation check and before anything is inserted)
     let (first, second) = if a.0 <= b.0 { (a, b) } else { (b, a) };  // Axiom 2
     let mut h = Sha256::new(); h.update(first.0); h.update(second.0);
     let mut new_bytes = [0u8; 16];
