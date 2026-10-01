@@ -690,6 +690,11 @@ pub const koru_lambda_core::vectors::ADJACENCY_UPSTREAM_HOPS2_CANONICAL_HEX: &st
 pub const koru_lambda_core::vectors::C_HEX: &str
 pub const koru_lambda_core::vectors::D_HEX: &str
 pub const koru_lambda_core::vectors::E_HEX: &str
+pub const koru_lambda_core::vectors::FOLD_HI_ANCHORED_AT_D_HEX: &str
+pub const koru_lambda_core::vectors::TIP_00_HEX: &str
+pub const koru_lambda_core::vectors::TIP_01_HEX: &str
+pub const koru_lambda_core::vectors::TIP_41_HEX: &str
+pub const koru_lambda_core::vectors::TIP_FF_HEX: &str
 #[non_exhaustive] pub enum koru_lambda_core::InvariantError
 pub koru_lambda_core::InvariantError::BinaryParentageMismatch
 pub koru_lambda_core::InvariantError::BinaryParentageMismatch::parented_plus_primordials: usize

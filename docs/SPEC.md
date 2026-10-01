@@ -185,7 +185,8 @@ Eight synthesize calls per byte, and 256 distinct tips.
 
 So the substrate has one lift rule applied at two levels: bytes fold
 over the primordials, sequences fold over the byte tips. An
-implementation reproducing §10's vectors must implement this exactly;
+implementation reproducing §10's vectors — which include byte tips and a
+sequence fold — must implement this exactly;
 an encoding that produces distinct tips by some other route is a
 different substrate.
 

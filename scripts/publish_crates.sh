@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+# The checklist is the release gate. Without this call the gate is a
+# document that describes itself as enforcing, which is worse than no gate:
+# it invites trust it has not earned.
+"$(dirname "$0")/gates/release_ready.sh" || {
+    echo "refusing to publish: the release checklist has open items" >&2
+    exit 1
+}
+
 echo "Publishing koru-lambda-core to crates.io..."
 
 # Navigate to project root (parent of scripts/)

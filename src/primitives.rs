@@ -62,10 +62,10 @@ pub trait Canonicalizable {
 /// Byte → distinction folding (v2.0: engine-registered, no phantoms).
 ///
 /// [`ByteMapping::map_byte_to_distinction`] folds an 8-bit byte through
-/// 8 bit-steps in `engine`. At each bit-step, both primordials d₀ and
-/// d₁ participate in a synthesis; the bit value determines the order,
-/// which preserves bit information in the canonical chain via the
-/// distinct intermediate distinctions.
+/// 8 bit-steps in `engine`. Each step folds the accumulator with the one
+/// primordial that bit selects, so `synthesize(acc, d₀)` and
+/// `synthesize(acc, d₁)` diverge by content addressing and every bit
+/// survives into the chain.
 ///
 /// # Fold Law contribution
 ///
@@ -145,7 +145,7 @@ impl ByteFold {
     ///
     /// Cost is paid once: 256 byte folds, most of which saturate
     /// immediately after the first. Afterwards a tip is an array index
-    /// rather than 17 synthesis calls.
+    /// rather than a fold per lookup.
     #[must_use]
     pub fn new(engine: &DistinctionEngine) -> Self {
         let tips: [Distinction; 256] =
@@ -233,9 +233,7 @@ pub fn domain_anchor(
 }
 
 impl ByteMapping {
-    /// Number of bit-steps per byte fold. Each step performs two
-    /// `synthesize` calls (one with d₀, one with d₁); the bit value
-    /// determines the order.
+    /// Number of bit-steps per byte fold, one `synthesize` call each.
     ///
     /// One synthesize call per bit, so this is also the per-byte cost of
     /// the lift. After folding all 256 byte values each primordial
@@ -533,6 +531,37 @@ mod tests {
     fn anchor_for(e: &DistinctionEngine) -> Distinction {
         let c = e.synthesize(e.d0(), e.d1());
         e.synthesize(c, e.d0())
+    }
+
+    #[test]
+    fn lift_matches_the_published_vectors() {
+        // The lift is the substrate's only free parameter, so these are the
+        // vectors that matter most for agreement between implementations:
+        // everything else can match while every folded value differs.
+        use crate::vectors;
+        let e = DistinctionEngine::new();
+        let fold = ByteFold::new(&e);
+        for (byte, expected) in [
+            (0x00u8, vectors::TIP_00_HEX),
+            (0x01, vectors::TIP_01_HEX),
+            (0x41, vectors::TIP_41_HEX),
+            (0xFF, vectors::TIP_FF_HEX),
+        ] {
+            assert_eq!(fold.tip(byte).to_hex(), expected, "byte tip {byte:#04x} drifted");
+        }
+
+        // The anchor is vector D: a synthesized node, not a byte tip,
+        // which is what the fold requires of an anchor.
+        let c = e.synthesize(e.d0(), e.d1());
+        let d = e.synthesize(c, e.d0());
+        assert_eq!(d.to_hex(), vectors::D_HEX, "anchor is not vector D");
+        assert!(!fold.is_tip(d), "the anchor must not be an element tip");
+
+        assert_eq!(
+            fold.fold(d, b"hi", &e).to_hex(),
+            vectors::FOLD_HI_ANCHORED_AT_D_HEX,
+            "sequence fold drifted"
+        );
     }
 
     #[test]

@@ -388,8 +388,8 @@ which every pure-Rust consumer would otherwise pay for.
             │                                     │
             │   Distinction, DistinctionEngine,   │
             │   LocalCausalAgent, synthesize_*,   │
-            │   ConsensusValidator, NetworkAgent, │
-            │   CommitmentAgent, StructuralCompactor│
+            │   ConsensusValidator,               │
+            │   CommitmentAgent                   │
             │   (Reference impls — fork or replace │
             │    if your consensus differs.)      │
             │                                     │
