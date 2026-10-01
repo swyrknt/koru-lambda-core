@@ -1,4 +1,4 @@
-# Forma Core Guardrails - Developer Safety System
+# Koru Lambda Core Guardrails - Developer Safety System
 
 These guardrails prevent common Rust pitfalls and ensure code quality stays high as your team scales.
 
@@ -19,8 +19,13 @@ Clippy is Rust's official linter. It catches:
 ```toml
 cognitive-complexity-threshold = 15    # Max function complexity
 type-complexity-threshold = 100        # Max type nesting depth
-avoid-breaking-exported-api = true     # Prevent accidental API changes
+avoid-breaking-exported-api = false    # Keep public-signature lints audible
 ```
+
+`avoid-breaking-exported-api` is deliberately `false`: clippy's default of
+`true` silences exactly the lints that flag public signatures, which are
+the ones that become permanent once a version is published. The
+suppression gate (`scripts/gates/no_suppression.sh`) requires the line.
 
 ### What It Prevents
 ```rust
@@ -102,7 +107,7 @@ cargo fmt -- --check
 
 ## 📚 Layer 3: Developer Education (CONTRIBUTING.md)
 
-**File**: `CONTRIBUTING.md` (273 lines)
+**File**: `CONTRIBUTING.md` (264 lines)
 
 ### What It Does
 This is your **team's Rust bible**. It teaches:
@@ -192,33 +197,38 @@ Runs automatically on every:
 
 ### Four Mandatory Gates
 
-#### Gate 1: Tests
-```yaml
-- name: Run tests
-  run: cargo test --verbose
-```
-**Blocks**: Any PR where tests fail
+These four block every merge. They are the floor, not the whole pipeline:
+`ci.yml` also carries jobs for the feature matrix, the wasm bindings,
+rustdoc, MSRV, loom, miri, the API snapshot, semver, advisories, the
+package dry-run, and the examples and demos. There is no coverage job.
 
-#### Gate 2: Formatting
+#### Gate 1: Repository gates
 ```yaml
-- name: Check formatting
-  run: cargo fmt -- --check
+- run: ./scripts/gates/no_suppression.sh
+- run: ./scripts/gates/crate_boundary.sh
+- run: ./scripts/gates/no_process_leaks.sh
+- run: ./scripts/gates/checklist_evidence.sh
+```
+**Blocks**: Any PR that suppresses a lint, crosses a crate boundary,
+leaks a process, or claims checklist progress without evidence
+
+#### Gate 2: Tests
+```yaml
+- run: cargo test --workspace --all-features
+```
+**Blocks**: Any PR where tests fail. Runs in both debug and release.
+
+#### Gate 3: Formatting
+```yaml
+- run: cargo fmt --all --check
 ```
 **Blocks**: Any PR with unformatted code
 
-#### Gate 3: Clippy
+#### Gate 4: Clippy
 ```yaml
-- name: Run clippy
-  run: cargo clippy --all-targets -- -D warnings
+- run: cargo clippy --all-targets -- -D warnings
 ```
-**Blocks**: Any PR with warnings
-
-#### Gate 4: Coverage (Optional)
-```yaml
-- name: Generate coverage
-  run: cargo tarpaulin --out Xml
-```
-**Reports**: How much code is covered by tests
+**Blocks**: Any PR with warnings, on both the native and wasm32 targets
 
 ### Benefits
 - **No bad code merges**: If it doesn't pass CI, it doesn't merge
@@ -253,10 +263,10 @@ Runs automatically on every:
 4. **Developer commits, opens PR**
 
 5. **CI runs automatically**
+   - ✓ Repository gates pass
    - ✓ Tests pass
    - ✓ Formatting correct
    - ✓ Clippy happy
-   - ✓ Coverage acceptable
 
 6. **Code reviewer approves** (less to review, CI did the grunt work)
 
@@ -308,7 +318,7 @@ chmod +x .git/hooks/pre-commit
 1. Go to repo Settings → Branches
 2. Add branch protection rule for `main`
 3. Check "Require status checks to pass"
-4. Select: Test, Format, Clippy
+4. Select: Repository gates, Tests, Format, Clippy
 
 Now **nobody** can merge without passing all checks (not even admins!)
 

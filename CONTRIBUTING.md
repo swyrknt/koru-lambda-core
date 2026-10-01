@@ -4,13 +4,15 @@ This is the **core** of our entire system. The code here must be flawless, perfo
 
 ## Core Principles
 
-### 1. The Five Axioms Are Sacred
-Every change must preserve the five axioms of distinction calculus:
-- **Identity**: A distinction is defined solely by its unique identifier
-- **Nontriviality**: The system initializes with two primordial distinctions (Δ₀, Δ₁)
-- **Synthesis**: Two distinctions combine deterministically to create a third
-- **Symmetry**: Relationships are bidirectional and order-independent
-- **Irreflexivity**: A distinction synthesized with itself yields itself
+### 1. The Four Axioms Are Sacred
+Every change must preserve the four axioms, as stated in `THEORY.md`:
+- **Determinism**: the same two distinctions always synthesize to the same third
+- **Commutativity**: `synthesize(a, b)` and `synthesize(b, a)` are the same, because the pair is ordered before hashing
+- **Irreflexivity**: a distinction synthesized with itself yields itself
+- **Content addressing**: identity *is* the content — a distinction's bytes are derived from its parents, with no separate naming layer
+
+The two primordials are a given of the system rather than an axiom, and
+the eight structural laws follow from the four above.
 
 ### 2. Zero Tolerance for Borrow Checker Warnings
 If the borrow checker complains, **fix it properly**. Never:

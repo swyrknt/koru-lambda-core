@@ -328,14 +328,17 @@ println!("  All final distinctions identical: {}", final_id);
 
 ```
 tests/
-├── falsification/
-│   ├── mod.rs              # Shared helpers and utilities
-│   ├── path_independence.rs
-│   ├── determinism.rs
-│   ├── structural.rs
-│   └── temporal.rs
-└── integration_tests.rs    # Legacy integration tests
+├── cond_d_falsifier.rs     # Cross-engine projection independence
+├── cond_d_prime.rs         # Cross-target byte equivalence vs. the vectors
+├── loom_kernel.rs          # Loom model check (needs --cfg loom)
+├── projection_smoke.rs     # Projection surface and wire-format round trips
+├── scale.rs                # r = 2d − 3 at 5M synths
+├── trybuild.rs             # Compile-fail harness
+└── trybuild/               # Compile-fail cases
 ```
+
+Per-crate suites sit alongside their own crate:
+`crates/koru-lambda-wasm/tests/`, `experiments/runner/tests/`.
 
 ### Module Organization
 

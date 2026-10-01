@@ -30,8 +30,8 @@
 //!   amendment expected once scale probes land)
 
 // Native-only stub for wasm32 — `dhat` is a native-only dev-dep (heap
-// profiler over backtraces / OS APIs). We branch `main` on target so
-// `wasm-pack test --features wasm` (which compiles all examples) doesn't
+// profiler over backtraces / OS APIs). We branch `main` on target so a
+// wasm32 build that compiles the examples doesn't
 // hit the missing crate. The real profile runs on native only; wasm has
 // nothing to profile here.
 #[cfg(target_arch = "wasm32")]

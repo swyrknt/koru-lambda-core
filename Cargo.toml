@@ -93,8 +93,8 @@ serde_json = "1.0"
 
 # Native-only dev-deps. `proptest`, `criterion`, `loom`, `dhat`, `trybuild`
 # all have wasm-hostile transitive deps (`wait-timeout`, native FFI, etc.);
-# scoping them to non-wasm32 lets `wasm-pack test --features wasm` compile
-# `tests/wasm_smoke.rs` without dragging their broken transitives onto the
+# scoping them to non-wasm32 keeps their transitives off the wasm target
+# when the bindings crate is built, without dragging them onto the
 # wasm target.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.5"
@@ -108,8 +108,9 @@ trybuild = "1"
 
 # wasm32-only dev-deps.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-# `wasm-bindgen-test` — smoke suite for `src/wasm.rs` at `tests/wasm_smoke.rs`.
-# Runs via `wasm-pack test --node --features wasm`.
+# `wasm-bindgen-test` — retained for wasm32 builds of this crate's own
+# targets. The bindings and their smoke suite live in
+# `crates/koru-lambda-wasm`, which runs `wasm-pack test --node`.
 wasm-bindgen-test = "0.3"
 # Note: koru-experiments-runner is a workspace member (see [workspace]
 # above) but NOT a dev-dependency of the root crate — that edge, combined

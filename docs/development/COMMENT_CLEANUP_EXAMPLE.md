@@ -1,6 +1,6 @@
 # Comment Standardization Example
 
-## File: src/subsystems/commitment.rs
+## File: crates/koru-lambda-consensus/src/commitment.rs
 
 ### BEFORE (Subjective & Verbose)
 
@@ -148,9 +148,7 @@ let new_root = engine.synthesize(&self.local_root, &commitment_d);
 ## Apply to Rest of Codebase
 
 Use `docs/development/COMMENT_STANDARDS.md` as guide for standardizing:
-- src/subsystems/network.rs
-- src/subsystems/validator.rs
-- src/subsystems/compactor.rs
+- crates/koru-lambda-consensus/src/validator.rs
 - src/engine.rs
 - src/primitives.rs
 - Other files with subjective language

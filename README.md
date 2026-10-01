@@ -17,8 +17,10 @@ kernel, not as protocol they have to layer on top.
 koru-lambda-core = "2.0"
 ```
 
-No default features. The `wasm` feature gates the `wasm-bindgen`
-surface for browser / Node / Deno targets.
+No default features. The optional `serde` feature adds hex serde
+adapters for `Distinction` and `RawDistinctionId`. The `wasm-bindgen`
+surface for browser / Node / Deno targets is not a feature of this
+crate: it ships separately as `koru-lambda-wasm`.
 
 ## Quickstart (Rust)
 
@@ -143,6 +145,8 @@ for details.
 
 - [THEORY.md](THEORY.md) — one operator, four axioms, two
   primordials, eight structural laws. Authoritative for the theory.
+- [docs/SPEC.md](docs/SPEC.md) — the normative byte-level
+  specification: what a conforming implementation must reproduce.
 - [DESIGN.md](DESIGN.md) — shipping story: what the substrate ships
   today, what the epics change, and what v2.0.0 does *not* ship.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — code structure, module

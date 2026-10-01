@@ -1,6 +1,7 @@
 //! Coding Law ρ gate test — see `docs/BENCHMARKS.md § Throughput` for
 //! scale-context; this file is the canonical source of truth for the
-//! exp18 corpus SHA-256 pin (constants at lines 30–31 below).
+//! exp18 corpus SHA-256 pin (`EXP18_LOG_SHA256` and
+//! `EXP18_FREQ_SHA256` below).
 //!
 //! Pins the exp18 corpus at `tests/corpora/exp18.{log,freq.bin}` via
 //! SHA-256 digest constants, then runs the canonical Coding Law

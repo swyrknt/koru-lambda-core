@@ -237,9 +237,10 @@ impl ByteMapping {
     /// `synthesize` calls (one with d₀, one with d₁); the bit value
     /// determines the order.
     ///
-    /// This constant is the `8` in the Fold Law gate (DESIGN.md gate 14):
-    /// `degree(d₀) ≥ 256 × Self::BITS_PER_BYTE` after the 256-byte
-    /// exercise.
+    /// One synthesize call per bit, so this is also the per-byte cost of
+    /// the lift. After folding all 256 byte values each primordial
+    /// reaches `2^BITS_PER_BYTE + 1 = 257`: `2^i` novel bumps at step
+    /// `i`, plus the anchoring synthesis, plus the genesis addend.
     pub const BITS_PER_BYTE: usize = 8;
 
     /// Fold an 8-bit byte through `engine` into a single tip

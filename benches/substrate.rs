@@ -185,9 +185,9 @@ fn bench_degree_lookup(c: &mut Criterion) {
 
 fn bench_byte_fold(c: &mut Criterion) {
     let mut group = c.benchmark_group("byte_fold");
-    // Per-byte throughput. Each fold is 17 synthesize calls
-    // (1 seed + 16 inner), so ops/sec at the synthesize layer
-    // is roughly 17× this number.
+    // Per-byte throughput. Each fold is 9 synthesize calls
+    // (1 anchor + 8 bit-steps), so ops/sec at the synthesize layer
+    // is roughly 9× this number.
     group.throughput(Throughput::Elements(1));
 
     group.bench_function("map_byte_warm_engine", |b| {
