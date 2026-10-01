@@ -94,6 +94,8 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [ ] PROC-11 Coverage: `cargo llvm-cov --all-features --fail-under-regions 95` (region, not line), debug profile, plus a per-file floor of 90% with no file below it
 - [x] PROC-12 Public API snapshot committed and diffed in CI, so a public signature cannot change without changing a committed file a reviewer reads. The snapshots are also the source the changelog and migration guides get derived from, rather than recollection.
   - evidence: `api/koru-lambda-core.txt`, `api/koru-lambda-consensus.txt`, `api/koru-lambda-wasm.txt`; gate `scripts/gates/api_snapshot.sh` (verified to fail on an added public const); `.github/workflows/ci.yml` api-surface job
+- [ ] PROC-13b Both existing publish scripts are deleted, not repaired. `build_universal.sh` runs `wasm-pack` against the rlib-only root crate with a `--features wasm` flag that no longer exists, so it cannot succeed; `publish_npm.sh` publishes `../pkg`, which resolves outside the repository entirely. Keeping scripts that cannot work is worse than having none: someone will run them.
+- [ ] PROC-21 CI asserts the packed npm tarball's `name` and `version` match the intended package. Nothing checks either today, and the name silently changed from what 1.2.0 shipped.
 - [ ] PROC-13 One release script replaces `publish_crates.sh` / `publish_npm.sh`: it runs the full gate, checks this file, builds `pkg/` with `--features wasm`, dry-runs both registries, and asks for confirmation before each real publish
 - [x] PROC-14 Feature-matrix builds: `--no-default-features`, each feature alone, `--all-features`, and `wasm32` (making `serde` optional creates combinations nothing builds today)
   - evidence: `.github/workflows/ci.yml` features job @ 699a872 — 4 combinations, `--all-targets` so tests compile too
@@ -106,6 +108,29 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [ ] PROC-18 The release script executes publish order — substrate, then consumers, then FFI — each dry-run passing against its already-published predecessor, and refuses to publish out of order
 - [ ] PROC-19 Inter-crate dependencies are pinned to an exact version with both `path` and `version`; CI fails on a caret or a path-only dependency
 - [ ] PROC-20 Every PROC-2 job runs per crate; a workspace-wide invocation is not sufficient for clippy and feature-matrix gates
+
+## PKG — The family (settled 2026-10-01)
+
+Three published things, one sentence each, so a stranger lands on the right door:
+
+| Artifact | Is | Ships at 2.0.0 |
+|---|---|---|
+| `koru-lambda-core` (crate) | the substrate: witness, vantage, lift, replay, trust boundary, vectors | yes |
+| `koru-lambda-wasm` (crate) → npm | the same engine with no Rust toolchain | yes |
+| `koru-lambda-agents` (repo) | worked consumers of one pattern — validator, commitment, and later network, compactor, batch | **no** |
+
+`agents` versions independently, which is the point: its four wire-facing
+defects get fixed on its own schedule, and growing from two consumers back to
+five never touches the crate anyone depends on. The substrate stays small
+because the interesting work happens next door.
+
+Naming: "agents", not "consensus" — a second claimant in the aisle
+`koru-protocol` already holds is the positioning mistake that was vetoed once
+already, and "reference" apologises in the title.
+
+- [ ] PKG-10 `koru-lambda-consensus` is renamed `koru-lambda-agents` and moves to its own repository, after its replacement as the substrate's in-repo consumer exists (TST-7). It keeps `publish = false` until its wire defects are closed, and it does not carry 2.0.0.
+- [ ] PKG-11 Version policy recorded and enforced: the bindings pin the substrate exactly (`=2.0.0`), because they re-export substrate types across an ABI and a patch can change the generated `.d.ts`; `agents` takes `^2.0`, so it absorbs substrate patches and is the thing that notices when one breaks a consumer.
+- [ ] PKG-12 The `agents` repository runs a daily CI job against the substrate's `main` by git dependency. That job failing is how anyone finds out the substrate broke a consumer; colocation was previously doing this job by accident.
 
 ## PKG — Workspace layout (DEC-9: three crates)
 
@@ -152,6 +177,8 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 
 - [ ] ENC-8 **One lift, applied recursively.** `ByteMapping` is re-derived as the anchored fold over the two-letter alphabet `{d₀, d₁}`, so the substrate ships one lift instead of two and `BITS_PER_BYTE` stops being a constant. Measured before adopting: the derived 8-step fold produces the same 256 distinct tips as the shipped 17-step one, with `deg(d₀) = 257` against 512 and 513 nodes against 1023 — the nine extra steps buy no injectivity and exactly double the graph. Published vectors are unaffected (they involve no byte folding; verified). Law 11's magnitude and the corresponding design gate re-baseline; see THY-4.
 - [ ] ENC-9 `Canonicalizable::to_canonical_structure` takes the `ByteFold`. The current signature cannot carry one, so every call rebuilds the 256-tip table — and the only real consumer already routed around the trait: `compute_batch_root` calls a `canonicalize_with` helper instead. A trait its own implementors bypass is the wrong shape.
+- [ ] ENC-11 **The fold generalises over its alphabet.** `docs/SPEC.md` §4.2 specifies the anchored fold over an arbitrary alphabet with a tip function; the code ships only the concrete 256-byte case. Two voices reached this independently: the general rule exists in prose only, and a consumer folding a composite value has to invent its own framing — the moment a variable-length field appears, that is the collision class `ByteFold` closed, relocated one level up. Ship `fold(anchor, tips, elements)` over any alphabet, with `u8` as its worked instance.
+- [ ] ENC-12 Composite framing is answered, not left silent: either a documented field-concatenation rule with its length discipline, or a fold over distinctions. A consumer with a struct containing a `String` must not have to invent this.
 - [ ] ENC-10 `DomainLabel` is a newtype with a documented reservation table, not a bare `u8` alias. Two crates picking `0x01` independently is a silent collision.
 
 - [x] ENC-1 One anchored, order-preserving sequence fold, with a written spec: the anchor is a **parameter**, not a constant; the spec states and proves accumulator/element lineage disjointness **including nested folds** (a fold's result used as another fold's element, which is what the subsystems do); injectivity holds modulo the 128-bit bound. Tests:
@@ -224,6 +251,7 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 
 ## TST — Test suite
 
+- [ ] TST-7 **The substrate keeps a consumer that applies pressure.** When `agents` leaves, nothing in this repo calls the lift. An example is not a substitute: the trait defect was found because a real consumer folds *N* values in a loop and the per-call table cost became visible enough to route around — a 40-line example folds once and the cost stays invisible. Ship an integration test defining a domain type with a non-trivial `Canonicalizable` impl and a batch loop, plus a `trybuild` **pass** case, since the defect was expressible rather than runtime.
 - [ ] TST-6 `tests/scale.rs` stops claiming a falsification it does not perform: the message reads "r = 2d − 3 holds with zero deviations at 5M synths" on an assertion that checks parentage, identity and degree — not that relation.
 
 - [x] TST-1 One golden-vector file, used by both native and wasm tests (child ids; projection ids and canonical bytes for every signal × direction × boundary; subsystem roots)
@@ -312,7 +340,8 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 
 ## LAND — The published artifact
 
-- [ ] LAND-11 A "Built on this" section names the downstream projects — spatial, cognitive, physical — with links. It shows the substrate's reach without shipping any of their weight, which is the whole argument for the minimal core.
+- [ ] LAND-11 A "Built on this" section names the **domains**, not the repositories — physics, cognition, space, ephemeral state, notarisation. Twenty `koru-*` repos by one author reads as a hobby; the same facts as five domains read as five independent confirmations. Same evidence, opposite verdict.
+- [ ] LAND-12 *(superseded by LAND-11)* A "Built on this" section names the downstream projects — spatial, cognitive, physical — with links. It shows the substrate's reach without shipping any of their weight, which is the whole argument for the minimal core.
 
 - [ ] LAND-1 README first screen, in order: the ≤25-word claim (LAND-4), a runnable example with its printed output, then the cross-runtime byte-equality claim in one sentence. Theory is linked below the fold, not led with.
 - [ ] LAND-2 DEMO-1 and DEMO-4 run against the **published** npm tarball and crates.io package in CI, with no `wasm-pack` step. Today every demo requires a Rust toolchain and a local build, so no demo is runnable by someone who installs the package.
