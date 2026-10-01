@@ -296,11 +296,14 @@ cases in release builds.
 
 ## Reference subsystems
 
+Reference subsystems live in their own crate, `koru-lambda-consensus`,
+and are **not published with 2.0.0**:
+
 ```
-src/subsystems/
-  mod.rs              ~20 LOC   declarations + re-exports
-  validator.rs        ~300 LOC  ConsensusValidator
-  commitment.rs       ~250 LOC  CommitmentAgent + BatchCommitment
+crates/koru-lambda-consensus/src/
+  lib.rs              declarations + re-exports
+  validator.rs        ConsensusValidator
+  commitment.rs       CommitmentAgent + BatchCommitment
 ```
 
 Each subsystem is a worked example of the LCA pattern with real
@@ -353,10 +356,12 @@ built; nothing here is a shipping commitment.
 
 ### WASM
 
-`src/wasm.rs` is gated behind `#[cfg(feature = "wasm")]` and exposes
-`DistinctionEngine`, the projection primitive, and `verify` to JS/TS.
-The current ship-set of signals is `Adjacency`, `Degree`, and
-`HopDistance`.
+The JS/TS surface is its own crate, `crates/koru-lambda-wasm`, published
+to npm alongside the substrate. It exposes `DistinctionEngine`, the
+projection primitive and `verify`; the current ship-set of signals is
+`Adjacency`, `Degree` and `HopDistance`. It is a separate crate rather
+than a feature because `wasm-pack` requires `crate-type = ["cdylib"]`,
+which every pure-Rust consumer would otherwise pay for.
 
 - Bytes-canonical end to end. Every distinction ID crossing the JS
   boundary is `Uint8Array` of length 16.

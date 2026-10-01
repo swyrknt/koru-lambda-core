@@ -42,6 +42,16 @@ Every axiom-shaped sentence in this document is an anchor-link back to
 `[SHIPPED @ …]`, `[TARGET @ …]`, or `[DEPRECATED @ …]` tag. Any
 sentence that violates either rule is a drift report against this file.
 
+**Anchors name symbols, never line numbers.** An anchor is a module path
+and item name, such as `engine::DistinctionEngine::verify`. This document
+previously carried nine `file:line` anchors and four of them had rotted:
+one pointed at a closing brace, another at an unrelated doc comment, all
+because the code moved and nothing checked. `scripts/gates/doc_anchors.sh`
+now rejects line-number anchors outright, and verifies every symbol
+anchor against the committed public-API snapshots — which also means an
+anchor naming a crate-private item fails, since it is not part of any
+shipped surface.
+
 **Anchor slug convention.** The `THEORY.md#section-slug` links in this
 document use a simplified GitHub-style slug: heading text lowercased,
 non-alphanumeric characters (including em-dashes, equals, and minus
@@ -124,20 +134,21 @@ enforces [the four axioms](THEORY.md#the-four-axioms) directly:
 - Content addressing: 16-byte SHA-256 prefix of the canonical pair
 - Saturation: `contains_key` fast path before entry lock
 
-`pub fn synthesize` `[SHIPPED @ src/engine.rs:605-611]`. The bare
+`pub fn synthesize` `[SHIPPED @ engine::DistinctionEngine::synthesize]`. The bare
 `synthesize` API returns `Distinction`, discarding the novelty bit;
 the parallel `synthesize_novel` entry point returns
 `SynthesisOutcome::Novel(Distinction) | Existing(Distinction)`
-`[SHIPPED @ src/engine.rs:708-713]`. Both route through the shared
-`synthesize_inner` implementation `[SHIPPED @ src/engine.rs:740-840]`.
+`[SHIPPED @ engine::DistinctionEngine::synthesize_novel]`. Both route through the shared
+`synthesize_inner` implementation, which is crate-internal and so
+carries no shipped-surface anchor.
 
 **Two-type discipline (Axiom-4 closure).** Bytes typed as `Distinction`
 that were not produced by the operator are structurally illegitimate.
 [`THEORY.md § The operator`](THEORY.md#the-operator) names the API-level
 convention: raw bytes admitted only as `RawDistinctionId`, converted to
 `Distinction` via `engine.verify()`, foreclosing foreign-byte injection at
-the type level. That API surface is `[SHIPPED @ src/engine.rs:158-177]`
-(`RawDistinctionId`) and `[SHIPPED @ src/engine.rs:991]` (`verify`).
+the type level. That API surface is `[SHIPPED @ engine::RawDistinctionId]`
+(`RawDistinctionId`) and `[SHIPPED @ engine::DistinctionEngine::verify]` (`verify`).
 The runtime closure is the foreign-parent guard in
 `engine::DistinctionEngine::synthesize`, and it runs in **every build
 profile**. It was a debug-only `debug_assert!` backed by an `expect` on
@@ -149,7 +160,7 @@ panics. Release builds do not trust the contract; they check it.
 
 ### The Distinction type
 
-`pub struct Distinction(pub(crate) [u8; 16])` `[SHIPPED @ src/engine.rs:71]`
+`pub struct Distinction(pub(crate) [u8; 16])` `[SHIPPED @ engine::Distinction]`
 — a 16-byte newtype with:
 
 - `#[repr(transparent)]` — zero-copy FFI / persistence layout.
@@ -167,7 +178,7 @@ panics. Release builds do not trust the contract; they check it.
 - Primordials: `d0 = Distinction([0; 16])`, `d1 = Distinction([1, 0, …, 0])`.
 
 Hex round-trip via `to_hex` / `from_hex` / `Display` / `Debug` at
-`[SHIPPED @ src/distinction_hex.rs]`, with typed `ParseError` returned
+`[SHIPPED @ distinction_hex::ParseError]`, with typed `ParseError` returned
 from `from_hex` (length + charset validation). `from_hex` parses bytes
 but does not verify engine registration — callers must obtain
 `Distinction` values from the engine they intend to use. Cross-engine
@@ -196,9 +207,9 @@ code, not here.
 
 ### Structural invariants surfaced
 
-`pub fn check_structural_invariant` `[SHIPPED @ src/engine.rs:1068]`
+`pub fn check_structural_invariant` `[SHIPPED @ engine::DistinctionEngine::check_structural_invariant]`
 returns `Result<(), InvariantError>`
-`[SHIPPED @ src/engine.rs:319]`. The check tests
+`[SHIPPED @ engine::InvariantError]`. The check tests
 [Law 5 binary parentage](THEORY.md#law-5-binary-parentage) via the
 [Law 6 r = 2d − 3](THEORY.md#law-6-r--2d--3) accounting:
 `nodes.len() == parents_of_count + 2` (every non-primordial has parents
@@ -208,7 +219,7 @@ satisfies Law 6 and must be redesigned, not amended.
 
 ### LocalCausalAgent (substrate-level trait)
 
-`pub trait LocalCausalAgent` `[SHIPPED @ src/agent.rs]` captures the
+`pub trait LocalCausalAgent` `[SHIPPED @ agent::LocalCausalAgent]` captures the
 substrate's reference consumption pattern:
 
 - an LCA anchors to a **local root distinction** — its perspective;
@@ -220,7 +231,7 @@ substrate's reference consumption pattern:
 The trait exposes `get_current_root` and `update_local_root` as the
 core surface, plus a default `synthesize_action` method that composes
 them via the helper `pub fn synthesize_causal_action`
-`[SHIPPED @ src/agent.rs]`. The helper canonicalizes the action's data
+`[SHIPPED @ agent::LocalCausalAgent]`. The helper canonicalizes the action's data
 through the engine (via `Canonicalizable`) and synthesizes the result
 with the local root, returning a new root.
 
@@ -231,7 +242,7 @@ with different shapes (multi-perspective, non-root, no-perspective) can
 exist and still receive the substrate's axiom-level correctness
 guarantees; the trait exists so LCA-shape consumers interoperate.
 
-The trait lives at `[SHIPPED @ src/agent.rs]` (substrate level, not
+The trait lives at `[SHIPPED @ agent::LocalCausalAgent]` (substrate level, not
 under `subsystems/`) because it formalizes what it means to *use* the
 substrate. Subsystems are *implementers* of the trait, not the trait's
 home.
@@ -242,7 +253,7 @@ Three reference implementations ship in-crate demonstrating consumer
 patterns; none extend engine state. Consumers wanting none of these
 pay nothing.
 
-- **`SynthesisRecorder`** `[SHIPPED @ src/recorder.rs]` — chronological
+- **`SynthesisRecorder`** `[SHIPPED @ recorder::SynthesisRecorder]` — chronological
   record of novel syntheses through a single engine. Consumer
   constructs one, routes `synthesize` calls through it; the recorder
   pushes to its internal `Vec` only on novel results (deduped via
@@ -253,7 +264,7 @@ pay nothing.
   its own).
 
 - **`snapshot_parentage` + `replay_topological`**
-  `[SHIPPED @ src/replay.rs]` — engine persistence + round-trip
+  `[SHIPPED @ replay::replay_topological]` — engine persistence + round-trip
   reconstruction. `snapshot_parentage(engine)` dumps the parent map;
   `replay_topological(snapshot)` rebuilds a fresh engine by repeatedly
   calling `synthesize` on entries whose parents are already
@@ -267,7 +278,7 @@ pay nothing.
   [Law 9 order-independent reconstruction](THEORY.md#law-9-order-independent-reconstruction):
   replaying a shuffled parentage snapshot produces byte-identical state.
 
-- **`build_children_index`** `[SHIPPED @ src/replay.rs]` — materializes
+- **`build_children_index`** `[SHIPPED @ replay::replay_topological]` — materializes
   the inverse of `parents_of` in O(N) once for consumers that need to
   iterate children rather than just count them. Takes a parentage
   snapshot, returns `HashMap<Distinction, Vec<Distinction>>`.
@@ -283,7 +294,7 @@ the engine is unaware of them.
 Two reference LCA implementations demonstrate the pattern with running
 consensus code at the current commit:
 
-- `[SHIPPED @ src/subsystems/validator.rs]` — `ConsensusValidator`
+- `[SHIPPED @ koru-lambda-consensus: validator]` — `ConsensusValidator`
   with V3 (data cap), V4 (oversized-root clipping), V5 (atomic-failure
   pre-validation), V6 (atomic `restore_state`), V8 (empty-data
   by-design) designed-in as non-existent bugs. Pre-validation pass
@@ -291,7 +302,7 @@ consensus code at the current commit:
   rejection. Typed errors on the public surface; explicit thresholds;
   no magic constants.
 
-- `[SHIPPED @ src/subsystems/commitment.rs]` — `CommitmentAgent` +
+- `[SHIPPED @ koru-lambda-consensus: commitment]` — `CommitmentAgent` +
   `BatchCommitment`. `BatchCommitment::compute` hashes `leader_id` (N6
   designed-in); `TransactionBatch::previous_root` typed as
   `Distinction` — the N5 String-truncation bug literally cannot exist
@@ -350,11 +361,11 @@ FFI heavyweight dependency (`parking_lot`) is NOT pulled at this
 commit — see anti-scope. A C-ABI binding surface is deferred to a
 future release; nothing in v2.0.0 claims C API compatibility.
 
-WASM dependencies (`wasm-bindgen`, `wasm-bindgen-test`, `console_error_panic_hook`,
-`serde_bytes`, `js-sys`, `serde-wasm-bindgen`) ARE pulled behind the `wasm`
-feature — `src/wasm.rs` `[SHIPPED @ v2.0.0]` gates the JS/TS binding
-surface. Default `cargo build` and `cargo test --workspace` are unaffected
-(feature-off).
+WASM dependencies (`wasm-bindgen`, `console_error_panic_hook`,
+`serde_bytes`, `js-sys`, `serde-wasm-bindgen`) belong to
+`crates/koru-lambda-wasm` `[SHIPPED @ v2.0.0]`, not to the substrate. The
+substrate has no `wasm` feature: a consumer of `koru-lambda-core` never
+resolves any of them.
 
 No new heavyweight deps. Every addition serves a specific design goal.
 
@@ -368,10 +379,12 @@ No new heavyweight deps. Every addition serves a specific design goal.
   1.74; 1.80 leaves headroom for `LazyLock`/`OnceLock` usage without
   surprising consumers. Bumping MSRV is a breaking change requiring
   its own minor-version release after v2.0.0.
-- **Workspace:** single-crate, not a workspace member. `experiments/`
-  has its own `Cargo.toml` and does not ship in the published crate.
-  The published `koru-lambda-core` is one `Cargo.toml`, one crate,
-  one published artifact.
+- **Workspace:** four members. `koru-lambda-core` is the substrate and
+  the only crate the axioms describe; `koru-lambda-wasm` carries the
+  JS/TS bindings and publishes to npm; `koru-lambda-consensus` holds the
+  reference consumers and is marked `publish = false` for 2.0.0;
+  `experiments/runner` holds probes and does not ship. A consumer of the
+  substrate depends on one crate and resolves five direct dependencies.
 
 ### Test strategy — one-paragraph reference
 
@@ -387,7 +400,7 @@ FFI surface itself), and misuse-detection tests
 release-safe mismatch/unreachable/missing-primordial errors). Full
 test inventory lives in `src/**/tests` inline modules and in
 `tests/`. Coding Law ρ ≥ 0.985 is asserted at
-`[SHIPPED @ experiments/runner/tests/coding_law.rs:74-127]` against a
+`[SHIPPED @ koru-experiments-runner: coding_law::exp18_rho_clears_gate]` against a
 pinned exp18 corpus.
 
 ### Why the code looks the way it does — grounded decisions
@@ -422,7 +435,7 @@ without a theory change.
 3. **`LocalCausalAgent` at substrate level, not under `subsystems/`.**
    The trait IS substrate — it formalizes what it means to use the
    substrate. Filing it under `subsystems/` misnames its role.
-   `[SHIPPED @ src/agent.rs]` is the correct home.
+   `[SHIPPED @ agent::LocalCausalAgent]` is the correct home.
 
 4. **`previous_root: Distinction` on `TransactionBatch`.** The N5
    String-truncation bug from v1.2.x cannot exist because there is no
@@ -487,7 +500,7 @@ later minor releases carry a `[TARGET]` tag on the relevant line-item.
 - `synthesize_causal_action(root, action, &engine) -> Distinction` —
   LCA helper.
 
-Every entry above resolves to a `[SHIPPED @ src/…]` file path per the
+Every entry above resolves to a `[SHIPPED @ <symbol-path>]` anchor per the
 substrate description sections above. `SynthesisOutcome` and the
 `RawDistinctionId → engine.verify() → Distinction` type-level API
 extend this surface as part of v2.0.0's projection primitive.
@@ -525,9 +538,9 @@ novelty bit is fixed in
 DESIGN.md merely names the API surface that materializes it.
 
 **Two-type API surface.** `RawDistinctionId → engine.verify() →
-Distinction`. The runtime closure is `[SHIPPED @ src/engine.rs:747-756]`;
-the type-level API is `[SHIPPED @ src/engine.rs:158-177]`
-(`RawDistinctionId`) and `[SHIPPED @ src/engine.rs:991]` (`verify`) —
+Distinction`. The runtime closure is `[SHIPPED @ engine::DistinctionEngine::synthesize]`;
+the type-level API is `[SHIPPED @ engine::RawDistinctionId]`
+(`RawDistinctionId`) and `[SHIPPED @ engine::DistinctionEngine::verify]` (`verify`) —
 see substrate description above.
 
 **Signal axis forward-compat.** The projection dual carries a `Signal`
@@ -629,8 +642,8 @@ Enumerated. No hedging.
    tips, so the extra calls bought no injectivity while doubling the
    graph. See Law 11 on what that does to the quoted magnitudes.
 7. **No production BFT consensus layer.**
-   `[SHIPPED @ src/subsystems/validator.rs]` and
-   `[SHIPPED @ src/subsystems/commitment.rs]` are reference LCA
+   `[SHIPPED @ koru-lambda-consensus: validator]` and
+   `[SHIPPED @ koru-lambda-consensus: commitment]` are reference LCA
    implementations, not the pitch. `koru-protocol` remains the home
    for production consensus.
 8. **No networking stack.** Production networking is downstream of

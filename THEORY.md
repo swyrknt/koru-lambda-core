@@ -292,8 +292,9 @@ has lived in six ad-hoc reinventions across the ecosystem (ALIS `Field`,
 koru-engine `Field`, koru-spatial adjacency, koru-mesh seen-set,
 koru-delta replay-to-point, koru-wave dissolve-on-read). Naming it here
 does not add a primitive; it names what the axioms already produce.
-First-class API surface for the projection is `[TARGET: first-class API]`;
-the theoretical claim itself carries no tag.
+First-class API surface for the projection is
+`[SHIPPED @ projection::Projection]`; the theoretical claim itself
+carries no tag.
 
 **Falsifier.** Cross-engine projection independence probe — two engines
 with identical synthesis histories, queried with the same projection
@@ -353,11 +354,12 @@ The axioms force consequences the substrate does not yet expose. Naming
 them here fixes the theoretical status; API surface is downstream.
 
 - **The novelty bit as a first-class outcome.** Law 7 makes *novel vs.
-  saturated* a structural binary the operator computes on every call;
-  the current API discards it, returning a bare `Distinction`. Exposing
-  `SynthesisOutcome { child, was_novel }` lets consumers compute
-  novelty-rate signals over projections without recomputing state.
-  Theory-forced; API `[TARGET]`.
+  saturated* a structural binary the operator computes on every call.
+  `[SHIPPED @ engine::SynthesisOutcome]` exposes it, so consumers can
+  compute novelty-rate signals over projections without recomputing
+  state. It ships as an enum rather than the `{ child, was_novel }`
+  struct this section once proposed: the two states are exclusive, and
+  an enum makes a caller handle both.
 
 - **Intrinsic degree-frequency coupling.** Coding Law's structural part
   makes the graph *self-attending by construction* — reframing what
@@ -461,4 +463,5 @@ in `docs/BENCHMARKS.md`.
 
 ---
 
-*Empirical evidence: `docs/BENCHMARKS.md`, `tests/coding_law.rs`.*
+*Empirical evidence: `docs/BENCHMARKS.md`, and
+`koru-experiments-runner: coding_law::exp18_rho_clears_gate`.*
