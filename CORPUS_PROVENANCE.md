@@ -1,8 +1,9 @@
 # Corpus Provenance
 
 This file is the **out-of-band authoritative record** for the pinned exp18
-corpus (`tests/corpora/exp18.{log,freq.bin}`). It exists because the
-in-tree SHA-256 gates in `tests/coding_law.rs` only detect drift — they
+corpus (`experiments/runner/tests/corpora/exp18.{log,freq.bin}`). It exists
+because the in-tree SHA-256 gates in
+`experiments/runner/tests/coding_law.rs` only detect drift — they
 cannot distinguish a legitimate, gate-amendment-approved regeneration
 from a silent corpus replacement. This file is the trail that survives
 either case.
@@ -28,12 +29,12 @@ trail. (Adopted during pre-merge review; see commit log.)
 
 | File | Size (bytes) | SHA-256 |
 |---|---|---|
-| `tests/corpora/exp18.log` | `1_048_576` | `9fd8a22b4b89e0937d09af13646af5b797e8369e46c11c3e1f94b3e7169878d9` |
-| `tests/corpora/exp18.freq.bin` | `16_384` | `93d08b2fb4e721b679c90a56b70d69de8511a4749a4ee2ff715722efc123ca46` |
+| `experiments/runner/tests/corpora/exp18.log` | `1_048_576` | `9fd8a22b4b89e0937d09af13646af5b797e8369e46c11c3e1f94b3e7169878d9` |
+| `experiments/runner/tests/corpora/exp18.freq.bin` | `16_384` | `93d08b2fb4e721b679c90a56b70d69de8511a4749a4ee2ff715722efc123ca46` |
 
 ## Measured Spearman ρ at the pin
 
-`tests/coding_law.rs::exp18_rho_clears_gate` reports **ρ = 0.9940** on
+`experiments/runner/tests/coding_law.rs::exp18_rho_clears_gate` reports **ρ = 0.9940** on
 this corpus against a fresh `DistinctionEngine`. Gate target: ≥ 0.985.
 Gate floor: ≥ 0.97.
 

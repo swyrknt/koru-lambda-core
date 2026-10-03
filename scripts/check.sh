@@ -18,6 +18,7 @@ step "repository gates"
 ./scripts/gates/no_process_leaks.sh
 ./scripts/gates/checklist_evidence.sh
 ./scripts/gates/doc_anchors.sh
+./scripts/gates/roadmap.sh
 
 step "api snapshot"
 if command -v cargo-public-api >/dev/null 2>&1; then

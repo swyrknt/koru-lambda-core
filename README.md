@@ -151,6 +151,8 @@ for details.
   today, what the epics change, and what v2.0.0 does *not* ship.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — code structure, module
   layout, and how the merged-map substrate is organized.
+- [ECOSYSTEM.md](ECOSYSTEM.md) — the layers around the substrate,
+  which one you want, and how other languages reach it.
 - [CHANGELOG.md](CHANGELOG.md) — release history.
 - [docs/BENCHMARKS.md](docs/BENCHMARKS.md) — capacity and
   throughput measurements; every number cites an in-crate anchor.

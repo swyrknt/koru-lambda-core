@@ -419,3 +419,76 @@ fn hop_distance_entries_shape() {
     // length check above; the type + shape are the load-bearing checks.
     assert!(saw_root_hop_zero || arr.length() == 3, "root at hop 0 (or bigint path)");
 }
+
+// Axioms 2 and 3 across the WebAssembly boundary.
+//
+// These were missing, and the gap predates 2.0.0. The v1.2 suite had a
+// `test_falsify_wasm_axiom_violations` written to assert exactly this, and
+// that file never compiled once before it was published — so the axioms have
+// never been checked through the bindings in any released version.
+//
+// Why it is not redundant with the native tests: the bindings cross an ABI,
+// marshal `Vec<u8>` through JsValue, and compile under a different backend to
+// a 32-bit pointer width. Argument order and the irreflexive fast path are
+// both things a marshalling layer can disturb without any native test
+// noticing. `cond_d_prime_wasm.rs` pins agreement on published vectors;
+// these pin the operator's own laws.
+
+#[wasm_bindgen_test]
+fn axiom2_commutativity_holds_across_the_boundary() {
+    let e = WasmEngine::new();
+    let d0 = e.d0();
+    let d1 = e.d1();
+    let deeper = e.synthesize(&d0, &d1).expect("seed child");
+
+    for (a, b) in [(&d0, &d1), (&d1, &deeper), (&deeper, &d0)] {
+        let forward = e.synthesize(a, b).expect("forward");
+        let backward = e.synthesize(b, a).expect("backward");
+        assert_eq!(
+            forward, backward,
+            "Axiom 2 violated through the bindings: argument order changed the \
+             child, so the marshalling layer is not canonicalising the pair"
+        );
+    }
+}
+
+#[wasm_bindgen_test]
+fn axiom3_irreflexivity_holds_across_the_boundary() {
+    let e = WasmEngine::new();
+    let d0 = e.d0();
+    let d1 = e.d1();
+    let child = e.synthesize(&d0, &d1).expect("seed child");
+
+    for d in [&d0, &d1, &child] {
+        let same = e.synthesize(d, d).expect("self-synthesis is legal");
+        assert_eq!(
+            same, *d,
+            "Axiom 3 violated through the bindings: self-synthesis produced new \
+             bytes instead of returning the input"
+        );
+    }
+}
+
+#[wasm_bindgen_test]
+fn law7_saturation_adds_no_structure_across_the_boundary() {
+    let e = WasmEngine::new();
+    let d0 = e.d0();
+    let d1 = e.d1();
+
+    let first = e.synthesize(&d0, &d1).expect("first");
+    let count_after_first = e.distinction_count();
+    let relationships_after_first = e.relationship_count();
+
+    let second = e.synthesize(&d0, &d1).expect("repeat");
+    assert_eq!(first, second, "Law 7: a repeat produced different bytes");
+    assert_eq!(
+        count_after_first,
+        e.distinction_count(),
+        "Law 7 violated through the bindings: a saturated repeat grew the graph"
+    );
+    assert_eq!(
+        relationships_after_first,
+        e.relationship_count(),
+        "Law 7 violated through the bindings: a saturated repeat added an edge"
+    );
+}

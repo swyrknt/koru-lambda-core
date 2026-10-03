@@ -17,8 +17,11 @@
 //! diverged; either accept the new digest (revising this gate) or
 //! pin a different `rand` version".
 //!
-//! Also pins the rand version via `rand = "=0.8.5"` in
-//! `experiments/runner/Cargo.toml`.
+//! The `rand` version this depends on is pinned at the workspace level —
+//! `rand = "=0.9.5"` in `[workspace.dependencies]` of the root `Cargo.toml`,
+//! which `experiments/runner/Cargo.toml` inherits. See `CORPUS_PROVENANCE.md`
+//! for why the pin is exact and for the record of the `=0.8.5` → `=0.9.5`
+//! move, which left both corpus digests byte-identical.
 
 use koru_experiments_runner::coding_law_workload::CodingLawWorkload;
 use koru_lambda_core::DistinctionEngine;

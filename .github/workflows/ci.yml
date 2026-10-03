@@ -22,6 +22,7 @@ jobs:
       - run: ./scripts/gates/no_process_leaks.sh
       - run: ./scripts/gates/checklist_evidence.sh
       - run: ./scripts/gates/doc_anchors.sh
+      - run: ./scripts/gates/roadmap.sh
 
   fmt:
     name: Format
