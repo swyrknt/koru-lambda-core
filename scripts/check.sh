@@ -19,6 +19,7 @@ step "repository gates"
 ./scripts/gates/checklist_evidence.sh
 ./scripts/gates/doc_anchors.sh
 ./scripts/gates/roadmap.sh
+./scripts/gates/vectors_frozen.sh
 
 step "api snapshot"
 if command -v cargo-public-api >/dev/null 2>&1; then

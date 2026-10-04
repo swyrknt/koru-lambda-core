@@ -1,0 +1,76 @@
+{
+  "$comment": [
+    "The published identity of koru-lambda-core. This file is the single source",
+    "for every vector the substrate guarantees; src/vectors.rs mirrors it and a",
+    "test asserts the mirror. Language-neutral on purpose: hex strings and",
+    "integers only, so a conforming implementation in any language can certify",
+    "itself without reading Rust.",
+    "",
+    "Changing any value here changes the published identity of the substrate.",
+    "scripts/gates/vectors_frozen.sh refuses that unless frozen_for_major and",
+    "the digest in conformance/VECTORS.sha256 are updated to match, which makes",
+    "the change three visible edits instead of one silent regeneration."
+  ],
+  "frozen_for_major": 2,
+  "spec": "docs/SPEC.md",
+
+  "primordials": {
+    "$comment": "Asserted, not derived. Every other value below descends from these.",
+    "d0": "00000000000000000000000000000000",
+    "d1": "01000000000000000000000000000000"
+  },
+
+  "operator": {
+    "$comment": "synthesize(a, b) = SHA-256(min(a,b) || max(a,b))[0..16], with a==b returning a before hashing.",
+    "cases": [
+      { "name": "c", "parents": ["d0", "d1"], "id": "6cc4f0e930b34481d03a4134331852ea" },
+      { "name": "d", "parents": ["c", "d0"], "id": "3309377e376d6ca3c2e3bf9885900260" },
+      { "name": "e", "parents": ["d", "d1"], "id": "5f02c8386c05dc7311e0c73a011e18be" }
+    ]
+  },
+
+  "lift": {
+    "$comment": [
+      "The substrate's only free parameter, and therefore the thing that most",
+      "needs pinning: two implementations can satisfy every operator case above",
+      "and still disagree on every value a consumer folds.",
+      "Each byte takes 8 synthesize steps, one per bit, least-significant first,",
+      "folding the accumulator with the primordial that bit selects."
+    ],
+    "bits_per_byte": 8,
+    "tips": [
+      { "byte": 0, "id": "1c1a627159dcf9523304bd261346e876" },
+      { "byte": 1, "id": "d1da7982b838811998a709d6b93c4af8" },
+      { "byte": 65, "id": "f734ffd02c46262fbaa9c5c9d5726538" },
+      { "byte": 255, "id": "214032b0fd17b607a0ed4076a36f16ed" }
+    ],
+    "folds": [
+      {
+        "$comment": "Pins the sequence fold end to end: the anchor rule, the length folded first, and element order. The anchor is `d` because an anchor must not be a byte tip.",
+        "name": "fold_hi_anchored_at_d",
+        "anchor": "3309377e376d6ca3c2e3bf9885900260",
+        "bytes": [104, 105],
+        "id": "c92ea05207b80ce6bb3ef6995a203c3e"
+      }
+    ]
+  },
+
+  "projections": {
+    "$comment": [
+      "One wire form today. CONF-1 widens this to the full cross product of",
+      "3 signals x 3 directions x 2 boundary kinds, each with its projection_id;",
+      "until then a conforming implementation can agree on everything here and",
+      "still differ on 17 of 18 reads."
+    ],
+    "cases": [
+      {
+        "name": "adjacency_upstream_hops2",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Adjacency",
+        "direction": "Upstream",
+        "boundary": { "kind": "Hops", "value": 2 },
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000"
+      }
+    ]
+  }
+}

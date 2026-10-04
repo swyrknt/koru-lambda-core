@@ -1,0 +1,17 @@
+# The published identity of koru-lambda-core, pinned.
+#
+# This digest is kept in a file SEPARATE from the vectors it pins, so that
+# changing a published identifier is a two-file diff that says so, rather than
+# one regeneration that reads as noise. Combined with the mirror test and the
+# live-engine test in tests/conformance_fixture.rs, moving an identifier now
+# takes four coordinated edits: the engine, src/vectors.rs, the fixture, and
+# this line.
+#
+# What this does NOT close: a contributor who intends to change identity can
+# still make all four edits in one commit. No in-repo pin can prevent that.
+# What it closes is the SILENT case — identity moving as a side effect of a
+# change to the operator, with every gate green, which is how it stood before.
+#
+# Changing this line changes what 2.x means. See conformance/README.md.
+major = 2
+sha256 = 7fe572de74d695e65eb359abb7a4f2c72930cd4720a774afb13301e965c1b4a5

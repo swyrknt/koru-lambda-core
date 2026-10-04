@@ -23,6 +23,7 @@ jobs:
       - run: ./scripts/gates/checklist_evidence.sh
       - run: ./scripts/gates/doc_anchors.sh
       - run: ./scripts/gates/roadmap.sh
+      - run: ./scripts/gates/vectors_frozen.sh
 
   fmt:
     name: Format
