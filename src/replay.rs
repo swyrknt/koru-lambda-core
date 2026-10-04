@@ -9,8 +9,6 @@
 //!
 //! - [`replay_topological`] — rebuild a fresh engine from a parentage
 //!   snapshot, in any input order, via repeated `synthesize` calls.
-//! - [`build_children_index`] — materialize the inverse-of-`parents_of`
-//!   map for consumers that need children iteration.
 //! - [`ReplayError`] — diagnostic error type for replay failures.
 //!
 //! These functions are pure (no engine state in this module). Consumers
@@ -30,7 +28,6 @@
 //! snapshot → replay → byte-identical engine.
 
 use crate::{Distinction, DistinctionEngine, ParentPair};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Reasons [`replay_topological`] can fail.
@@ -160,39 +157,6 @@ pub fn replay_topological(
     }
 
     Ok(engine)
-}
-
-/// Materialize the inverse of `parents_of`: for each distinction, the
-/// set of distinctions that have it as a parent.
-///
-/// # Snapshot-in-time semantics
-///
-/// The returned index reflects only the parentage entries passed in.
-/// Concurrent syntheses against the live engine after the snapshot was
-/// taken do NOT appear in this index. Build it from a fresh
-/// `engine.snapshot_parentage()` call at a quiescent moment, or accept
-/// that the view is consistent with the snapshot, not with the engine's
-/// current state.
-///
-/// # Why this isn't in the engine
-///
-/// The engine doesn't carry this index — `degree` is the canonical
-/// O(1) Coding Law projection. This helper materializes the dual
-/// (children-iteration) on demand. Build once at a quiescent moment;
-/// query O(1) thereafter.
-///
-/// O(N) build, where N is `parentage.len()`. Each parent gets entries
-/// proportional to its child count.
-#[must_use]
-pub fn build_children_index(
-    parentage: &[(Distinction, ParentPair)],
-) -> HashMap<Distinction, Vec<Distinction>> {
-    let mut index: HashMap<Distinction, Vec<Distinction>> = HashMap::new();
-    for (child, (a, b)) in parentage {
-        index.entry(*a).or_default().push(*child);
-        index.entry(*b).or_default().push(*child);
-    }
-    index
 }
 
 #[cfg(test)]
@@ -404,37 +368,5 @@ mod tests {
         let err =
             replay_topological(parentage).expect_err("rootless parentage must reject (invariant)");
         assert_eq!(err, ReplayError::MissingPrimordial);
-    }
-
-    // ----- build_children_index ----------------------------------------
-
-    #[test]
-    fn build_children_index_inverts_parents_of() {
-        let (e, snap) = build_source();
-        let index = build_children_index(&snap);
-
-        // Every parentage entry (child, (a, b)) implies a is in
-        // index[child]'s reverse — i.e., child appears in index[a] and
-        // index[b].
-        for (child, (a, b)) in &snap {
-            assert!(
-                index.get(a).is_some_and(|children| children.contains(child)),
-                "child {child:?} missing from index[{a:?}]"
-            );
-            assert!(
-                index.get(b).is_some_and(|children| children.contains(child)),
-                "child {child:?} missing from index[{b:?}]"
-            );
-        }
-
-        // d0 has lots of children (it's a Fold Law mega-hub after byte folds).
-        let d0_children = index.get(&e.d0()).expect("d0 has children (invariant)");
-        assert!(!d0_children.is_empty());
-    }
-
-    #[test]
-    fn build_children_index_empty_input_empty_output() {
-        let index = build_children_index(&[]);
-        assert!(index.is_empty());
     }
 }

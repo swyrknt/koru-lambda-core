@@ -34,14 +34,14 @@ SNAPSHOTS=(api/*.txt)
 while IFS= read -r ref; do
     [ -z "$ref" ] && continue
     # Last path segment is the item; check the item appears in the surface.
-    # Crate-qualified anchors (e.g. "koru-lambda-consensus: validator") and
+    # Crate-qualified anchors (e.g. "koru-lambda-agents: validator") and
     # version/branch anchors are not symbol paths; skip them.
     case "$ref" in *" "*|*/*) continue ;; esac
     # Match the fully-qualified path, which is how the snapshots spell it.
     # Exact rather than by last segment: a stale anchor whose item still
     # exists under a different module should still fail.
     found=0
-    for crate in koru_lambda_core koru_lambda_consensus koru_lambda_wasm; do
+    for crate in koru_lambda_core koru_lambda_agents koru_lambda_wasm; do
         if grep -qF "${crate}::${ref}" "${SNAPSHOTS[@]}"; then
             found=1
             break

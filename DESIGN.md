@@ -294,7 +294,7 @@ the engine is unaware of them.
 Two reference LCA implementations demonstrate the pattern with running
 consensus code at the current commit:
 
-- `[SHIPPED @ koru-lambda-consensus: validator]` — `ConsensusValidator`
+- `[SHIPPED @ koru-lambda-agents: validator]` — `ConsensusValidator`
   with V3 (data cap), V4 (oversized-root clipping), V5 (atomic-failure
   pre-validation), V6 (atomic `restore_state`), V8 (empty-data
   by-design) designed-in as non-existent bugs. Pre-validation pass
@@ -302,7 +302,7 @@ consensus code at the current commit:
   rejection. Typed errors on the public surface; explicit thresholds;
   no magic constants.
 
-- `[SHIPPED @ koru-lambda-consensus: commitment]` — `CommitmentAgent` +
+- `[SHIPPED @ koru-lambda-agents: commitment]` — `CommitmentAgent` +
   `BatchCommitment`. `BatchCommitment::compute` hashes `leader_id` (N6
   designed-in); `TransactionBatch::previous_root` typed as
   `Distinction` — the N5 String-truncation bug literally cannot exist
@@ -381,7 +381,7 @@ No new heavyweight deps. Every addition serves a specific design goal.
   its own minor-version release after v2.0.0.
 - **Workspace:** four members. `koru-lambda-core` is the substrate and
   the only crate the axioms describe; `koru-lambda-wasm` carries the
-  JS/TS bindings and publishes to npm; `koru-lambda-consensus` holds the
+  JS/TS bindings and publishes to npm; `koru-lambda-agents` holds the
   reference consumers and is marked `publish = false` for 2.0.0;
   `experiments/runner` holds probes and does not ship. A consumer of the
   substrate depends on one crate and resolves five direct dependencies.
@@ -642,8 +642,8 @@ Enumerated. No hedging.
    tips, so the extra calls bought no injectivity while doubling the
    graph. See Law 11 on what that does to the quoted magnitudes.
 7. **No production BFT consensus layer.**
-   `[SHIPPED @ koru-lambda-consensus: validator]` and
-   `[SHIPPED @ koru-lambda-consensus: commitment]` are reference LCA
+   `[SHIPPED @ koru-lambda-agents: validator]` and
+   `[SHIPPED @ koru-lambda-agents: commitment]` are reference LCA
    implementations, not the pitch. `koru-protocol` remains the home
    for production consensus.
 8. **No networking stack.** Production networking is downstream of

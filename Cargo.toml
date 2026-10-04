@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/koru-lambda-consensus", "crates/koru-lambda-wasm", "experiments/runner"]
+members = [".", "crates/koru-lambda-agents", "crates/koru-lambda-wasm", "experiments/runner"]
 resolver = "2"
 
 # Workspace-shared dependencies — see CORPUS_PROVENANCE.md for the

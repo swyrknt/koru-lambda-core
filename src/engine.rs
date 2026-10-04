@@ -551,7 +551,7 @@ type NodeMap = DashMap<[u8; 16], EngineNode, IdentityBuildHasher>;
 /// is one node.
 ///
 /// No log. No observation channel. No order-bearing state. The substrate
-/// is timeless; time is what consumers (`LocalCausalAgent`) do.
+/// is timeless; time is what consumers do.
 ///
 /// # Concurrency
 ///
@@ -663,7 +663,7 @@ impl DistinctionEngine {
     ///    `sum_of_degrees == 2 * non_primordial_count` holds at every
     ///    quiescent point.
     ///
-    /// Consumers (`LocalCausalAgent`) drive synthesis sequentially within
+    /// Consumers that carry a perspective drive synthesis sequentially within
     /// a single LCA, so the relaxed in-flight ordering between distinct
     /// LCAs is invisible to any contract built on the LCA pattern. Probes
     /// reading degree directly (`Coding Law`, `Fold Law` traversals)
@@ -937,6 +937,36 @@ impl DistinctionEngine {
     #[must_use]
     pub fn parents_of(&self, d: Distinction) -> Option<(Distinction, Distinction)> {
         self.nodes.get(&d.0).and_then(|entry| entry.value().parents)
+    }
+
+    /// Does `candidate` advance forward from `previous`?
+    ///
+    /// True when `previous` is one of `candidate`'s parents. This is the one
+    /// structural fact behind the local-causal-agent pattern: an advance that
+    /// does not descend from the root it replaces is not a causal step, it is
+    /// an unrelated assignment.
+    ///
+    /// # Why this is a substrate read and the agent contract is not
+    ///
+    /// The contract that *chooses* to advance is a consumer's — the theory is
+    /// explicit that the pattern is a pattern and not an axiom, and it names
+    /// legal consumers that do not follow it. But whether a given advance was
+    /// forward is a question about the graph, answered by one `parents_of`
+    /// lookup, and reads belong here.
+    ///
+    /// Put differently: every non-primordial distinction *is* an advance of
+    /// each of its parents, so agent-ness is a reading of the structure rather
+    /// than a type some values have. This method is that reading. The trait
+    /// that wrapped it lives with the consumers who choose to use it.
+    ///
+    /// Returns `false` if `candidate` is unregistered or primordial — neither
+    /// has parents, so neither advances from anything.
+    #[must_use]
+    pub fn advances_from(&self, candidate: Distinction, previous: Distinction) -> bool {
+        match self.parents_of(candidate) {
+            Some((a, b)) => a == previous || b == previous,
+            None => false,
+        }
     }
 
     /// Compute the degree of a distinction (Law 12, Coding Law).
@@ -1745,6 +1775,60 @@ mod engine_tests {
         assert!(p1.as_bytes() <= p2.as_bytes());
         // The actual parents are d0 and d1 in some order.
         assert!((p1 == e.d0() && p2 == e.d1()) || (p1 == e.d1() && p2 == e.d0()));
+    }
+
+    // ----- advances_from — the forward-advance read ----------------------
+    //
+    // These cover the read that replaced the agent contract. The contract
+    // chose to advance; this answers whether an advance was forward, which is
+    // a question about the graph.
+
+    #[test]
+    fn advances_from_holds_for_both_parents() {
+        let e = DistinctionEngine::new();
+        let child = e.synthesize(e.d0(), e.d1());
+        // Every non-primordial is an advance of *each* of its parents — the
+        // reading is available from either side, and nothing privileges one.
+        assert!(e.advances_from(child, e.d0()));
+        assert!(e.advances_from(child, e.d1()));
+    }
+
+    #[test]
+    fn advances_from_rejects_a_root_it_does_not_descend_from() {
+        let e = DistinctionEngine::new();
+        let first = e.synthesize(e.d0(), e.d1());
+        let second = e.synthesize(first, e.d0());
+        let sibling = e.synthesize(first, e.d1());
+        assert!(e.advances_from(second, first), "second descends from first");
+        assert!(
+            !e.advances_from(second, sibling),
+            "a sibling is not an ancestor; this is the case that catches an \
+             assignment masquerading as a causal step"
+        );
+    }
+
+    #[test]
+    fn advances_from_is_false_for_a_chain_skipping_a_step() {
+        let e = DistinctionEngine::new();
+        let a = e.synthesize(e.d0(), e.d1());
+        let b = e.synthesize(a, e.d0());
+        let c = e.synthesize(b, e.d1());
+        // Monotonicity is one step, not reachability: `c` descends from `b`,
+        // and `a` is its grandparent, not its parent.
+        assert!(e.advances_from(c, b));
+        assert!(!e.advances_from(c, a), "advances_from is immediate parentage, not ancestry");
+    }
+
+    #[test]
+    fn advances_from_is_false_for_primordials_and_strangers() {
+        let e = DistinctionEngine::new();
+        let child = e.synthesize(e.d0(), e.d1());
+        // Primordials have no parents, so they advance from nothing.
+        assert!(!e.advances_from(e.d0(), e.d1()));
+        // An unregistered distinction has no parentage here to read.
+        let stranger = unwitnessed_elsewhere(&e);
+        assert!(!e.advances_from(stranger, child));
+        assert!(!e.advances_from(child, stranger));
     }
 
     // ----- Law 6 — r = 2d − 3 -------------------------------------------

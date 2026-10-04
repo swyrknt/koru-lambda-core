@@ -25,10 +25,11 @@
 //! - **V8 (empty-data by design)** — `TransactionAction::data` must be
 //!   non-empty. Enforced in pre-validation AND at deserialize-time.
 
+use crate::agent::LocalCausalAgent;
 use crate::DOMAIN_TRANSACTION;
 use koru_lambda_core::domain_anchor;
 use koru_lambda_core::primitives::{ByteFold, Canonicalizable};
-use koru_lambda_core::{Distinction, DistinctionEngine, LocalCausalAgent};
+use koru_lambda_core::{Distinction, DistinctionEngine};
 
 // --- Constants ---------------------------------------------------------
 
@@ -376,7 +377,7 @@ impl LocalCausalAgent for ConsensusValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use koru_lambda_core::synthesize_causal_action;
+    use crate::agent::synthesize_causal_action;
     use std::sync::Arc;
 
     fn fresh() -> (Arc<DistinctionEngine>, ConsensusValidator) {

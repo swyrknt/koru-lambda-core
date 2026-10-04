@@ -54,7 +54,7 @@ the trust boundary is closed is an implementation concern. Conflating these
 is how a convention becomes quoted downstream as a law.
 
 **Target.** The agent layer does not exist as its own repository yet. Today
-its two consumers live in `crates/koru-lambda-consensus`, unpublished, and
+its two consumers live in `crates/koru-lambda-agents`, unpublished, and
 2.0.0 does not ship them — so for the life of 2.0.0 the recommended path is
 not yet installable. The status section at the end says what is actually
 built.
@@ -298,7 +298,7 @@ wrongly implied it had.
 |---|---|
 | Substrate | Specification normative. Public surface **not** settled: a dozen tracked items still change it, six of them removals |
 | Bindings | Ship with the substrate; the lift is not reachable from them, and the published npm name changed from 1.2.0 |
-| Agents | Two consumers in `crates/koru-lambda-consensus`, unpublished, pending their own repository and their wire-facing fixes |
+| Agents | Two consumers in `crates/koru-lambda-agents`, unpublished, pending their own repository and their wire-facing fixes |
 | Vectors | Nine constants: three child ids, four of 256 byte tips, one fold, one of eighteen projection wire forms, no projection identity |
 | Conformance fixtures | Not extracted. No `conformance/` directory exists |
 | Reference implementations | None in the repository. An independent reimplementation was reported but no artifact survives, so treat the specification's sufficiency as untested until one ships |

@@ -150,16 +150,13 @@
 #![warn(clippy::missing_const_for_fn)]
 #![warn(missing_docs)]
 
-pub mod agent;
 pub mod distinction_hex;
 pub mod engine;
 pub mod primitives;
 pub mod projection;
-pub mod recorder;
 pub mod replay;
 pub mod vectors;
 
-pub use agent::{synthesize_causal_action, LocalCausalAgent};
 pub use distinction_hex::ParseError;
 pub use engine::{
     Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher, InvariantError,
@@ -171,5 +168,4 @@ pub use primitives::{domain_anchor, ByteFold, ByteMapping, Canonicalizable, Doma
 pub use projection::{
     Adjacency, CoreSignal, Degree, HopDistance, Projection, ProjectionId, ProjectionSpec, Signal,
 };
-pub use recorder::SynthesisRecorder;
-pub use replay::{build_children_index, replay_topological, ReplayError};
+pub use replay::{replay_topological, ReplayError};

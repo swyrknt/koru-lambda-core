@@ -19,7 +19,7 @@
 //! the substrate doesn't ship the wrapper because the right discipline
 //! is workload-dependent.
 
-use crate::{Distinction, DistinctionEngine, IdentityBuildHasher};
+use koru_lambda_core::{Distinction, DistinctionEngine, IdentityBuildHasher};
 use std::collections::HashSet;
 use std::marker::PhantomData;
 

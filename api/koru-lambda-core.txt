@@ -1,11 +1,4 @@
 pub mod koru_lambda_core
-pub mod koru_lambda_core::agent
-pub trait koru_lambda_core::agent::LocalCausalAgent
-pub type koru_lambda_core::agent::LocalCausalAgent::ActionData: koru_lambda_core::primitives::Canonicalizable
-pub fn koru_lambda_core::agent::LocalCausalAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_core::agent::LocalCausalAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_core::agent::LocalCausalAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
-pub fn koru_lambda_core::agent::synthesize_causal_action<A: koru_lambda_core::primitives::Canonicalizable>(koru_lambda_core::engine::Distinction, A, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub mod koru_lambda_core::distinction_hex
 #[non_exhaustive] pub enum koru_lambda_core::distinction_hex::ParseError
 pub koru_lambda_core::distinction_hex::ParseError::InvalidChar
@@ -151,6 +144,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::Disti
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::Distinction
 pub struct koru_lambda_core::engine::DistinctionEngine
 impl koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::advances_from(&self, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> bool
 pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
 pub const fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
 pub const fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
@@ -642,21 +636,6 @@ pub fn koru_lambda_core::projection::HopDistance::compute_aggregate(&self, &koru
 pub fn koru_lambda_core::projection::signal_identity<S: koru_lambda_core::projection::Signal>(&S) -> [u8; 16]
 pub fn koru_lambda_core::projection::type_id_of<S: koru_lambda_core::projection::CoreSignal>() -> [u8; 16]
 pub type koru_lambda_core::projection::SignalOutputs<S> = alloc::collections::btree::map::BTreeMap<koru_lambda_core::engine::Distinction, <S as koru_lambda_core::projection::Signal>::Output>
-pub mod koru_lambda_core::recorder
-pub struct koru_lambda_core::recorder::SynthesisRecorder
-impl koru_lambda_core::recorder::SynthesisRecorder
-pub fn koru_lambda_core::recorder::SynthesisRecorder::log(&self) -> &[koru_lambda_core::engine::Distinction]
-pub fn koru_lambda_core::recorder::SynthesisRecorder::new() -> Self
-pub fn koru_lambda_core::recorder::SynthesisRecorder::synthesize(&mut self, &koru_lambda_core::engine::DistinctionEngine, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::Distinction
-impl core::default::Default for koru_lambda_core::recorder::SynthesisRecorder
-pub fn koru_lambda_core::recorder::SynthesisRecorder::default() -> Self
-impl core::marker::Freeze for koru_lambda_core::recorder::SynthesisRecorder
-impl !core::marker::Send for koru_lambda_core::recorder::SynthesisRecorder
-impl !core::marker::Sync for koru_lambda_core::recorder::SynthesisRecorder
-impl core::marker::Unpin for koru_lambda_core::recorder::SynthesisRecorder
-impl core::marker::UnsafeUnpin for koru_lambda_core::recorder::SynthesisRecorder
-impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::recorder::SynthesisRecorder
-impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::recorder::SynthesisRecorder
 pub mod koru_lambda_core::replay
 #[non_exhaustive] pub enum koru_lambda_core::replay::ReplayError
 pub koru_lambda_core::replay::ReplayError::Mismatch
@@ -683,7 +662,6 @@ impl core::marker::Unpin for koru_lambda_core::replay::ReplayError
 impl core::marker::UnsafeUnpin for koru_lambda_core::replay::ReplayError
 impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::replay::ReplayError
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::replay::ReplayError
-pub fn koru_lambda_core::replay::build_children_index(&[(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)]) -> std::collections::hash::map::HashMap<koru_lambda_core::engine::Distinction, alloc::vec::Vec<koru_lambda_core::engine::Distinction>>
 pub fn koru_lambda_core::replay::replay_topological(impl core::iter::traits::collect::IntoIterator<Item = (koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>) -> core::result::Result<alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, koru_lambda_core::replay::ReplayError>
 pub mod koru_lambda_core::vectors
 pub const koru_lambda_core::vectors::ADJACENCY_UPSTREAM_HOPS2_CANONICAL_HEX: &str
@@ -937,6 +915,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::Disti
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::Distinction
 pub struct koru_lambda_core::DistinctionEngine
 impl koru_lambda_core::engine::DistinctionEngine
+pub fn koru_lambda_core::engine::DistinctionEngine::advances_from(&self, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> bool
 pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
 pub const fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
 pub const fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
@@ -1120,20 +1099,6 @@ impl core::marker::Unpin for koru_lambda_core::engine::RawDistinctionId
 impl core::marker::UnsafeUnpin for koru_lambda_core::engine::RawDistinctionId
 impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::engine::RawDistinctionId
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::RawDistinctionId
-pub struct koru_lambda_core::SynthesisRecorder
-impl koru_lambda_core::recorder::SynthesisRecorder
-pub fn koru_lambda_core::recorder::SynthesisRecorder::log(&self) -> &[koru_lambda_core::engine::Distinction]
-pub fn koru_lambda_core::recorder::SynthesisRecorder::new() -> Self
-pub fn koru_lambda_core::recorder::SynthesisRecorder::synthesize(&mut self, &koru_lambda_core::engine::DistinctionEngine, koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::Distinction
-impl core::default::Default for koru_lambda_core::recorder::SynthesisRecorder
-pub fn koru_lambda_core::recorder::SynthesisRecorder::default() -> Self
-impl core::marker::Freeze for koru_lambda_core::recorder::SynthesisRecorder
-impl !core::marker::Send for koru_lambda_core::recorder::SynthesisRecorder
-impl !core::marker::Sync for koru_lambda_core::recorder::SynthesisRecorder
-impl core::marker::Unpin for koru_lambda_core::recorder::SynthesisRecorder
-impl core::marker::UnsafeUnpin for koru_lambda_core::recorder::SynthesisRecorder
-impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::recorder::SynthesisRecorder
-impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::recorder::SynthesisRecorder
 pub trait koru_lambda_core::Canonicalizable
 pub fn koru_lambda_core::Canonicalizable::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
 impl koru_lambda_core::primitives::Canonicalizable for u8
@@ -1142,11 +1107,6 @@ pub trait koru_lambda_core::CoreSignal: koru_lambda_core::projection::Signal + k
 impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Adjacency
 impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Degree
 impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::HopDistance
-pub trait koru_lambda_core::LocalCausalAgent
-pub type koru_lambda_core::LocalCausalAgent::ActionData: koru_lambda_core::primitives::Canonicalizable
-pub fn koru_lambda_core::LocalCausalAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_core::LocalCausalAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_core::LocalCausalAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 pub trait koru_lambda_core::Signal: core::clone::Clone + core::marker::Send + core::marker::Sync + 'static
 pub type koru_lambda_core::Signal::Output: core::marker::Send + core::marker::Sync + koru_lambda_core::projection::CanonicalBytes + 'static
 pub fn koru_lambda_core::Signal::canonical_bytes(&self) -> &[u8]
@@ -1167,10 +1127,8 @@ pub type koru_lambda_core::projection::HopDistance::Output = usize
 pub fn koru_lambda_core::projection::HopDistance::canonical_bytes(&self) -> &[u8]
 pub fn koru_lambda_core::projection::HopDistance::compute(&self, &koru_lambda_core::projection::SignalContext<'_>, koru_lambda_core::engine::Distinction) -> Self::Output
 pub fn koru_lambda_core::projection::HopDistance::compute_aggregate(&self, &koru_lambda_core::projection::SignalContext<'_>, impl core::iter::traits::collect::IntoIterator<Item = koru_lambda_core::engine::Distinction>) -> core::option::Option<Self::Output>
-pub fn koru_lambda_core::build_children_index(&[(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)]) -> std::collections::hash::map::HashMap<koru_lambda_core::engine::Distinction, alloc::vec::Vec<koru_lambda_core::engine::Distinction>>
 pub fn koru_lambda_core::domain_anchor(&koru_lambda_core::engine::DistinctionEngine, &koru_lambda_core::primitives::ByteFold, koru_lambda_core::primitives::DomainLabel) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::replay_topological(impl core::iter::traits::collect::IntoIterator<Item = (koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>) -> core::result::Result<alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, koru_lambda_core::replay::ReplayError>
-pub fn koru_lambda_core::synthesize_causal_action<A: koru_lambda_core::primitives::Canonicalizable>(koru_lambda_core::engine::Distinction, A, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub type koru_lambda_core::DomainLabel = u8
 pub type koru_lambda_core::IdentityBuildHasher = core::hash::BuildHasherDefault<koru_lambda_core::engine::IdentityHasher>
 pub type koru_lambda_core::ParentPair = (koru_lambda_core::engine::Distinction, koru_lambda_core::engine::Distinction)

@@ -25,8 +25,8 @@
 //! it, and it captures "time is what consumers do" as a composable
 //! trait.
 
-use crate::primitives::Canonicalizable;
-use crate::{Distinction, DistinctionEngine};
+use koru_lambda_core::primitives::Canonicalizable;
+use koru_lambda_core::{Distinction, DistinctionEngine};
 use std::sync::Arc;
 
 /// The Local Causal Agent contract.

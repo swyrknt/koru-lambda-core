@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-CRATES=(koru-lambda-core koru-lambda-consensus koru-lambda-wasm)
+CRATES=(koru-lambda-core koru-lambda-agents koru-lambda-wasm)
 update=0
 [ "${1:-}" = "--update" ] && update=1
 

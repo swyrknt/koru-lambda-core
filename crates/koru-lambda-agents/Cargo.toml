@@ -1,12 +1,12 @@
 [package]
-name = "koru-lambda-consensus"
+name = "koru-lambda-agents"
 version = "2.0.0"
 edition = "2021"
 rust-version = "1.80"
-description = "Reference consensus consumers built on the koru-lambda-core substrate: batch validation, commitments, networking and batch synthesis"
+description = "Agents built on the koru-lambda-core substrate: the local-causal-agent contract, batch validation and commitments, plus the consumer patterns the substrate deliberately does not carry"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/swyrknt/koru-lambda-core"
-keywords = ["consensus", "validator", "commitment", "content-addressed"]
+keywords = ["agent", "validator", "commitment", "content-addressed"]
 categories = ["data-structures"]
 # Not published with 2.0.0. This crate is a reference consumer, not the
 # substrate, and it still carries known wire-facing defects: an unverified
@@ -25,5 +25,8 @@ thiserror = "1.0"
 lru = "0.18"
 
 [dev-dependencies]
+# The recorder asserts its own !Send + !Sync at compile time; that is the
+# whole point of its PhantomData, so the assertion travels with it.
+static_assertions = "1"
 proptest = "1.0"
 serde_json = "1.0"

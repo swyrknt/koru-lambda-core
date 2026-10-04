@@ -296,11 +296,11 @@ cases in release builds.
 
 ## Reference subsystems
 
-Reference subsystems live in their own crate, `koru-lambda-consensus`,
+Reference subsystems live in their own crate, `koru-lambda-agents`,
 and are **not published with 2.0.0**:
 
 ```
-crates/koru-lambda-consensus/src/
+crates/koru-lambda-agents/src/
   lib.rs              declarations + re-exports
   validator.rs        ConsensusValidator
   commitment.rs       CommitmentAgent + BatchCommitment

@@ -16,11 +16,12 @@
 //!   stored leader_id. If the stored leader_id was tampered, the
 //!   recomputed hash won't match the stored `commitment_hash`.
 
+use crate::agent::LocalCausalAgent;
 use crate::validator::TransactionBatch;
 use crate::DOMAIN_COMMITMENT;
 use koru_lambda_core::domain_anchor;
 use koru_lambda_core::primitives::{ByteFold, Canonicalizable};
-use koru_lambda_core::{Distinction, DistinctionEngine, LocalCausalAgent};
+use koru_lambda_core::{Distinction, DistinctionEngine};
 use lru::LruCache;
 use sha2::{Digest, Sha256};
 use std::num::NonZeroUsize;
