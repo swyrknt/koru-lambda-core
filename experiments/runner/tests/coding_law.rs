@@ -23,6 +23,9 @@
 //! for why the pin is exact and for the record of the `=0.8.5` → `=0.9.5`
 //! move, which left both corpus digests byte-identical.
 
+use koru_experiments_runner::coding_law_control::{
+    mechanism_correlation, saturation_sweep, shuffled_null,
+};
 use koru_experiments_runner::coding_law_workload::CodingLawWorkload;
 use koru_lambda_core::DistinctionEngine;
 use sha2::{Digest, Sha256};
@@ -127,6 +130,95 @@ fn exp18_rho_clears_gate() {
         rho >= RHO_GATE,
         "Coding Law ρ gate FAILED: got {rho:.6}, need ≥ {RHO_GATE}. \
          Substrate may be losing degree signal — investigate before relaxing."
+    );
+}
+
+/// The ρ gate with a null model, which it did not have.
+///
+/// ρ ≥ 0.985 is the headline empirical number in `THEORY.md`, and degree is
+/// incremented by the very draws frequency counts — so the gate might have
+/// been asserting that a counter counts. The previous release shipped that
+/// exact defect elsewhere: a correlation with no null, on two series sharing a
+/// monotone trend, which passed 96% of the time against the hypothesis it
+/// claimed to reject.
+///
+/// This holds the degree deltas fixed and permutes the frequency vector,
+/// destroying the pairing while preserving both marginal distributions. If a
+/// non-relationship could reach 0.985, the gate would be decorative.
+#[test]
+fn rho_gate_is_not_clearable_without_a_relationship() {
+    let engine = DistinctionEngine::new();
+    let workload = CodingLawWorkload::generate(&engine, ALPHA, SEED, N, M);
+    let delta = workload.run_against(&engine);
+
+    let null = shuffled_null(&workload.freq, &delta, 200, 0xA11CE);
+    println!(
+        "null over {} permutations: mean {:+.4}, sd {:.4}, max |ρ| {:.4}",
+        null.trials, null.mean, null.sd, null.max_abs
+    );
+
+    assert!(
+        null.max_abs < RHO_GATE,
+        "a permuted frequency vector reached |ρ| = {:.4} against a gate of {RHO_GATE}. \
+         The gate would then be clearable with no relationship between frequency and \
+         degree at all, and THEORY's ρ ≈ 0.99 would be an artifact of the construction \
+         rather than a measurement.",
+        null.max_abs
+    );
+    assert!(
+        null.mean.abs() < 0.05,
+        "the null is centred at {:+.4} rather than zero, so permuting frequency leaves a \
+         systematic correlation — the two series share something the shuffle cannot break",
+        null.mean
+    );
+}
+
+/// THEORY explains why ρ < 1 — saturation drift — and that explanation is a
+/// prediction about how ρ *moves*, which is stronger evidence than any single
+/// value. "Under heavy saturation ρ drops below 1 ... under low saturation
+/// ρ → 1."
+///
+/// Nothing in the construction forces this. ρ comes from the engine's degree
+/// bookkeeping; the saturation rate comes from how often the engine declined
+/// to create anything. A substrate that mis-credited degree would break the
+/// relationship while leaving the saturation rate untouched.
+#[test]
+fn rho_tracks_saturation_as_the_theory_predicts() {
+    let shapes = [
+        (8192usize, 8192usize, 0.5f64),
+        (8192, 16384, 0.8),
+        (4096, 32768, 1.0),
+        (2048, 32768, 1.0),
+        (1024, 32768, 1.2),
+        (512, 32768, 1.4),
+        (256, 32768, 1.6),
+        (128, 32768, 1.8),
+    ];
+    let points = saturation_sweep(&shapes, SEED);
+    for p in &points {
+        println!(
+            "pool {:6} draws {:7} alpha {:.1}  saturation {:.4}  ρ {:+.4}",
+            p.pool, p.draws, p.alpha, p.saturation, p.rho
+        );
+    }
+
+    let mech = mechanism_correlation(&points);
+    println!("ρ(saturation, ρ) = {mech:+.4}");
+    assert!(
+        mech < -0.9,
+        "ρ(saturation, ρ) = {mech:+.4}; THEORY attributes the shortfall below 1.0 to \
+         saturation drift, which requires a strong negative relationship. If this is \
+         near zero, saturation does not explain the shortfall and THEORY's account of \
+         its own headline number needs replacing."
+    );
+
+    // The low-saturation limit THEORY states explicitly.
+    let lightest = points.first().expect("sweep is non-empty");
+    assert!(
+        lightest.saturation < 0.01 && lightest.rho > 0.999,
+        "at saturation {:.4} ρ was {:.4}; THEORY says ρ → 1 as saturation → 0",
+        lightest.saturation,
+        lightest.rho
     );
 }
 
