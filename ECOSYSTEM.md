@@ -299,8 +299,8 @@ wrongly implied it had.
 | Substrate | Specification normative. Public surface **not** settled: a dozen tracked items still change it, six of them removals |
 | Bindings | Ship with the substrate; the lift is not reachable from them, and the published npm name changed from 1.2.0 |
 | Agents | Two consumers in `crates/koru-lambda-agents`, unpublished, pending their own repository and their wire-facing fixes |
-| Vectors | Nine constants: three child ids, four of 256 byte tips, one fold, one of eighteen projection wire forms, no projection identity |
-| Conformance fixtures | Not extracted. No `conformance/` directory exists |
+| Vectors | Published in `conformance/vectors.json`, language-neutral, with `src/vectors.rs` as a test-asserted mirror. Coverage is thin: three operator cases, four of 256 byte tips, one fold, **one of eighteen** projection wire forms, and no projection identity at all |
+| Conformance fixtures | `conformance/vectors.json` and `conformance/README.md` ship, keyed to the specification's sections in three levels. The cross product of reads is not covered, and there are no rejection cases — so "conforming" currently means "agrees on good input", which is not what a trust boundary is |
 | Reference implementations | None in the repository. An independent reimplementation was reported but no artifact survives, so treat the specification's sufficiency as untested until one ships |
-| The freeze | Not mechanically enforced. The published vectors live inside the crate they pin, and the API snapshot records a constant's type rather than its value |
+| The freeze | Mechanical. The vectors live outside the crate they pin, their digest is pinned in a separate file, and a live engine is asserted against them — so moving a published identifier takes four coordinated, visible edits. The limit, stated in the gate: a deliberate change can still make all four at once. What is closed is identity moving as a *side effect* |
 | C ABI | Not built; an open owner decision |
