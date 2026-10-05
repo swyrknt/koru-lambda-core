@@ -112,3 +112,41 @@ and the signals that are example vantages rather than substrate.
 **After 2.0.0** the sections below the `Not blocking 2.0.0` line in
 `CHECKLIST.md` become that release's scope. They are deliberately unphased here
 and the gate ignores them.
+
+---
+
+## Research, and where it belongs
+
+The theory makes a **framework** claim — distinction as foundational — and
+`THEORY.md` stakes that claim on *fertility* rather than falsification: does
+the frame produce results you could not otherwise get? That invites probes
+that are genuinely open-ended, and open-ended work is the easiest way for a
+release to drift.
+
+So it gets a declared home and three rules.
+
+**Probes live in `experiments/`.** `tests/` asserts; `experiments/` measures.
+A probe whose outcome we do not know does not belong in a suite whose job is
+to go red when something breaks.
+
+**A research finding is not a release item.** It is recorded below the
+`Not blocking 2.0.0` line in `CHECKLIST.md`, which the roadmap gate ignores by
+design. No phase above that line may depend on one. The exception is narrow
+and already spent: a probe whose result changes a claim *already* in a tracked
+document is release work, because the document is wrong until it runs — that
+is why the Coding Law control ran before the theory was rewritten.
+
+**A probe result may enter a tracked document only with a status and a
+citation.** `THEORY.md` defines the statuses; a probed claim names the file
+that runs it. This is the rule that would have stopped the previous release's
+three headline measurements — a correlation that was a coin flip, a selection
+artefact, and a result the harness installed itself — from being published as
+properties of the substrate.
+
+**And every emergence probe needs a null model**, stated before it runs. This
+project has twice measured its own harness and reported the result as the
+substrate's: the previous release's scale-free topology existed only because
+the test driver installed preferential attachment, and Law 11's hub turned out
+to track the alphabet rather than the anchor. "Let it run and see what
+emerges" measures the draw policy unless something establishes what a policy
+that encodes nothing produces.

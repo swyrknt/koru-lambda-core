@@ -539,6 +539,28 @@ one.
 
 # Not blocking 2.0.0
 
+## EMG — The emergence ladder *(research; nothing here blocks 2.0.0)*
+
+`THEORY.md` makes a **framework** claim and stakes it on fertility. This
+section is where that claim is turned into experiments, under the rules in
+`ROADMAP.md` § Research, and where it belongs. Every item needs a null model
+stated before it runs, because this project has twice measured its own harness
+and reported the result as the substrate's.
+
+- [x] EMG-1 Does anything scale-invariant appear under a draw policy that encodes **nothing**? Prediction stated before measurement: the global mean clustering figure observed in passing is the *policy's*, not the substrate's, and should fall as ~1/N under uniform pairing because two distinctions drawn from a pool of size N are adjacent with probability ~4/N.
+  - evidence: `experiments/runner/src/emergence_probe.rs`, run via `cargo run -p koru-experiments-runner --release --bin emergence_probe`. **Prediction confirmed, and the result bounds the emergence claim.** Over a 27× scale range (d = 489 → 13,477), two arms on the same seed:
+
+    | | clustering | triangles | max degree |
+    |---|---|---|---|
+    | uniform (policy-free) | 0.005129 → **0.000347** | 19 → **30** | 21 |
+    | locality-biased | 0.639 → **0.633** | 322 → 8,611 | 19 |
+
+    Under a policy that encodes nothing the substrate produces **essentially no clustering** — it falls as ~1/d, and the absolute triangle count grows from 19 to 30 while the graph grows 27-fold, consistent with logarithmic rather than linear growth. Under locality bias clustering is stable to three decimals across the same range, which is what a *policy* constant looks like. Both arms assert `r = 2d − 3` and zero unexplained triangles as controls, so a divergence would indict the harness rather than flatter the substrate.
+  - **what this means for the framework claim:** complexity does not emerge from synthesis alone. It emerges from synthesis *plus a policy that already has structure in it* — the substrate is the medium, and the policy is where the information is. That does not refute the ladder; it says each rung needs its own policy, and the real question is which policies produce which rungs. Note also that **neither** arm produced hubs: max degree 21 against a mean of 4, a thin tail and not a power law, which is independent corroboration of the Law 11 demotion and of the previous release's scale-free result having been a harness artifact.
+- [ ] EMG-2 The ladder's rungs are each stated as a falsifiable prediction with the policy that is claimed to produce them. Right now the chain — distinction, information and logic, waves, atoms, physics — is unfalsifiable for a boring reason: nobody has written down what would count as a rung failing. Writing that down is the work.
+- [ ] EMG-3 The known blocker is named in whatever document carries the ladder: the rungs above "order from nesting" need **dynamics**, and the substrate is timeless by design. Propagation needs time, and time is explicitly a consumer concern. This is not an oversight — timelessness is what makes Laws 8 and 9 hold, so adding dynamics to the substrate trades away convergence-without-coordination. Any ladder that reaches waves has to say what it is giving up.
+- [ ] EMG-4 A policy-free run is characterised at a scale where logarithmic and constant triangle growth can be told apart. Four points over 27× cannot distinguish `4·ln(N)` from a bounded constant, and EMG-1 deliberately claims only "far slower than linear".
+
 Retained in the repository, out of the release. Nothing here is abandoned; it is unscheduled.
 
 ## SUB — Consensus reference consumers (ships in `koru-lambda-agents`)

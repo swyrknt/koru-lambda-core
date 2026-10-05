@@ -12,3 +12,4 @@
 pub mod anchor_hub_probe;
 pub mod coding_law_control;
 pub mod coding_law_workload;
+pub mod emergence_probe;
