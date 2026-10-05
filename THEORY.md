@@ -1,467 +1,493 @@
 # Distinction Theory
 
-`[SHIPPED: axioms + Laws 5-12 correspond to code state]`
+One operator, four axioms, two primordials, and the structure they force.
 
-The substrate `koru-lambda-core` implements is small enough to state on one
-page. It has one operator, four axioms, two primordials, and a handful of
-structural laws that follow as consequences. Where a claim references
-code, an inline `[SHIPPED]` or `[TARGET]` tag records whether the
-correspondence is in-tree today or scheduled; theoretical claims carry no
-tag. Version binding lives in `DESIGN.md`.
+This document is rewritten rather than amended. The version it replaces had
+accumulated four internal contradictions over two years — it named six
+converging domains in one section and two consumers in its closing paragraph,
+stated a law flatly and retracted it ten lines later, described the same
+construct as both "a pattern, not an axiom" and "a substrate-level construct,"
+and cited a probe that did not exist. Those are what amendment produces, and
+editing them out one at a time preserves the structure that allowed them. The
+previous version remains in version control.
 
 ---
 
-## Downstream Discipline
+## Reading this document
 
-THEORY.md is upstream of `DESIGN.md`, `ARCHITECTURE.md`, `README.md`, and
-`docs/**`; every paraphrase is where drift lives.
+Every claim below carries a status, because the distinction between what the
+axioms *force* and what we *chose* is the one that downstream documents get
+wrong, and the one a reader needs in order to argue with us.
 
-**Two-anchor policy.** Downstream references to concept-terms in this
-document (`synthesize`, `commutativity`, `irreflexivity`,
-`content addressing`, `Law 5`–`Law 12`, `Fold Law`, `Coding Law`, `LCA` /
-`local causal agent`, `synthesis/projection dual`) resolve to either
-`THEORY.md#section-slug` (default — section anchors survive edits) or
-`THEORY.md:LINE` (verbatim-quote-only). Matches inside `[SHIPPED]` or
-`[TARGET]` tag blocks are exempt — those anchor to code by construction.
+| Status | Means |
+|---|---|
+| **Axiom** | Asserted. Not derived, not negotiable. |
+| **Derived** | Follows from the axioms. A proof sketch is given. |
+| **Encoding** | A property of an encoding we chose. A different encoding changes it. |
+| **Probed** | Empirical, with the probe named. Run it; it is in the repository. |
+| **Framework** | A commitment the formalism permits and does not establish. |
+
+A claim with no status is a mistake in this document.
+
+## Downstream discipline
+
+This document is upstream of `DESIGN.md`, `ARCHITECTURE.md`, `ECOSYSTEM.md`,
+`README.md`, and `docs/**`. Every paraphrase is where drift lives.
+
+Downstream references to concept-terms here (`synthesize`, `commutativity`,
+`irreflexivity`, `content addressing`, `Law 5`–`Law 12`, `Fold Law`,
+`Coding Law`, `local causal agent`, `synthesis/projection dual`) resolve to
+`THEORY.md#section-slug`. Section anchors survive edits; line numbers do not,
+and are rejected by `scripts/gates/doc_anchors.sh`.
+
+`docs/SPEC.md` is normative for bytes. Where this document and the
+specification disagree about what an implementation must produce, the
+specification wins.
 
 ---
 
 ## The operator
 
-There is one operator:
+There is one:
 
 > **synthesize(a, b) → (c, novel?)**
 
-`a`, `b`, and `c` are *distinctions* — the only kind of thing the theory
-talks about. A distinction has no internal structure beyond its identity.
-Identity is content-addressed (see Axiom 4). The `novel?` bit
-distinguishes a first-time derivation from a saturated repeat (Law 7);
-implementations may expose or discard it, but the theory asserts its
-existence as a structural output of the operator.
+`a`, `b` and `c` are *distinctions* — the only kind of thing the theory talks
+about. A distinction has no internal structure beyond its identity. The
+`novel?` bit distinguishes a first derivation from a saturated repeat;
+implementations may expose or discard it, and this one exposes it
+`[SHIPPED @ engine::SynthesisOutcome]`.
 
-**Two-type discipline (Axiom-4 closure).** Bytes typed as `Distinction`
-that were not produced by the operator are structurally illegitimate.
-The theory forces a boundary between verified distinctions and raw
-byte payloads; how a given implementation closes that boundary is a
-design concern (see `DESIGN.md` and `ARCHITECTURE.md`).
-
----
+**Axiom.** Bytes typed as a distinction that the operator did not produce are
+structurally illegitimate. The theory forces a boundary between verified
+distinctions and raw payloads; how an implementation closes that boundary is a
+design concern, and this one closes it at runtime by refusing to synthesize
+against a parent the engine never witnessed.
 
 ## The primordials
 
-There are two distinctions that exist by definition:
-
-- **d₀** — the first primordial
-- **d₁** — the second primordial
-
-They are the only distinctions whose existence is asserted rather than
-derived. Every other distinction comes from a synthesis of two
-previously-existing ones. By convention, d₀ and d₁ have a single
-"genesis" relationship between them: the edge `d₀ ↔ d₁` is part of the
-graph without being the result of any synthesis.
-
----
-
-*The koru substrate is small enough to state on one page, and its
-consequences carry domains that normally require their own foundations.
-What follows are the four axioms and the eight structural laws they
-force.*
-
----
+Two distinctions exist by assertion rather than derivation: **d₀** and **d₁**.
+Every other distinction is a synthesis of two that already exist. By
+convention the edge `d₀ ↔ d₁` is in the graph without being the result of any
+synthesis — the one edge not derivable from parentage.
 
 ## The four axioms
 
-The behaviour of `synthesize` is constrained by four axioms. The substrate
-is correct iff all four hold for every input.
+The substrate is correct if and only if all four hold for every input.
 
-### Axiom 1 — Determinism
-`synthesize(a, b)` always produces the same distinction. No randomness,
-no time-dependence, no engine-state-dependence on the output's identity.
+**Axiom 1 — Determinism.** `synthesize(a, b)` always produces the same
+distinction. No randomness, no time-dependence, no dependence of the output's
+identity on engine state.
 
-### Axiom 2 — Commutativity
-`synthesize(a, b) = synthesize(b, a)`. Argument order is not part of
-the structure. Implementations canonicalize the pair before hashing.
+**Axiom 2 — Commutativity.** `synthesize(a, b) = synthesize(b, a)`. Argument
+order is not part of the structure.
 
-### Axiom 3 — Irreflexivity
-`synthesize(a, a) = a`. A distinction synthesized with itself produces
-itself — no new structure. (See "Mediated self-reference" below for the
-loophole that lets self-aware systems still produce novelty.)
+**Axiom 3 — Irreflexivity.** `synthesize(a, a) = a`. A distinction
+synthesized with itself produces itself. This is load-bearing: it forecloses
+runaway self-generation, and the cost is that direct self-reference is
+degenerate. See *Mediated self-reference*.
 
-### Axiom 4 — Content addressing
-A distinction's identity *is* the canonical hash of its parents' canonical
-pair. The bytes of `c` literally encode the way `c` was made. There is
-no separate naming layer.
+**Axiom 4 — Content addressing.** A distinction's identity *is* the hash of
+its parents' canonical pair. The bytes of `c` encode how `c` was made. There
+is no separate naming layer.
 
-These four are non-negotiable. Any change that violates them is wrong,
-regardless of what it enables.
+Any change that violates one of these is wrong, whatever it enables.
 
 ---
 
-## Structural laws (consequences of the axioms)
+## The laws
 
-The axioms produce a graph with predictable properties.
+Eight numbered consequences. Law 11 is numbered but is **not** an independent
+law — see its entry. Renumbering would break every downstream reference, so the
+number stays and the status travels with it.
 
 ### Law 5 — Binary parentage
-Every non-primordial distinction has exactly two parents. Not one, not
-three. The synthesize operator is binary, and content addressing
-encodes both parents in the child's bytes.
+
+**Derived.** Every non-primordial distinction has exactly two parents. The
+operator is binary and Axiom 4 encodes both parents in the child.
 
 ### Law 6 — r = 2d − 3
-For a graph with `d` distinctions and `r` relationships, `r = 2d − 3`
-holds exactly at every scale. Each novel synthesis adds one new
-distinction and two new parent-child edges; the `−3` accounts for the
-genesis state (d=2, r=1: only the d₀↔d₁ edge).
 
-The d₀↔d₁ genesis edge is a *theory-level* relationship;
-implementations may carry it implicitly or materialize it explicitly.
-Either choice satisfies Law 6 without violating Law 5; primordials have
-no parents by definition. See `ARCHITECTURE.md` for how the current
-substrate materializes the addend.
+**Derived, and probed.** For `d` distinctions and `r` relationships,
+`r = 2d − 3` holds exactly at every scale. Each novel synthesis adds one
+distinction and two parent edges; the `−3` accounts for the genesis state
+(`d = 2`, `r = 1`).
+
+*Probe:* `tests/scale.rs` — zero deviation at 5 million syntheses.
+
+Mean degree therefore converges to 4 at every scale under every workload, so
+hub degree is paid for by leaves. The genesis edge is a theory-level
+relationship; an implementation may carry it implicitly or materialize it.
 
 ### Law 7 — Saturation
-Repeating the same synthesis adds nothing. `synthesize(a, b)` called
-twice in succession produces the same distinction and leaves the graph
-unchanged on the second call.
+
+**Derived.** Repeating a synthesis adds nothing. The second
+`synthesize(a, b)` returns the same distinction and leaves the graph
+unchanged.
 
 ### Law 8 — Engine independence
-Two engines that process the same operations produce byte-identical
-state **at quiescence**, regardless of their independent histories.
-Mid-flight the two engines may transiently disagree while writes are
-in progress; the claim is post-processing convergence, not
-instantaneous equality. Content addressing means identity is the
-operation; distinct paths through the operation space converge.
+
+**Derived, and probed.** Two engines that process the same operations produce
+byte-identical state **at quiescence**, regardless of their independent
+histories. Mid-flight they may transiently disagree while writes are in
+progress; the claim is post-processing convergence, not instantaneous
+equality.
 
 ### Law 9 — Order-independent reconstruction
-Two engines synthesizing the same parent pairs converge to byte-identical
-state regardless of the order in which they apply the pairs. Replay is
-content-validated, not chronologically dependent.
 
-### Law 10 — Mediated self-reference → unbounded novelty (within ID space)
+**Derived, and probed.** Two engines synthesizing the same parent pairs
+converge to byte-identical state regardless of the order in which they apply
+them. Replay is content-validated, not chronological.
 
-Direct `synthesize(x, x) = x` (Axiom 3, irreflexivity). A distinction
-synthesized with itself produces itself — no new structure. This is
-load-bearing: without irreflexivity, the substrate could fall into
-trivial recursive loops where every node generates new structure forever
-without anchoring to anything.
+*Probe for 8 and 9:* `tests/order_independence.rs`. This is the experiment
+this document names as the one that would refute its central claim, and for
+most of the project's life nothing ran it — the test that looked like the
+falsifier drove both engines from one corpus in one order, which establishes
+Axiom 1 and not these two laws.
 
-But `synthesize(synthesize(x, observation), x)` produces a unique
-distinction at every depth when `observation` differs at each step —
-whether `observation` cycles through a finite alphabet or holds constant
-at some `obs`, the inner synthesis produces something no longer equal to
-`x`, so the outer synthesis is no longer reflexive. The mediation
-through `observation` breaks the irreflexive collapse.
+It now permutes 600 parent pairs into a different *topological* order —
+`synthesize` rejects an unwitnessed parent, so the only legal reorderings are
+topological — asserts the permutation differs from the original at 595 of 600
+positions before comparing anything, and then compares counts, the distinction
+set, parentage edge for edge, and `projection_id` plus canonical bytes across
+all eighteen axis combinations.
 
-**Why this matters structurally.** Most computational systems that try
-to represent themselves hit one of three failure modes:
+**Consequence worth stating plainly, because the architecture rests on it:**
+every engine is a partial witness of one grow-only structure. Agents agree on
+identity by construction and differ only in what they have witnessed — novelty
+and degree are properties of an engine's state, not of an identifier. Two
+agents necessarily agree on *what a thing is* and may permanently disagree on
+whether they saw it first.
 
-1. **Infinite recursion.** The system tries to model itself as part of
-   its state. Each level of self-modeling requires another level
-   underneath it. Stack blows up. (Naive self-reference.)
-2. **Explicit fixed-point machinery.** Gödel encoding, Y combinator,
-   typed reflection. These work, but they require careful construction
-   and don't compose naturally with the system's main operations.
-3. **Forbid self-reference.** Many systems just don't allow it.
-   Restrictive but simple.
+### Law 10 — Mediated self-reference
 
-Mediated self-reference is a fourth path. The substrate has self-reference
-*as a structural primitive*: `synth(synth(self, obs), self)` is a legal
-composition of `synthesize` calls with no special-case machinery. The
-result is a distinction that genuinely *refers to* `self` while being
-distinct from `self`. It composes cleanly with everything else the
-substrate does because synthesis is the only operation.
+**Derived, and probed.** Direct self-reference is degenerate by Axiom 3. But
+`synthesize(synthesize(x, observation), x)` produces a distinction that
+genuinely refers to `x` while being distinct from `x`, for any observation not
+equal to `x`. The mediation breaks the irreflexive collapse.
 
-**Why it doesn't infinite-recurse.** Each `(synth(synth(x, obs_n), x))_n`
-chain produces a *finite* chain of distinct distinctions, one per
-recursion depth, terminated by whatever stopping condition the consumer
-chooses. The substrate doesn't enforce termination — that's the
-consumer's job — but it doesn't enable runaway recursion either.
-Every distinction synthesized goes into the engine's `nodes` map
-(with its `parents` and `degree` fields populated); no hidden stack
-growth.
+This is self-reference as a structural primitive — a legal composition of the
+one operator, with no fixed-point machinery, no encoding trick, and no
+prohibition. It composes with everything else because synthesis is the only
+operation.
 
-**Bounded by ID space, not by depth.** Distinctions are 16 bytes (128
-bits of identity), so the substrate carries at most 2^128 distinct
-distinctions and the birthday bound kicks in at ~2^64. Uniqueness at
-depth ≥ 10K is a probed property (see the mediated-self-reference
-uniqueness probe); above that the limit is hash-space exhaustion, not
-the self-reference loophole. "Unbounded" means "not bounded by the
-irreflexivity axiom," not literally infinite.
+*Probe:* `tests/mediated_self_reference.rs` — 100,001 distinct distinctions at
+depth 100,000, under three observation regimes (constant, cycling, and drawn
+from the chain's own history), asserting at every step that the new
+distinction still references the one it came from. Without that last
+assertion the chain would be merely novel rather than self-referential.
 
-### Law 11 — Fold Law
+**Bounded by identity space, not by depth.** Distinctions are 128 bits, so the
+birthday bound arrives near 2⁶⁴. "Unbounded" means "not bounded by Axiom 3."
 
-*Status: a property of an encoding, not a consequence of the axioms.
-See the note on magnitude below.*
+### Law 11 — the Fold Law *(a corollary, not an independent law)*
 
-The two primordials become topological hubs. Byte folding routes every
-byte through `d₀` and `d₁`, so they appear on every derivation path.
-The "depth ≤ 8" bound is **structural**: the canonical byte fold takes
-each input byte through exactly 8 `synthesize` steps, one per bit, and
-each step folds the accumulator with the one primordial that bit
-selects. The bound follows from that construction, not from a workload.
+**Encoding, and probed. Independent-law status withdrawn.**
 
-**On magnitude.** After folding all 256 byte values, `degree(d₀)` and
-`degree(d₁)` reach 257 against a maximum of 4 for any other node — a
-ratio of about 64. Those numbers describe the encoding, and changing it
-changes them: an earlier byte fold ran *both* primordials at every step
-and reached 512 with twice as many nodes, while producing the same 256
-distinct tips. The extra work bought no injectivity. Fold sequences over
-a larger alphabet, such as the 256 byte tips, and the tips take the hub
-positions instead, with the primordials retaining the top ranks only
-because constructing that alphabet routes through them.
+The claim was that the two primordials become topological hubs because the
+byte lift routes every byte through them. The measurement says otherwise: the
+hub tracks the **alphabet**, not the anchor.
 
-So what the law names is the *shape* — the lift concentrates degree
-wherever it routes — and not a particular number. Any specific figure
-quoted here is a measurement of the shipped encoding.
+*Probe:* `experiments/runner/src/anchor_hub_probe.rs`. Six anchor levels
+crossed with six alphabet levels, varied independently — which the shipped
+configuration cannot do, because `domain_anchor` derives the anchor from an
+alphabet tip, so the two factors covary in-tree and no measurement on it alone
+could separate them. The top-degree node changed in 0 of 90 alphabet-varying
+cell pairs and 90 of 90 anchor-varying pairs.
 
-**Fold Law and Coding Law both operate at all depths.** They're not
-sequential — there's no "handoff" at depth 8. Fold Law dominates the
-*topology* at shallow depths (≤ 8) because byte-fold structure mechanically
-routes paths through d₀/d₁ before usage patterns have had time to
-concentrate elsewhere. Coding Law dominates the *content distribution*
-beyond the fold layer because most distinctions exist there and usage
-concentration drives degree centrality. Both are observable simultaneously
-in a mature engine; the "depth" distinction is about which mechanism
-explains the most variance in degree-centrality at that depth.
+Three exact results:
 
-### Law 12 — Coding Law
-Across the whole graph, degree-centrality tracks usage frequency. The
-law has two parts that should not be conflated:
+- The primordials gain **zero** degree from folding data. Their degree of 257
+  is one-time alphabet-construction cost that does not grow with the corpus.
+- An anchor touched only at a fold's first step takes at most one novel
+  participation per distinct first element, so its degree is **ceilinged at
+  the alphabet size** regardless of corpus size. This is forced by the
+  encoding's shape, which is what makes the demotion structural rather than a
+  workload accident.
+- `degree = novel participations` held for every node in every cell, so Law
+  12's structural part fully accounts for every figure this law quoted.
 
-**Structural part (universal, by construction):** `degree(d) = count of
-novel synthesis participations` plus the genesis addend. This is
-*definitional* — every axiom-consistent implementation increments the
-count on the parents each time a novel synthesis is registered. It
-holds under any workload, including adversarial ones, because it's a
-property of how the operator writes the graph. There is no workload
-where this fails without the engine being broken.
+What survives: the lift concentrates degree wherever it routes, which is Law
+12 applied to the lift's routing table. "The primordials are the hubs" is true
+only while the folded corpus is smaller than the alphabet — at 64 KiB, d₀ is
+rank 42.
 
-**Empirical part (workload-conditional):** the Spearman rank correlation
-between `degree(d)` and `frequency_of_use(d)` — where frequency counts
-*all* draws including saturated repeats — settles around ρ ≈ 0.99 with
-run-to-run noise of ~0.005 against the workload exp18 implements
-(length-N chain pool, Zipf-sampled index pairs at α=1.0). The v2.0 gate
-is ρ ≥ 0.985 on this pinned workload.
+### Law 12 — the Coding Law
 
-**Why ρ < 1.0 even on natural workloads:** saturation drift. When a
-workload repeatedly samples the same pair, `frequency` keeps
-incrementing but `degree` does not (saturation: the second
-`synthesize(a, b)` returns the existing child without bumping degree).
-Under heavy saturation (small pool, large M, narrow Zipf), ρ drops
-below 1. Under low saturation (large pool, small M, broad distribution),
-ρ → 1. The structural part is universal; the gap between structural and
-empirical is exactly the saturation effect.
+Two parts that must not be conflated.
 
-**What "Coding Law" the law refers to:** the structural part — degree
-tracks the count of novel participations *by construction*. The empirical
-ρ measurement is how we *verify* the substrate is built correctly. Calling
-the structural part "workload-conditional" would understate what the
-substrate guarantees; calling the empirical part "universal" would
-overclaim what the measurement establishes.
+**Structural part — Derived.** `degree(d)` is the count of novel synthesis
+participations, plus the genesis addend. Every axiom-consistent implementation
+increments the count on the parents when a novel synthesis is registered. It
+holds under any workload, adversarial ones included, because it is a property
+of how the operator writes the graph.
 
-High-attention distinctions become high-degree nodes naturally — no
-PageRank, no curator, no learning algorithm — *given* the workloads
-empirical systems typically produce.
+**Empirical part — Probed.** The Spearman rank correlation between `degree(d)`
+and frequency of use — where frequency counts *all* draws including saturated
+repeats — is **0.9940** on the pinned workload, gated at ≥ 0.985.
+
+*Probes:* `experiments/runner/tests/coding_law.rs`, three of them, because a
+correlation with no null model is not a measurement:
+
+1. **The gate is not clearable by noise.** Holding degree deltas fixed and
+   permuting the frequency vector over 200 trials — destroying the pairing
+   while preserving both marginals — gives mean ρ = −0.0000, sd 0.0148, and a
+   maximum |ρ| of 0.0388 against a gate of 0.985.
+2. **The stated mechanism holds.** The shortfall below 1.0 is saturation
+   drift: when a workload re-draws the same pair, frequency increments and
+   degree does not. Sweeping eight workload shapes from 0.06% to 97.3%
+   saturation gives ρ falling monotonically from 1.0000 to 0.9292, with
+   ρ(saturation, ρ) = **−1.0000**. Nothing in the construction forces that: ρ
+   comes from the engine's degree bookkeeping and the saturation rate from how
+   often the engine declined to create anything.
+3. **ρ → 1 as saturation → 0**, exactly, at the low-saturation limit.
+
+**The band the gate is valid in.** A *correct* substrate yields ρ = 0.9752 at
+72% saturation and 0.9292 at 97%. So 0.985 encodes the pinned corpus's
+saturation rate of 36%; it is clearable below roughly 45% and not above.
+A failing ρ on a saturation-heavy workload is not evidence of a broken
+substrate, and the gate must say which workload it speaks for.
+
+High-attention distinctions become high-degree nodes with no ranking
+algorithm, no curator and no training — *given* workloads that do not saturate
+heavily.
+
+---
+
+## Locality
+
+**Derived, and probed.** `synthesize(a, b)` creates one distinction adjacent
+to exactly `a` and `b`, and touches nothing else. So for two neighbourhoods
+that are disjoint *and* non-adjacent, work confined to one perturbs nothing in
+the other — not approximately, exactly.
+
+*Probe:* `tests/parentage_topology.rs` — 400 syntheses confined to a 37-node
+neighbourhood changed 0 of 12 clustering coefficients in a disjoint,
+non-adjacent one, compared bit for bit.
+
+This is why "every distinction is an advance of its own parents" is
+substantive: there is no action at a distance. It is also a live regression
+gate rather than a philosophical claim, because a reverse index, a degree
+cache that rewrites a third party, or a rebalancing pass would each break it,
+and each is the sort of thing added for performance by someone not expecting a
+structural consequence.
+
+## Order from an order-blind operator
+
+**Derived, and probed.** Axiom 2 means the operator cannot represent an
+ordered pair: there is no field in which "a came first" could live, and no
+number of calls supplies one. Yet sequences of bytes receive distinct
+identifiers.
+
+What produces order is **nesting**. Composing commutative operations is not
+commutative, because the intermediate values differ:
+`synth(synth(X, a), b)` and `synth(synth(X, b), a)` are syntheses of different
+parents, so Axiom 4 separates them even though each individual call ignores
+argument order.
+
+*Probe:* `tests/order_emergence.rs`, as a counted prediction rather than an
+impression. In a flat left-associated fold `((((a₁,a₂),a₃),a₄),a₅)` the only
+transposition commutativity can hide is `a₁ ↔ a₂`, because that is the one
+pair handed to a single call as bare arguments — every other position is
+separated by a nesting level. So `n!` orderings should collapse to exactly
+`n!/2`. Measured: **120 orderings → 60** under the flat fold, and **120 → 120**
+under the anchored fold, which recovers every ordering with no position index
+stored anywhere.
+
+This is the clearest instance in the substrate of structure that was not put
+in. It is also why an anchor must not be an element tip: the anchor is the
+single thing breaking the symmetry at the first position.
+
+## Clustering is mediated self-reference
+
+**Derived, and probed.** The only edges in the parentage graph are
+child-parent, plus the genesis edge. So a triangle requires one of its three
+pairs to be an edge in its own right, which means `synth(a, b)` closes a
+triangle exactly when `a` and `b` were already adjacent — when one is the
+other's parent.
+
+Unpack that and it is Law 10. For `m = synth(x, obs)` and `r = synth(m, x)`,
+the parents of `r` are `(m, x)` and `x` is a parent of `m`, so `{r, m, x}` is
+a triangle. Mediated self-reference is not *a* way to close a triangle here.
+It is the only way.
+
+The consequence is a structural identity between a standard graph statistic
+and a law of this theory: **the local clustering coefficient of the parentage
+graph measures the local density of mediated self-reference, and measures
+nothing else.**
+
+*Probe:* `tests/parentage_topology.rs` — 546 triangles classified as 545
+mediated self-reference, 1 genesis, **0 unexplained**. A closed
+classification with no residue.
 
 ---
 
 ## The synthesis/projection dual
 
-The axioms describe `synthesize` directly, but they produce more than one
-object. The first is what the axioms name explicitly: the append-only,
-content-addressed graph, extended one distinction at a time by the
-operator or left unchanged under Law 7. This is the *write dual* — every
-axiom-consistent act of the operator adds structure, or none at all.
+The axioms describe `synthesize` directly, and produce two objects.
 
-The second is what the axioms produce by implication: any axiom-consistent
-read of the graph from a vantage. Walking parents from a chosen
-distinction, counting participations, asking whether one distinction is
-downstream of another, materializing children under some synthesis-count
-boundary — each is a *projection*, a coherent read from a specified root,
-at a specified boundary, in a specified direction, over a specified
-signal. The projection is not new structure; it is the graph *as viewed
-from somewhere.*
+The first is named explicitly: the append-only, content-addressed graph,
+extended one distinction at a time or left unchanged under Law 7. This is the
+**write dual** — every axiom-consistent act of the operator adds structure, or
+none at all.
 
-The projection is theory-forced. Axioms 1 and 4 make the graph a pure
-function of its inputs; Laws 8 and 9 make it identical across engines
-with the same synthesis history; Law 7 makes it stable under repeated
-observation. Any read that respects those constraints IS a projection,
-whether the reader knows it or not.
+The second is produced by implication: any axiom-consistent read of the graph
+from a vantage. Walking parents from a chosen distinction, counting
+participations, asking whether one distinction is downstream of another — each
+is a **projection**, a coherent read from a specified root, at a specified
+boundary, in a specified direction, over a specified signal. It is not new
+structure; it is the graph *as viewed from somewhere*
+`[SHIPPED @ projection::Projection]`.
 
-The substrate has, until now, exposed only the write dual. The read dual
-has lived in six ad-hoc reinventions across the ecosystem (ALIS `Field`,
-koru-engine `Field`, koru-spatial adjacency, koru-mesh seen-set,
-koru-delta replay-to-point, koru-wave dissolve-on-read). Naming it here
-does not add a primitive; it names what the axioms already produce.
-First-class API surface for the projection is
-`[SHIPPED @ projection::Projection]`; the theoretical claim itself
-carries no tag.
+**Derived.** Axioms 1 and 4 make the graph a pure function of its inputs; Laws
+8 and 9 make it identical across engines with the same history; Law 7 makes it
+stable under repeated observation. Any read respecting those constraints *is* a
+projection, whether the reader knows it or not.
 
-**Falsifier.** Cross-engine projection independence probe — two engines
-with identical synthesis histories, queried with the same projection
-`{ Root, boundary, Direction, Signal }` at quiescence, must produce
-byte-identical output. If not, the projection is an engine-side
-artifact, not a theory-forced object, and this section is wrong.
+**Encoding.** The four axes, the shipped signals and the wire layout are
+chosen. The axioms force that coherent engine-independent reads *exist*; they
+do not force this parameterization.
 
----
+**The boundary axis is not an optimization.** Every distinction roots in the
+primordials, so the graph is one connected component and an unbounded vantage
+reaches everything — and therefore distinguishes nothing. The boundary is what
+makes a tractable observer possible at all.
 
-## What it means to "use" the substrate
+*Falsifier:* two engines with the same history, queried with the same
+`{root, direction, boundary, signal}` at quiescence, must produce
+byte-identical output. If not, the projection is an engine-side artifact and
+this section is wrong. Run by `tests/cond_d_falsifier.rs` for the single-order
+case and `tests/order_independence.rs` across topological reorderings.
 
-The substrate by itself is timeless. It enforces the axioms; it knows
-about distinctions and parents; it does not know about order, history,
-identity-of-perspective, or causality.
+## Using the substrate
 
-The substrate's **reference consumption pattern** is the Local Causal
-Agent (LCA):
+The substrate is timeless. It knows about distinctions and parents; it does not
+know about order, history, identity-of-perspective, or causality. Time is what
+consumers do.
 
-- An LCA anchors to a **local root distinction** — its perspective.
-- State transitions are **causal syntheses** from the local root + the
-  canonical structure of the action being taken.
-- LCAs **update their perspective forward** as their causal chain
-  advances.
+The reference pattern is the **local causal agent**: a consumer anchored to a
+local root, advancing it by synthesizing the root with the canonical structure
+of the action being taken.
 
-**This is a pattern, not an axiom.** The four axioms don't *require*
-consumers to be LCAs; they constrain what `synthesize` does, not how
-consumers structure their use of it. A consumer with a different
-shape — multi-perspective agents that anchor to several roots
-simultaneously, consumers that synthesize from non-root state, or
-consumers that ignore perspective entirely and just record raw
-synthesis events — could exist and still get the substrate's
-correctness guarantees.
+**Derived — and this is the correction the previous version needed.** The
+pattern is not a type some consumers have. *Every* non-primordial distinction
+is an advance of each of its parents: set `root = a` and `action = b` in
+`synth(a, b)`, and the advance holds with `a` as the root; set `root = b` and
+it holds again. Agent-ness is therefore a **reading of the graph**, available
+everywhere, and a trait asserting that only some types have it is the wrong
+shape.
 
-The LCA pattern is the *reference* because:
+That resolves a contradiction the previous version carried without noticing:
+it described this construct as both "a pattern, not an axiom" and "a
+substrate-level construct." It is neither. The argument was about where to put
+a type, and the thing is not a type.
 
-- It's how every consumer we've actually built (ALIS, koru-protocol,
-  the reference subsystems) uses the substrate.
-- It cleanly captures "time is what consumers do" — the substrate
-  stays timeless, the LCA carries the causal chain.
-- The trait `LocalCausalAgent` makes the pattern composable, so
-  multi-consumer systems can interoperate without re-inventing the
-  perspective discipline.
+What the substrate keeps is the **read** — whether a given advance was
+forward, which is a question about the graph answered by one parentage lookup
+`[SHIPPED @ engine::DistinctionEngine::advances_from]`. The contract that
+chooses to advance belongs to consumers, and ships with them.
 
-The LCA contract is a substrate-level construct — not a subsystem —
-because it formalizes the canonical *consumer contract*, not because
-it's the only legal way to consume the substrate. Future consumers
-that need different shapes are welcome; they'll simply write their own
-contracts and lose the interop benefits the LCA one provides.
-Implementation details for the reference LCA trait live in
-`ARCHITECTURE.md`.
+**Encoding.** Nothing requires a consumer to carry one root. Multi-root
+consumers, consumers that synthesize from non-root state, and consumers that
+ignore perspective entirely are all legal and all get the substrate's
+guarantees, because those flow from the axioms and not from the consumer's
+shape.
 
 ---
 
-## Implications not yet materialized
+## The framework layer
 
-The axioms force consequences the substrate does not yet expose. Naming
-them here fixes the theoretical status; API surface is downstream.
+**Framework.** Everything in this section is a commitment the formalism
+permits and does not establish. It is here because it is why the work is being
+done, and marked because no gate can check it.
 
-- **The novelty bit as a first-class outcome.** Law 7 makes *novel vs.
-  saturated* a structural binary the operator computes on every call.
-  `[SHIPPED @ engine::SynthesisOutcome]` exposes it, so consumers can
-  compute novelty-rate signals over projections without recomputing
-  state. It ships as an enum rather than the `{ child, was_novel }`
-  struct this section once proposed: the two states are exclusive, and
-  an enum makes a caller handle both.
+The commitment: **distinction is foundational.** Logic and information are not
+products of synthesis — the operator's own specification presupposes equality,
+ordering and a hash function, so nothing could emerge from it in that
+direction. They are two aspects of distinction-structure, read from different
+sides. You cannot have identity without distinguishing; you cannot have
+information without a difference.
 
-- **Intrinsic degree-frequency coupling.** Coding Law's structural part
-  makes the graph *self-attending by construction* — reframing what
-  earlier drafts called "emergent attention." The closer's bullet states
-  the consequence in its final form; cataloged here so the implication
-  is preserved rather than lost in the reframe.
+A framework claim is not judged by falsification — the Peano axioms are not
+falsifiable either. It is judged by **fertility**: does the frame produce
+results you could not otherwise get? That is a standard this document can be
+held to, and the ledger is above. Order from an order-blind operator, a graph
+statistic turning out to *be* a law, self-reference without reflection
+primitives, convergence without consensus, and one law lost to its own
+measurement.
 
----
+What the formalism cannot establish, and this document therefore does not
+claim: that logic, information, or the physical world *are* distinction. The
+formalism is substrate-neutral about what it models, and that generality is
+exactly why applicability is not evidence of constitution. Arithmetic models
+populations; populations are not made of numbers.
 
-## Law → downstream consequence
+## Limits
 
-Three-row legend for contributors carrying theory into downstream docs
-(translation, not survey — Coding Law and Fold Law's consumer
-implications belong in `DESIGN.md`):
-
-| Law | Consequence for downstream |
-|-----|---------------------------|
-| Law 8 (engine independence, at quiescence) | State agreement without consensus |
-| Projection dual (this document, § between Law 12 and LCA) | One primitive; the ecosystem currently reinvents it once per domain (cognition, physics, spatial, mesh, wave, delta) |
-| Law 10 (mediated self-reference) | Self-reference without reflection primitives |
-
----
-
-## What follows from the theory
-
-The theory's promises, taken together, give the substrate properties
-that are difficult or impossible to obtain through other means:
-
-- **Deterministic distributed *state* agreement without a consensus
-  protocol.** Engine independence (Law 8) means two machines processing
-  the same operations produce identical state. The hash function IS the
-  consensus mechanism for state and identity. **The substrate does not
-  solve inclusion** (which operations belong in the canonical set),
-  **liveness** (when a batch is finalized), **attribution** (who
-  performed an operation), or **censorship resistance** (preventing
-  withholding) — those concerns require knowing about peers, time, and
-  actor identity, which the substrate is designed not to know. Consumer
-  protocols (koru-protocol's leader election + commitment schemes) layer
-  on top to solve those. The substrate's contribution is removing the
-  state-agreement problem entirely; consumers handle the rest.
-
-- **Append-only by design choice (not by axiom).** The four axioms
-  don't forbid removal — they constrain *what `synthesize` does*, not
-  what other operations the engine exposes. We *chose* append-only
-  because it's what makes engine-independence (Law 8) and order-
-  independent reconstruction (Law 9) hold cleanly: if the graph is
-  monotone, replay from any subset converges. Garbage collection by
-  partial-reroot replay is theoretically permissible; v2.0 deliberately
-  excludes it. Auditability is therefore a *design* property, enabled by
-  but not forced by the theory.
-
-- **Intrinsic degree-frequency coupling.** Coding Law (Law 12) means
-  degree-centrality tracks usage frequency by construction, not by
-  overlaid learning. The graph *attends to what it uses* — usage
-  weighting is intrinsic to topology, produced by the operator rather
-  than layered on top. Same phenomenon downstream disciplines call
-  "attention," but without a trained layer.
-
-- **Self-aware systems via mediated self-reference.** Law 10 is the
-  structural answer to "how do you have a distinction that refers to
-  itself without the irreflexivity axiom collapsing it?" — you mediate
-  through observation.
-
-- **Identity is process.** Content addressing (Axiom 4) means a
-  distinction's identity literally encodes how it was produced. There is
-  no separate naming, schema, or coordination layer.
-
-These properties are not engineered features. They fall out of the four
-axioms. The implementation's job is to enforce the axioms at every code
-path; everything else follows.
-
----
+- **Identifiers carry no origin.** An identifier does not reveal which
+  implementation produced it, and `verify` cannot distinguish one produced
+  elsewhere from one invented.
+- **An identifier does not reveal its own construction.** It is the digest of
+  the *immediate* parent pair — one step, one way. "Identity is process" means
+  *determined by*, not *recoverable from*. The process lives in the engine's
+  witness record, which is per-instance and losable.
+- **Append-only is chosen, not forced.** The axioms constrain `synthesize`,
+  not what other operations an engine exposes. Append-only is what makes Laws
+  8 and 9 hold cleanly. Garbage collection by partial-reroot replay is
+  theoretically permissible; this version excludes it. Auditability is
+  therefore a design property enabled by the theory, not forced by it.
+- **The substrate solves state agreement, and nothing else about consensus.**
+  Law 8 removes the state-agreement problem: the hash function *is* the
+  mechanism for state and identity. It does not solve inclusion, liveness,
+  attribution, or censorship resistance — those require knowing about peers,
+  time and actor identity, which the substrate is designed not to know.
+- **An agent is not structurally unaware of its siblings.** Within one engine,
+  an undirected saturated projection from any witnessed root reaches every
+  distinction in that engine. There is no privacy axis among the four and none
+  could be added without changing the substrate. Across separate engines the
+  wall is real and enforced.
+- **The lift is the one free parameter**, and the only thing whose identity is
+  pinned per major version rather than permanently. It moved between 1.x and
+  2.0.0.
 
 ## Why the theory is small
 
-One operator that produces the graph and, over it, the projection —
-the theory's read-side dual. Four axioms. Two primordials. Eight
-structural laws as named consequences. One reference consumption
-pattern.
+One operator producing a graph and, over it, the projection. Four axioms. Two
+primordials. Eight numbered consequences, one of which turned out to be a
+corollary. One reference reading.
 
-Smallness is a deliberate constraint, not an accident. Every implementation
-that claims to be `koru-lambda-core` must enforce the four axioms exactly
-— there's nowhere for a violation to hide because the surface is so
-small. Every consumer that wants the substrate's correctness guarantees
-gets them whether or not they use the LCA pattern, because the
-guarantees flow from the axioms, not from the consumer's shape.
+Smallness is a constraint, not an accident: every implementation claiming to
+be this substrate must enforce the four axioms, and there is nowhere for a
+violation to hide when the surface is this small.
 
-The bet: a small, internally-consistent theory produces a substrate
-strong enough to carry domains that usually require their own,
-domain-specific foundations. The current evidence is two consumers
-(ALIS for cognition, koru-protocol for economic consensus) both built
-on the same engine. Whether the bet generalizes to a third domain is
-an open question; whether it holds for the two we have is the
-substrate's ongoing test.
+**The bet.** A small, internally consistent theory produces a substrate strong
+enough to carry domains that usually require their own foundations.
 
-Zero exceptions to the axioms or structural laws have been found within
-the probed range. Claims at scales beyond what was actually probed are
-deductions from the axioms (which hold at all scales); throughput at
-those scales is an open question. Capacity and throughput evidence lives
-in `docs/BENCHMARKS.md`.
+The evidence, stated so that its *verification status* is the hedge rather
+than its size — which is where the previous version went wrong, claiming six
+converging projects in one section and two consumers in its closer:
+
+- **Six independent projects built projection-shaped wrappers under six
+  different names**, in cognition, physics, spatial indexing, mesh telemetry,
+  wave state and replay. None was trying to validate this theory, and none
+  coordinated with the others. Convergence under no coordination is hard to
+  fake, and it is the substrate's strongest generalisation evidence.
+- **Two of those are exercised end to end** against this version. The rest are
+  asserted here and not verified here; compile-testing them against 2.0.0 is
+  tracked work.
+- **Byte-identical agreement across two compilation targets** is a harder
+  result than either consumer domain, and is checked against the published
+  vectors in `conformance/vectors.json` rather than against the other target.
+  Two compilations of one source are not two independent witnesses, which is
+  why the specification plus those vectors — not a binding — is what an
+  implementation in another language certifies against.
+
+What would refute the bet: a domain that needs a second primitive. No
+exceptions to the axioms or the laws have been found within the probed range,
+and one law has been demoted by a probe designed to try.
 
 ---
 
-*Empirical evidence: `docs/BENCHMARKS.md`, and
-`koru-experiments-runner: coding_law::exp18_rho_clears_gate`.*
+*Evidence: `conformance/vectors.json` for published identity;
+`docs/BENCHMARKS.md` for capacity and throughput; and the probes named in each
+law above, all runnable from this repository.*
