@@ -35,7 +35,7 @@ This document is upstream of `DESIGN.md`, `ARCHITECTURE.md`, `ECOSYSTEM.md`,
 `README.md`, and `docs/**`. Every paraphrase is where drift lives.
 
 Downstream references to concept-terms here (`synthesize`, `commutativity`,
-`irreflexivity`, `content addressing`, `Law 5`–`Law 12`, `Fold Law`,
+`idempotence`, `content addressing`, `Law 5`–`Law 12`, `Fold Law`,
 `Coding Law`, `local causal agent`, `synthesis/projection dual`) resolve to
 `THEORY.md#section-slug`. Section anchors survive edits; line numbers do not,
 and are rejected by `scripts/gates/doc_anchors.sh`.
@@ -82,10 +82,19 @@ identity on engine state.
 **Axiom 2 — Commutativity.** `synthesize(a, b) = synthesize(b, a)`. Argument
 order is not part of the structure.
 
-**Axiom 3 — Irreflexivity.** `synthesize(a, a) = a`. A distinction
+**Axiom 3 — Idempotence.** `synthesize(a, a) = a`. A distinction
 synthesized with itself produces itself. This is load-bearing: it forecloses
 runaway self-generation, and the cost is that direct self-reference is
 degenerate. See *Mediated self-reference*.
+
+*This axiom was called "Irreflexivity" until 2026-10-05, and the name was
+wrong. Irreflexivity is a property of a relation — no element stands in it to
+itself. Idempotence is the property of a binary operation that `f(a, a) = a`,
+which is what is written here. The old name described a **consequence**: the
+parentage relation is irreflexive, because no distinction is its own parent.
+Spencer-Brown calls exactly this law — `αα ≈ α` — the Law of Calling, which
+is the correspondence worth keeping. Downstream documents still carry the old
+name; correcting them is tracked.*
 
 **Axiom 4 — Content addressing.** A distinction's identity *is* the hash of
 its parents' canonical pair. The bytes of `c` encode how `c` was made. There
@@ -421,6 +430,116 @@ claim: that logic, information, or the physical world *are* distinction. The
 formalism is substrate-neutral about what it models, and that generality is
 exactly why applicability is not evidence of constitution. Arithmetic models
 populations; populations are not made of numbers.
+
+## Prior work
+
+A foundations document that cites nothing reads as either unaware of its field
+or claiming more than it holds. This section exists so a reader can check us
+against the literature rather than take our word, and because correctly
+locating the work is a stronger claim than an uncited one.
+
+### What the formalism inherits
+
+**The operator is hash-consing.** Collapsing structurally identical values so
+that equality is pointer comparison goes back to Ershov (*CACM* 1958) and is
+named by Goto (Univ. Tokyo TR 74-03, 1974); "maximal sharing" is the standard
+term for the invariant. The exact form here — a *commutative* binary operator
+whose pair is canonically ordered before hashing, with self-application
+short-circuited — is **AIG structural hashing** in hardware verification,
+whose published pseudocode is literally `if (n1 == n2) return n1` (Kuehlmann
+et al., *IEEE TCAD* 21(12), 2002; Mishchenko et al., Berkeley ERL, 2005). The
+same discipline appears as hash-consing modulo associativity and commutativity
+in term rewriting.
+
+*What differs:* in those systems the identifier is an index chosen by a local
+allocator. Here it is a digest of the ordered pair, so identity is
+reproducible without a shared table. Both halves are standard; the combination
+does not appear to be named in one place.
+
+**Laws 8 and 9 are an instance of the state-based CRDT theorem** — a state
+forming a join-semilattice under a monotonically non-decreasing update is
+strongly eventually consistent (Shapiro, Preguiça, Baquero, Zawirski, *SSS*
+2011; the grow-only-set catalogue entry is in the companion INRIA RR-7506). A
+Merkle structure used as a state-based CRDT is Auvolat & Taïani, *IEEE SRDS*
+2019. No primary source states "a grow-only content-addressed DAG is a CvRDT"
+as its contribution, so treat that as folklore rather than as an attribution.
+
+**The agreement/selection trade is CALM** — a program has a consistent,
+coordination-free distributed implementation if and only if it is monotone
+(conjectured in Hellerstein, *SIGMOD Record* 39(1), 2010; stated as Theorem 1
+in Hellerstein & Alvaro, *CACM* 63(9), 2020; proven in a transducer-network
+model by Ameloot, Neven, Van den Bussche, *JACM* 60(2), 2013). Two
+qualifications matter. The *iff* holds relative to a model in which nodes know
+nothing of the distribution policy; weaker forms of monotonicity correspond to
+larger coordination-free classes once they know more (Ameloot, Ketsman, Neven,
+Zinn, *ACM TODS* 40(4), 2015). And the dividing line is **retraction**, not
+aggregation: a monotone aggregate or a threshold on one is coordination-free,
+while anything that can withdraw a previously emitted answer is not (Alvaro,
+Conway, Hellerstein, Maier, *ICDE* 2014; Conway et al., *SoCC* 2012). For
+reads taken over convergent state specifically, see Laddad et al., *PVLDB*
+16(4), 2022 — CRDT guarantees cover updates, not observations.
+
+**Which reads survive appending is query stability**, a named and studied
+decision problem (Savković, Marengo, Nutt, *ICDT* 2016), earlier posed as
+irrelevant-update detection (Blakeley, Coburn, Larson, *ACM TODS* 14(3), 1989)
+and as independence of a query from an update (Levy & Sagiv, *VLDB* 1993). The
+syntactic characterisations are the classical preservation theorems —
+Łoś–Tarski, Lyndon, and homomorphism preservation — with the caveat that only
+the last survives restriction to finite structures (Rossman, *JACM* 55(3),
+2008). Note the distinction from monotonicity: a monotone answer only grows, a
+*stable* one does not change, and the four reads identified above are both.
+
+**The nearest research programme with the same shape is causal set theory**
+(Bombelli, Lee, Meyer, Sorkin, *PRL* 59(5), 1987; Rideout & Sorkin, *PRD* 61,
+1999). Two things are worth taking from it. Its growth dynamics is *derived*
+from three stated requirements rather than posited, which is a tighter way to
+pin a policy than anything here. And its label-invariant observables are
+generated by **past-closed sets** (Brightwell, Dowker, García, Henson, Sorkin,
+*PRD* 67, 2003) — the same classification as this document's upstream-stable
+reads, arrived at for the same reason: under a growth rule that only appends to
+the future, the past of an existing element is fixed at birth and its future is
+not. That programme also still lacks a dynamics from first principles after
+twenty-five years, which is a useful calibration on how hard the policy
+question is.
+
+### What the framework layer inherits
+
+**Distinction as prior to logic: Spencer-Brown, *Laws of Form* (1969)** — and
+the correspondence must be stated honestly, because it is looser than it
+looks. Axiom 3 above is his **Law of Calling** (`αα ≈ α`), exactly. But his
+**Law of Crossing** (`((α)) ≈ α`) has *no analogue here at all*, and crossing
+is what supplies an involution, hence negation, hence Boolean algebra, hence
+most of the generative content of the book. A substrate with calling and not
+crossing inherits the primitive and **may not claim the results.** Nor does
+*Laws of Form* have anything resembling content-addressed identity; it has no
+identifiers at all.
+
+The second-order cybernetics line is closer to the claim than Spencer-Brown
+alone: von Foerster, Luhmann's social-systems theory built on the distinction,
+and Varela, "A calculus for self-reference," *Int. J. General Systems*, 1975.
+
+**Information as difference:** Bateson, "Form, Substance and Difference"
+(1970), in *Steps to an Ecology of Mind*, 1972 — "a difference which makes a
+difference."
+
+**Information as primitive in physics:** Wheeler, "Information, Physics,
+Quantum" (1989). A programmatic essay, so it supports framing and not
+derivation.
+
+### What is claimed as new
+
+Nothing in the formalism. Two observations, both modest:
+
+1. The read surface's **stable quadrant, enumerated exhaustively** and
+   verified — an instance of query stability rather than a new notion.
+2. That in this graph family the clustering coefficient **degenerates to one
+   interpretable quantity.** Every triangle in an acyclic graph is transitive,
+   and with exactly two parents per node the only available shape is the
+   feed-forward loop (Milo et al., *Science* 298, 2002); so a triangle exists
+   precisely where a node was synthesized with one of its own parents. The
+   mathematics is a corollary of acyclicity plus out-degree two. What is worth
+   reporting is the census: 546 triangles, **zero unexplained** — a structural
+   prediction that could have failed.
 
 ## Limits
 
