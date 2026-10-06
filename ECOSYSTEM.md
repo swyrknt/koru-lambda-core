@@ -204,6 +204,32 @@ An agent may define its own signals, anchors and invariants. It may not:
 - **describe its own invariants as laws of the substrate** — *Chosen.* A
   documentation convention, and the reason this file marks everything.
 
+## What the substrate gives up, and where that is answered
+
+The substrate trades three capabilities for three guarantees, and the trade is
+deliberate. Identity, agreement and an immutable past come free; **optimality,
+forgetting and dynamics** do not. Each loss buys a theorem, so none is a defect
+to be patched — but each has an answer, and every answer is **above** the
+substrate.
+
+| Given up | Why | Where it is answered |
+|---|---|---|
+| **Optimality** — no "current best" | Retracting a previously emitted answer is what forces coordination, so a selection that can change its mind cannot be coordination-free | **Agents.** A node's ancestry is fixed at creation, so it is a permanently sealed set, and a maximum over a sealed set cannot retract. *Optimise over the past, not the present.* No new substrate surface: the read is already `Upstream` + `saturated`. |
+| **Forgetting** | Append-only is what makes order-independent reconstruction hold cleanly | **Already available.** An engine is a witness, not a namespace. An agent that wants to forget builds a witness with fewer nodes; surviving identifiers are unchanged, because identity is content-addressed. What it loses — `has` and `degree` — are declared engine-relative rather than identifier properties, so nothing breaks. Separately, relevance-forgetting is free: degree share is zero-sum, so a node that stops participating dilutes at 1/d. |
+| **Dynamics** | Timelessness is what makes agreement free; a policy that reads global state makes two partial witnesses diverge | **Agents.** A policy expressed as a *total function* of each node's sealed ancestry — rather than a *selection* over global state — is monotone, and therefore coordination-free. Untested; tracked as research. |
+
+**Nothing in this table adds substrate API**, and that is the point rather than
+a coincidence. A dynamics in the substrate would mean the substrate picks *the*
+dynamics, when the whole argument is that the policy is a parameter and the
+lift is the model. It would also be the exact mistake being unwound: the
+previous release put six consumers in the substrate, and the agent contract was
+in there until this release removed it.
+
+Two things *are* substrate business, and they are facts rather than functions:
+which reads are stable under extension, and that a witness cannot be denied.
+Both are stated in `THEORY.md` and `docs/SPEC.md` §11, because two conforming
+implementations have to agree on them.
+
 ## Choosing a layer
 
 Most consumers will want the agent layer. Use the substrate directly if you

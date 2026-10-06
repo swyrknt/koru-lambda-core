@@ -150,3 +150,21 @@ the test driver installed preferential attachment, and Law 11's hub turned out
 to track the alphabet rather than the anchor. "Let it run and see what
 emerges" measures the draw policy unless something establishes what a policy
 that encodes nothing produces.
+
+**When a finding is promoted.** The rules above send research below the line,
+and one case needs naming because it has already happened twice. A probe
+sometimes produces a **forced property of the substrate** — something two
+conforming implementations must agree on. Its absence from `THEORY.md` and
+`docs/SPEC.md` is then a *conformance* gap rather than a research direction,
+and it becomes release work.
+
+The test is the substrate's own membership test, asked of the finding rather
+than of a module: *if this were not written down, could two conforming
+implementations disagree, or build incompatible consumers on the same
+substrate?* "Only four of the eighteen reads are stable under extension" passes
+— a consumer comparing reads across engines depends on it — so it was promoted
+to the specification. "A policy reading only sealed state may give confluent
+dynamics" does not: it is a design conjecture about something built on top, so
+it stays below the line with a test attached.
+
+Everything else stays research, and no phase above the line may wait on it.

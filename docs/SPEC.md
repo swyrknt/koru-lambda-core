@@ -371,3 +371,21 @@ Stated here so that a reader finds them rather than discovers them.
 - **Not a consensus protocol.** Two parties that perform the same
   operations agree on the resulting bytes. Nothing here decides which
   operations should be performed, in what order, or by whom.
+- **A witness cannot be denied.** There is no expungement. An identifier is
+  a one-way digest and does not reveal its content, so removing a value from
+  an engine is not a leak — but anyone *holding* the content can re-derive the
+  identifier and ask whether this engine witnessed it. The guarantee an
+  implementation can offer is that the content is not recoverable *from the
+  substrate*; it cannot offer that the witnessing is unprovable. Consumers
+  with a deletion obligation need to know this before they lift anything into
+  the graph, not after.
+- **Only four reads are stable under extension.** `Upstream` crossed with
+  `{Adjacency, HopDistance}` crossed with either boundary returns the same
+  bytes however much is appended afterwards; the other fourteen combinations
+  do not, because degree grows and the downstream and undirected node sets
+  grow. A conforming implementation must agree on this classification, since
+  a consumer that compares reads taken at different times against different
+  engines depends on it. Note that §8 identity covers the specification and
+  not the output, so two specs differing only in stability have
+  indistinguishable identifiers — the classification is a fact about the
+  substrate, not something the wire form carries.

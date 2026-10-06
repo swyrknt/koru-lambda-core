@@ -331,6 +331,40 @@ classification with no residue.
 
 ---
 
+## Which reads survive appending
+
+**Derived, and probed.** A read taken over a partially-built graph sometimes
+equals the same read taken later and sometimes does not, and *which* depends on
+the axes rather than on the workload.
+
+Ancestry is fixed at creation: a distinction's parents are written once and
+nothing is ever removed. So an upstream read of a witnessed root cannot change
+however much is appended — not even an unbounded one, since the complete
+ancestry closure of a fixed node is itself fixed. Degree is different: it grows
+as children appear. Downstream and undirected reads are different again,
+because their node set grows.
+
+Of the eighteen axis combinations this implementation ships — three directions,
+three signals, two boundary kinds — **exactly four are stable under
+extension**: `Upstream` crossed with `{Adjacency, HopDistance}` crossed with
+either boundary.
+
+*Probe:* `tests/extension_invariance.rs`, predicted before measuring and exact.
+It also asserts that all eighteen *identifiers* are unchanged, which is correct
+by specification — identity covers the spec, not the output — and is precisely
+why the published surface cannot express this property.
+
+**Why it matters, in two directions.** For a consumer: those four are the only
+reads whose answer does not depend on how far the graph has got, so they are
+the only ones safe to compare across engines that are still filling. For
+anything built on top: by the monotonicity result cited under *Prior work*,
+they are also the only reads on which a coordination-free policy could be
+built. A policy reading degree is engine-relative, and two partial witnesses
+will disagree.
+
+This is an instance of **query stability**, not a new notion — see *Prior work*.
+What is contributed is the exhaustive enumeration for this read surface.
+
 ## The synthesis/projection dual
 
 The axioms describe `synthesize` directly, and produce two objects.
