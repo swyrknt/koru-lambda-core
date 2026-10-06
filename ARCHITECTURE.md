@@ -10,25 +10,33 @@ rounds, and step-by-step plan — see `DESIGN.md`.
 
 ---
 
-## Three layers
+## Three crates
 
-The crate divides into three layers, each independent of the next:
+These were three *layers inside one crate* until 2.0.0 split them, which is
+why the substrate used to contain things that were never substrate. They are
+now separate crates with a one-way dependency, enforced over the crate graph
+by `scripts/gates/crate_boundary.sh` rather than asserted here.
+`ECOSYSTEM.md` is authoritative on the layering and on which artifact ships
+where; this document describes the inside of the substrate crate.
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Bindings (FFI + WASM)                          │
-│  Exposes the substrate to C and JavaScript.     │
+│  crates/koru-lambda-wasm   — bindings           │
+│  The same engine with no Rust toolchain.        │
+│  Publishes to npm as the conformance surface.   │
 ├─────────────────────────────────────────────────┤
-│  Reference subsystems (LCA implementations)     │
-│  Worked examples of the LCA pattern: a          │
-│  validator, network, commitment, compactor.     │
-│  These are not the substrate — they USE it.     │
+│  crates/koru-lambda-agents — consumers          │
+│  Worked examples: a validator and a commitment  │
+│  agent, plus the agent contract, the recorder   │
+│  and the children index, which left the         │
+│  substrate because none of them determines a    │
+│  byte. publish = false; ships no files in the   │
+│  core tarball.                                  │
 ├─────────────────────────────────────────────────┤
-│  Substrate                                      │
-│  The engine, the synthesize operator, the LCA   │
-│  trait, and consumer helpers (replay, recorder, │
-│  hex display). This is what the crate's name    │
-│  promises.                                      │
+│  koru-lambda-core          — the substrate      │
+│  The engine and the operator, the projection    │
+│  read and its wire form, the lift, the trust    │
+│  boundary, replay, and the published vectors.   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -48,13 +56,18 @@ src/
                       RawDistinctionId + verify, SynthesisOutcome
   projection.rs       projection primitive (Root, Direction, Signal,
                       Materialized) and its wire codec
-  agent.rs            LocalCausalAgent trait + helper
-  primitives.rs       Canonicalizable trait + ByteMapping
+  primitives.rs       Canonicalizable, ByteMapping, ByteFold,
+                      domain_anchor — the lift
   distinction_hex.rs  to_hex / from_hex / Display / Debug / serde
-  replay.rs           snapshot_parentage / replay_topological /
-                      build_children_index
-  recorder.rs         SynthesisRecorder reference observer
+  replay.rs           snapshot_parentage / replay_topological
+  vectors.rs          the published vectors, mirroring
+                      conformance/vectors.json
 ```
+
+Seven modules. `agent.rs` and `recorder.rs` were here until 2.0.0, and
+`build_children_index` was part of `replay.rs`; all three now live in the
+agents crate. What the substrate kept from the agent contract is the read —
+`DistinctionEngine::advances_from`, in `engine.rs`.
 
 This is the heart of the crate.
 
@@ -234,32 +247,32 @@ field names are preserved from the pre-merge three-map design for
 public-API stability; their semantic mapping in the merged-map layout
 is documented on the variant itself.
 
-### `agent.rs` — the LCA trait
+### `engine.rs` — `advances_from`, and the trait that left
+
+This document used to carry the `LocalCausalAgent` trait here, as part of the
+substrate. It is no longer in this crate. The reason is not that it was
+misfiled but that it was the wrong kind of thing:
+
+**Every** non-primordial distinction is an advance of each of its parents —
+set `root = a` and `action = b` in `synth(a, b)` and the monotonicity
+condition holds with `a` as the root, then again with the parents swapped. So
+agent-ness is a *reading of the graph*, available everywhere, and a trait
+asserting that only some types have it misdescribes the structure.
+
+What the substrate keeps is the read:
 
 ```rust
-pub trait LocalCausalAgent {
-    type ActionData: Canonicalizable;
-    fn get_current_root(&self) -> Distinction;  // by value — Distinction is Copy
-    fn synthesize_action(&mut self, action: Self::ActionData,
-                         engine: &Arc<DistinctionEngine>) -> Distinction { /* default impl */ }
-    fn update_local_root(&mut self, new_root: Distinction);
-}
-
-pub fn synthesize_causal_action<A: Canonicalizable>(
-    local_root: Distinction, action: A, engine: &Arc<DistinctionEngine>,
-) -> Distinction { /* ... */ }
+pub fn advances_from(&self, candidate: Distinction, previous: Distinction) -> bool
 ```
 
-The trait IS the substrate's reference consumer contract — not the only
-legal pattern. The four axioms constrain `synthesize`, not consumer
-shape; multi-perspective agents and non-root-anchored consumers can use
-the substrate directly. The LCA pattern is canonical because (a) it's
-how every consumer we've built (ALIS, koru-protocol, the reference
-subsystems) uses the substrate; (b) it captures "time is what consumers
-do" cleanly. The default `synthesize_action` implementation calls
-`synthesize_causal_action` then `update_local_root` — implementers
-override only when they need finer control (e.g., batching actions
-before advancing root).
+One `parents_of` lookup, answering whether an advance was forward. An advance
+that does not descend from the root it replaces is not a causal step but an
+unrelated assignment, and this makes that checkable. It returns `false` for an
+unregistered or primordial candidate, neither of which has parents.
+
+The contract that *chooses* to advance, and its `synthesize_causal_action`
+helper, ship in `koru-lambda-agents` with the consumers that use them. See
+[`THEORY.md § Using the substrate`](THEORY.md#using-the-substrate).
 
 ### `primitives.rs` — Canonicalizable and ByteMapping
 
@@ -278,19 +291,27 @@ closed by construction.
 here. Hex is not theory. It is the human/wire-format rendering of bytes.
 The substrate is byte-canonical; hex is a boundary concern.
 
-### `replay.rs` and `recorder.rs` — consumer-side observers
+### `replay.rs` — the parentage-sufficiency theorem
 
-These are reference patterns, not substrate. The engine has no
-observation infrastructure and no order-bearing state. Consumers wanting
-chronology use `SynthesisRecorder`. Consumers wanting persistence use
-`snapshot_parentage` + `replay_topological`. Consumers wanting children
-iteration use `build_children_index`.
+Replay stays in the substrate while the recorder and the children index left,
+and the distinction is worth stating because it is the membership test doing
+real work. Replay is not a convenience: it is the claim that recorded
+parentage is *sufficient* to reconstruct an engine, which is what makes Law 9
+checkable. The other two determine no byte and reconstruct nothing.
 
-`SynthesisRecorder` is `!Send + !Sync` via `PhantomData<*const ()>` —
-the marker enforces single-thread use at compile time. `replay_topological`
-returns `Result<_, ReplayError>` with three variants (`Unreachable`,
-`Mismatch`, `MissingPrimordial`) so callers handle corrupted-parentage
-cases in release builds.
+`snapshot_parentage` dumps the parent map; `replay_topological` rebuilds a
+fresh engine by repeatedly synthesizing entries whose parents are already
+registered, until quiescent. It returns `Result<_, ReplayError>` with three
+variants — `Unreachable`, `Mismatch`, `MissingPrimordial` — so a caller
+handles corrupted parentage in release builds rather than discovering it as a
+silent divergence.
+
+The engine still has no observation infrastructure and no order-bearing state.
+A consumer wanting chronology uses `SynthesisRecorder`, and one wanting
+children iteration uses `build_children_index`; both now live in
+`koru-lambda-agents`. `SynthesisRecorder` remains `!Send + !Sync` via
+`PhantomData<*const ()>`, enforcing single-thread use at compile time, and its
+compile-time assertion travelled with it.
 
 ---
 
@@ -329,17 +350,25 @@ land as separate reference LCAs alongside `validator` and `commitment`.
 ## Bindings
 
 ```
-src/
-  wasm.rs             ~680 LOC  WASM bindings (feature-gated)
+crates/koru-lambda-wasm/
+  src/lib.rs          WasmEngine and the JS-facing surface
+  tests/              wasm_smoke.rs, cond_d_prime_wasm.rs
 ```
+
+The bindings are their own crate because `wasm-pack` needs `cdylib`, which
+would otherwise force a dynamic library on every pure-Rust consumer. Only that
+crate declares it (`crate-type = ["cdylib", "rlib"]`); the substrate is
+`["rlib"]`.
 
 ### FFI
 
-Post-v2.0.0 work; **not shipped in the current release.** The
-`cdylib` / `staticlib` crate-types remain declared in `Cargo.toml`
-so a future C-ABI binding release can drop into place without another
-manifest change, but there is no `src/ffi.rs`, no opaque handle set,
-and no C header in v2.0.0. The design sketch below documents what a
+Post-v2.0.0 work; **not shipped in the current release.** Nor are the
+crate-types reserved for it: this document claimed the `cdylib` / `staticlib`
+types "remain declared in `Cargo.toml`" and they do not — the substrate
+declares `["rlib"]` alone. There is no `src/ffi.rs`, no opaque handle set, and
+no C header. Whether a C ABI ships at all is an open owner decision; see
+`ECOSYSTEM.md`, which argues the polyglot case is served by the wasm binary
+and the wire protocol, leaving in-process embedding as the remaining job. The design sketch below documents what a
 future FFI binding is expected to look like when the surface is
 built; nothing here is a shipping commitment.
 
@@ -384,26 +413,27 @@ which every pure-Rust consumer would otherwise pay for.
                              │ depends on
                              ▼
             ┌─────────────────────────────────────┐
-            │  koru-lambda-core public API         │
-            │                                     │
-            │   Distinction, DistinctionEngine,   │
-            │   LocalCausalAgent, synthesize_*,   │
-            │   ConsensusValidator,               │
-            │   CommitmentAgent                   │
-            │   (Reference impls — fork or replace │
-            │    if your consensus differs.)      │
-            │                                     │
-            │   FFI (opaque KoruEngine, etc.)     │
-            │   WASM (WasmEngine, idToHex, ...)   │
+            │  koru-lambda-core  (crates.io)       │
+            │   Distinction, DistinctionEngine,    │
+            │   synthesize, verify, advances_from, │
+            │   Projection, ByteFold, replay,      │
+            │   vectors                            │
+            ├─────────────────────────────────────┤
+            │  koru-lambda-agents  (unpublished)   │
+            │   LocalCausalAgent, ConsensusValidator│
+            │   CommitmentAgent, SynthesisRecorder │
+            ├─────────────────────────────────────┤
+            │  koru-lambda-wasm  (npm)             │
+            │   WasmEngine, idToHex, ...           │
             └─────────────────────────────────────┘
 ```
 
-A consumer crate depends on `koru-lambda-core`. It uses the substrate
-directly (creating a `DistinctionEngine`, implementing
-`LocalCausalAgent` for its own state), or it uses the reference
-subsystems (extending `ConsensusValidator` or replacing it). For C or
-JavaScript consumers, the FFI and WASM layers expose the same substrate
-behind opaque or `Uint8Array`-flavored APIs.
+A consumer depends on the substrate for the operator and the reads, and on the
+agents crate for a worked causal pattern. The agent layer is the intended
+default path — see `ECOSYSTEM.md` — but using the substrate directly is legal
+and supported, because the correctness guarantees flow from the axioms and not
+from a consumer's shape. For JavaScript, the wasm crate exposes the same
+engine; there is no C ABI in this release.
 
 The substrate doesn't know what domain it serves. It knows about
 parents.

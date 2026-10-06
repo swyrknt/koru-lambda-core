@@ -67,12 +67,20 @@ pub trait Canonicalizable {
 /// `synthesize(acc, d₁)` diverge by content addressing and every bit
 /// survives into the chain.
 ///
-/// # Fold Law contribution
+/// # Alphabet-construction cost
 ///
-/// Every byte routes through `d₀` and `d₁`, so they accumulate degree far
-/// faster than anything else: after folding all 256 byte values each
-/// reaches 257, against a maximum of 4 for any other node — a ratio of
-/// about 64×. That dominance is what the Fold Law names.
+/// Constructing the alphabet routes every byte through `d₀` and `d₁`, so each
+/// reaches degree 257 against a maximum of 4 for any other node — a ratio of
+/// about 64×.
+///
+/// **That ratio measures the setup and nothing else.** It was described here
+/// as what the Fold Law names, and a probe that decoupled the anchor from the
+/// alphabet showed otherwise: the primordials gain **zero** degree from
+/// folding data, so the 257 is a one-time construction cost that does not
+/// grow with the corpus. At 64 KiB of folded data `d₀` is rank 42, and the
+/// ratio is 0.02×. Law 11 lost its independent status on that measurement —
+/// see `THEORY.md § Law 11` and
+/// `experiments/runner/src/anchor_hub_probe.rs`.
 ///
 /// The arithmetic: at bit-step `i` there are `2^i` distinct accumulators
 /// across all 256 bytes, each folded with the one primordial its bit
@@ -86,8 +94,11 @@ pub trait Canonicalizable {
 /// 512 and 1023 nodes. Measurement showed the extra calls bought no
 /// injectivity — both shapes produce 256 distinct tips — so the larger
 /// number described the encoding's shape rather than anything the theory
-/// forces. Choosing a different alphabet moves it again: fold sequences
-/// over the 256 byte tips and the tips become the hubs.
+/// forces. And the alphabet is what decides where degree concentrates, which
+/// the probe confirmed by varying the two factors independently: the
+/// top-degree node changed in 0 of 90 alphabet-varying pairs and 90 of 90
+/// anchor-varying pairs. An anchor touched only at a fold's first step is
+/// ceilinged at the alphabet size however much is folded.
 ///
 pub struct ByteMapping;
 
@@ -268,9 +279,12 @@ impl ByteMapping {
     /// hubs. Measurement says the extra nine calls buy nothing: both
     /// shapes yield 256 distinct tips, so injectivity is unchanged, while
     /// the two-call form exactly doubles the graph (1023 nodes against
-    /// 513) and the primordials' degree (512 against 257). The hub
-    /// magnitude was an artifact of the encoding, not a consequence of
-    /// the axioms — which is what the Fold Law now says.
+    /// 513) and the primordials' degree (512 against 257).
+    ///
+    /// The reasoning was wrong twice over. The magnitude was an artifact of
+    /// the encoding — and so was the hub. A later probe found the primordials
+    /// gain no degree at all from folded data, so neither call count made
+    /// them hubs of anything beyond their own construction.
     #[must_use]
     pub fn map_byte_to_distinction(byte: u8, engine: &DistinctionEngine) -> Distinction {
         let d0 = engine.d0();
@@ -424,12 +438,12 @@ mod tests {
 
     #[test]
     fn fold_law_d0_d1_are_top_two_by_degree() {
-        // The Fold Law's claim is that d0 and d1
-        // are the topological mega-hubs — meaning they have the highest
-        // degrees in the engine, not merely "above some threshold."
-        // After the 256-byte exercise, iterate every distinction in
-        // engine.all_distinctions and confirm no non-primordial degree
-        // matches or exceeds d0/d1's degree.
+        // Scoped claim: immediately after constructing the alphabet, and
+        // before folding any data, d0 and d1 hold the top two degrees. That
+        // is a fact about the construction and not about the substrate — a
+        // probe that decoupled anchor from alphabet found the primordials
+        // gain zero degree from folded data and fall to rank 42 by 64 KiB.
+        // What this pins is that building the alphabet routes through them.
         let e = DistinctionEngine::new();
         for byte in 0u8..=255 {
             let _ = ByteMapping::map_byte_to_distinction(byte, &e);
@@ -459,25 +473,30 @@ mod tests {
     }
 
     #[test]
-    fn fold_law_hub_ratio_characterises_this_encoding() {
-        // Renamed from a "clears 100x gate" test. The 100x target was
-        // calibrated against the previous 17-step encoding, which inflated
-        // primordial degree to 512 by folding both primordials at every
-        // step. Under the derived 8-step fold the same exercise measures
-        // 64.2x, and the drop is not a regression: it is the artifact
-        // leaving.
+    fn alphabet_construction_is_the_primordials_entire_degree() {
+        // This asserted a 50x "hub ratio" floor, and it folds no corpus at
+        // all — only the 256 alphabet-construction calls. So the ratio
+        // measured the setup, while the surrounding docs generalised it into
+        // a claim about where the lift concentrates degree. A probe that
+        // decoupled the anchor from the alphabet showed the generalisation
+        // was false: the primordials gain ZERO degree from folded data, and
+        // by 64 KiB d0 is rank 42 against a ratio of 0.02x.
         //
-        // What survives as a claim is the shape, not the magnitude — the
-        // primordials dominate every other node by a wide margin because
-        // the lift routes every byte through them. The magnitude is a
-        // property of the encoding, which is why this asserts a floor and
-        // records the measured value rather than gating on a number the
-        // axioms never implied.
+        // So the floor is replaced by the two things actually true here, and
+        // the second is the one with content.
         let e = DistinctionEngine::new();
         for byte in 0u8..=255 {
             let _ = ByteMapping::map_byte_to_distinction(byte, &e);
         }
-        let primordial_min = e.degree(e.d0()).min(e.degree(e.d1()));
+
+        // 1. The construction cost is exact, not a floor: 2^BITS_PER_BYTE
+        //    novel bumps minus one, plus the anchoring synthesize(d0, d1),
+        //    plus the genesis addend `degree()` adds for a primordial.
+        let expected = (1usize << ByteMapping::BITS_PER_BYTE) + 1;
+        assert_eq!(e.degree(e.d0()), expected, "d0 construction cost");
+        assert_eq!(e.degree(e.d1()), expected, "d1 construction cost");
+
+        let after_setup = e.degree(e.d0());
         let max_nonprim: usize = e
             .snapshot_distinctions()
             .into_iter()
@@ -485,18 +504,26 @@ mod tests {
             .map(|d| e.degree(d))
             .max()
             .unwrap_or(0);
-        assert!(max_nonprim > 0, "non-primordials exist after the 256-byte fold (sanity)");
-
-        let ratio = primordial_min as f64 / max_nonprim as f64;
-        assert!(
-            ratio >= 50.0,
-            "hub ratio {ratio:.1}x fell below the floor \
-             (d0={}, d1={}, max_nonprim={max_nonprim})",
-            e.degree(e.d0()),
-            e.degree(e.d1())
-        );
-        // Pinned so a change in the encoding shows up as a test change.
         assert_eq!(max_nonprim, 4, "interior chain nodes have two children plus two parents");
+
+        // 2. Folding DATA adds nothing to either primordial. This is the
+        //    assertion that makes the demotion of Law 11 structural rather
+        //    than a workload observation: an anchor touched only at a fold's
+        //    first step is ceilinged at the alphabet size, so the ratio above
+        //    decays as 1/corpus and is not a property of the substrate.
+        let fold = ByteFold::new(&e);
+        let anchor = domain_anchor(&e, &fold, 0x7F);
+        for chunk in 0u8..64 {
+            let payload = [chunk, chunk.wrapping_add(1), chunk.wrapping_add(2)];
+            let _ = fold.fold(anchor, &payload, &e);
+        }
+        assert_eq!(
+            e.degree(e.d0()),
+            after_setup,
+            "d0 gained degree from folded data; the alphabet-construction cost is supposed \
+             to be the whole of it, and Law 11's demotion rests on that"
+        );
+        assert_eq!(e.degree(e.d1()), after_setup, "d1 gained degree from folded data");
     }
 
     #[test]
