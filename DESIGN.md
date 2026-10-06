@@ -189,10 +189,10 @@ byte injection is caught by the two-type discipline above.
 bug (you computed a distinction and threw it away). Applies to
 `engine.synthesize`, `engine.parents_of`, `engine.degree`, `engine.d0`,
 `engine.d1`, `Distinction::as_bytes`, `Distinction::from_hex`,
-`Distinction::to_hex`, `LocalCausalAgent::get_current_root`,
-`LocalCausalAgent::synthesize_action`, `synthesize_causal_action`,
-`snapshot_parentage`, `replay_topological`, `build_children_index`,
-`SynthesisRecorder::new`, `SynthesisRecorder::log`.
+`Distinction::to_hex`, `engine.advances_from`, `snapshot_parentage`,
+`replay_topological`. The agent contract, the recorder and the children
+index were on this list until they left the crate; the policy applies to
+them where they now live.
 
 ### Engine internals — see ARCHITECTURE.md
 
@@ -217,43 +217,49 @@ recorded once; +2 accounts for the primordials, which by definition have
 no parents). A failure is a theory event — the engine no longer
 satisfies Law 6 and must be redesigned, not amended.
 
-### LocalCausalAgent (substrate-level trait)
+### The agent contract is a reading, not a trait
 
-`pub trait LocalCausalAgent` `[SHIPPED @ agent::LocalCausalAgent]` captures the
-substrate's reference consumption pattern:
+The substrate once shipped `pub trait LocalCausalAgent`, described here as a
+"substrate-level trait." It no longer does, and the reason is sharper than
+relocation.
 
-- an LCA anchors to a **local root distinction** — its perspective;
-- state transitions are **causal syntheses** from local root + the
-  canonical structure of the action being taken;
-- LCAs **update their perspective forward** as their causal chain
-  advances.
+**Every** non-primordial distinction is an advance of each of its parents: set
+`root = a` and `action = b` in `synth(a, b)` and the monotonicity condition
+holds with `a` as the root, then again with the parents swapped. So agent-ness
+is a property of the graph available everywhere, not a property some types
+have — and a trait asserting otherwise is the wrong kind of thing. That also
+resolved a contradiction `THEORY.md` had carried, which described the same
+construct as both "a pattern, not an axiom" and "a substrate-level construct."
+It is neither; the argument was about where to put a type.
 
-The trait exposes `get_current_root` and `update_local_root` as the
-core surface, plus a default `synthesize_action` method that composes
-them via the helper `pub fn synthesize_causal_action`
-`[SHIPPED @ agent::LocalCausalAgent]`. The helper canonicalizes the action's data
-through the engine (via `Canonicalizable`) and synthesizes the result
-with the local root, returning a new root.
+What the substrate keeps is the **read**:
 
-See
-[`THEORY.md § what it means to use the substrate`](THEORY.md#what-it-means-to-use-the-substrate)
-for the pattern's theoretical status — reference, not axiom. Consumers
-with different shapes (multi-perspective, non-root, no-perspective) can
-exist and still receive the substrate's axiom-level correctness
-guarantees; the trait exists so LCA-shape consumers interoperate.
+`pub fn advances_from(&self, candidate, previous) -> bool`
+`[SHIPPED @ engine::DistinctionEngine::advances_from]`
 
-The trait lives at `[SHIPPED @ agent::LocalCausalAgent]` (substrate level, not
-under `subsystems/`) because it formalizes what it means to *use* the
-substrate. Subsystems are *implementers* of the trait, not the trait's
-home.
+One `parents_of` lookup, answering whether a given advance was forward — which
+is a question about the graph, and reads belong here. An advance that does not
+descend from the root it replaces is not a causal step but an unrelated
+assignment, and this is what makes that checkable.
+
+The contract that *chooses* to advance belongs to consumers and ships with
+them, at `[SHIPPED @ koru_lambda_agents::agent::LocalCausalAgent]`. See
+[`THEORY.md § Using the substrate`](THEORY.md#using-the-substrate) for the
+pattern's status — a reading, not an axiom. Consumers with other shapes
+(multi-perspective, non-root, no-perspective) are legal and still receive the
+substrate's axiom-level guarantees, because those flow from the axioms and not
+from the consumer's shape.
 
 ### Reference observers (consumer-side, not engine state)
 
-Three reference implementations ship in-crate demonstrating consumer
-patterns; none extend engine state. Consumers wanting none of these
-pay nothing.
+Two of these still ship in the substrate — the replay pair, which is a
+theorem about the sufficiency of recorded parentage rather than a convenience.
+The recorder and the children index moved to the agents crate, because by the
+substrate's own membership test neither determines a byte. They are listed here
+with their new homes rather than deleted, since the reasoning is what a reader
+needs. None extends engine state; consumers wanting none of them pay nothing.
 
-- **`SynthesisRecorder`** `[SHIPPED @ recorder::SynthesisRecorder]` — chronological
+- **`SynthesisRecorder`** `[SHIPPED @ koru_lambda_agents::recorder::SynthesisRecorder]` — chronological
   record of novel syntheses through a single engine. Consumer
   constructs one, routes `synthesize` calls through it; the recorder
   pushes to its internal `Vec` only on novel results (deduped via
@@ -278,7 +284,7 @@ pay nothing.
   [Law 9 order-independent reconstruction](THEORY.md#law-9-order-independent-reconstruction):
   replaying a shuffled parentage snapshot produces byte-identical state.
 
-- **`build_children_index`** `[SHIPPED @ replay::replay_topological]` — materializes
+- **`build_children_index`** `[SHIPPED @ koru_lambda_agents::children_index::build_children_index]` — materializes
   the inverse of `parents_of` in O(N) once for consumers that need to
   iterate children rather than just count them. Takes a parentage
   snapshot, returns `HashMap<Distinction, Vec<Distinction>>`.
@@ -314,7 +320,7 @@ consensus code at the current commit:
 Common design principles across subsystems:
 
 1. **Each subsystem IS an LCA.** Implements
-   [the reference consumption pattern](THEORY.md#what-it-means-to-use-the-substrate)
+   [the reference consumption pattern](THEORY.md#using-the-substrate)
    directly; the trait's semantics are the only contract.
 2. **Bug-correct from the start.** Audit-discovered bugs from earlier
    design rounds are designed-in as non-existent (typed fields,
@@ -413,7 +419,7 @@ without a theory change.
 
 1. **No engine-side synthesis log.** The engine carries no ordered
    history of syntheses. Rationale:
-   [the substrate is timeless](THEORY.md#what-it-means-to-use-the-substrate);
+   [the substrate is timeless](THEORY.md#using-the-substrate);
    order is what consumers do. Chronological observation is a
    consumer concern — `SynthesisRecorder` is the reference
    implementation, not engine state. This decision is theory-forced
@@ -432,10 +438,17 @@ without a theory change.
    accepting the reallocation stall for a use case no consumer has;
    theoretically legal, engineeringly wrong.
 
-3. **`LocalCausalAgent` at substrate level, not under `subsystems/`.**
-   The trait IS substrate — it formalizes what it means to use the
-   substrate. Filing it under `subsystems/` misnames its role.
-   `[SHIPPED @ agent::LocalCausalAgent]` is the correct home.
+3. **`LocalCausalAgent` at substrate level — REVERSED, 2026-10-02.**
+   This read "the trait IS substrate — it formalizes what it means to
+   use the substrate." The decision was wrong, and so was the question.
+   Every non-primordial distinction is an advance of each of its
+   parents, so agent-ness is a reading of the graph available
+   everywhere rather than a property some types have; a trait asserting
+   otherwise is the wrong kind of thing, and both sides of the old
+   argument were debating where to file a type. The substrate keeps the
+   read, `[SHIPPED @ engine::DistinctionEngine::advances_from]`, and the
+   contract ships with the consumers that choose to use it. Recorded
+   rather than deleted because the reasoning is the useful part.
 
 4. **`previous_root: Distinction` on `TransactionBatch`.** The N5
    String-truncation bug from v1.2.x cannot exist because there is no
@@ -450,7 +463,7 @@ engine does not currently expose):
 - The engine does not expose `remove_distinction`, `clear`, or any
   non-monotone mutation. Append-only is a *design choice* enabling
   Laws 8 + 9 to hold cleanly; the axioms
-  [don't forbid removal](THEORY.md#what-follows-from-the-theory).
+  [don't forbid removal](THEORY.md#why-the-theory-is-small).
   Garbage collection by partial-reroot replay is theoretically
   permissible; v2.0.0 deliberately excludes it.
 - Every entry point through `synthesize` continues to accept the bare
@@ -534,7 +547,7 @@ Existing(Distinction)` (a `#[non_exhaustive]` enum, not a struct with
 fields — the enum shape lets future variants land without breaking
 match arms). `[SHIPPED @ v2.0.0]`. The theory-side status of the
 novelty bit is fixed in
-[`THEORY.md § Implications not yet materialized`](THEORY.md#implications-not-yet-materialized);
+[`THEORY.md § Implications not yet materialized`](THEORY.md#limits);
 DESIGN.md merely names the API surface that materializes it.
 
 **Two-type API surface.** `RawDistinctionId → engine.verify() →
