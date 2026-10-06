@@ -8,7 +8,7 @@
 //!
 //! - One operator: `DistinctionEngine::synthesize`
 //! - Two primordials: `engine.d0()`, `engine.d1()`
-//! - Four axioms enforced inline: determinism, commutativity, irreflexivity,
+//! - Four axioms enforced inline: determinism, commutativity, idempotence,
 //!   content addressing.
 //! - Three canonical O(1) projections — saturation check, parent
 //!   lookup, degree query — backed by a single `nodes` map of

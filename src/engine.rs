@@ -401,7 +401,7 @@ pub enum InvariantError {
     ///
     /// Axiom 3 makes self-synthesis a no-op, so no node can be the
     /// child of a pair of identical parents.
-    #[error("irreflexivity violation: {child} names {parent} as both parents")]
+    #[error("idempotence violation: {child} names {parent} as both parents")]
     SelfParentage {
         /// The offending child.
         child: Distinction,
@@ -441,7 +441,7 @@ pub enum InvariantError {
 /// [`synthesize`](DistinctionEngine::synthesize).
 ///
 /// **Design note.** Future variants may split `Existing` into
-/// cause-specific arms — `AxiomIrreflexive`, `Saturated`, `RaceLost` —
+/// cause-specific arms — `AxiomIdempotent`, `Saturated`, `RaceLost` —
 /// under `#[non_exhaustive]` semver-additive rules. Today all three
 /// collapse into `Existing(d)`; consumers who need the distinction
 /// should compose over [`is_novel`](Self::is_novel) and re-query engine
@@ -617,7 +617,7 @@ impl DistinctionEngine {
     ///    produce the same child bytes (via SHA-256).
     /// 2. **Commutativity** — argument order doesn't matter; canonical
     ///    `(min, max)` ordering on the 16-byte ids before hashing.
-    /// 3. **Irreflexivity** — `synthesize(a, a) == a`; early return.
+    /// 3. **Idempotence** — `synthesize(a, a) == a`; early return.
     /// 4. **Content addressing** — child identity IS the SHA-256 prefix
     ///    of the canonical parent-pair bytes.
     ///
@@ -723,7 +723,7 @@ impl DistinctionEngine {
     /// join sum invariant `sum_of_degrees == 2 * non_primordial_count`
     /// still holds.
     ///
-    /// # Axiom 3 (irreflexivity)
+    /// # Axiom 3 (idempotence)
     ///
     /// `synthesize_novel(a, a) === Existing(a)`. The self-synthesis
     /// short-circuit is a no-op with respect to engine state — the
@@ -823,7 +823,7 @@ impl DistinctionEngine {
     }
 
     pub(crate) fn synthesize_inner(&self, a: Distinction, b: Distinction) -> (Distinction, bool) {
-        // Axiom 3 — irreflexivity. Self-synthesis inserts nothing, but the
+        // Axiom 3 — idempotence. Self-synthesis inserts nothing, but the
         // engine must still refuse to vouch for a value it has never
         // witnessed, so the guard applies here too.
         if a == b {
@@ -1613,7 +1613,7 @@ mod engine_tests {
         let c = e.synthesize(e.d0(), e.d1());
         let _ = e.synthesize(c, e.d0()); // c is the parent; pre-seed must hold
         let _ = e.synthesize(c, e.d1());
-        let cc = e.synthesize(c, c); // irreflexivity short-circuits, fine
+        let cc = e.synthesize(c, c); // idempotence short-circuits, fine
         assert_eq!(cc, c);
     }
 
@@ -1687,10 +1687,10 @@ mod engine_tests {
         assert_eq!(e.degree(e.d0()), d0_deg_after_first);
     }
 
-    // ----- Axiom 3 — Irreflexivity --------------------------------------
+    // ----- Axiom 3 — Idempotence --------------------------------------
 
     #[test]
-    fn axiom3_irreflexivity_synth_with_self_is_self() {
+    fn axiom3_idempotence_synth_with_self_is_self() {
         let e = DistinctionEngine::new();
         assert_eq!(e.synthesize(e.d0(), e.d0()), e.d0());
         assert_eq!(e.synthesize(e.d1(), e.d1()), e.d1());
@@ -1700,7 +1700,7 @@ mod engine_tests {
     }
 
     #[test]
-    fn axiom3_irreflexivity_does_not_grow_engine() {
+    fn axiom3_idempotence_does_not_grow_engine() {
         let e = DistinctionEngine::new();
         let d_count_before = e.distinction_count();
         let _ = e.synthesize(e.d0(), e.d0());
@@ -2094,9 +2094,9 @@ mod engine_tests {
                 prop_assert_eq!(e.synthesize(a, b), e.synthesize(b, a));
             }
 
-            /// Irreflexivity (Axiom 3) holds for every distinction.
+            /// Idempotence (Axiom 3) holds for every distinction.
             #[test]
-            fn prop_irreflexivity(i in 0usize..12) {
+            fn prop_idempotence(i in 0usize..12) {
                 let (e, pool) = build_pool();
                 let a = pool[i];
                 prop_assert_eq!(e.synthesize(a, a), a);
@@ -2489,7 +2489,7 @@ mod engine_tests {
 
     #[test]
     fn synthesize_novel_axiom_3_returns_existing() {
-        // Axiom 3 (irreflexivity): `synthesize_novel(a, a) === Existing(a)`
+        // Axiom 3 (idempotence): `synthesize_novel(a, a) === Existing(a)`
         // for every registered `a` — both primordials AND any mid-graph
         // distinction. The child IS `a`, which is already registered by
         // contract, so the engine's state did not grow.

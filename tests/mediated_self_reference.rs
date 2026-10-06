@@ -1,6 +1,6 @@
 //! Law 10: a structure can refer to itself without collapsing into itself.
 //!
-//! Irreflexivity makes direct self-reference degenerate — `synth(x, x)` is `x`,
+//! Idempotence makes direct self-reference degenerate — `synth(x, x)` is `x`,
 //! so a thing synthesized with itself yields nothing new. That is the axiom
 //! doing its job: it forecloses runaway self-generation. The open question is
 //! whether self-reference is therefore impossible, or merely has to be
@@ -79,7 +79,7 @@ fn run(regime: Observation, engine: &DistinctionEngine, fold: &ByteFold) -> Outc
 
         // The observation must differ from the current element, or the inner
         // synthesis saturates to `current` and the outer one collapses by
-        // irreflexivity. This is a precondition of the law, not a failure of
+        // idempotence. This is a precondition of the law, not a failure of
         // it, so it is asserted rather than silently skipped.
         assert_ne!(
             observation, current,
@@ -166,7 +166,7 @@ fn unmediated_self_reference_collapses_immediately() {
     assert_eq!(
         engine.synthesize(x, x),
         x,
-        "irreflexivity broken — if direct self-synthesis produced something new, Law 10 \
+        "idempotence broken — if direct self-synthesis produced something new, Law 10 \
          would be solving a problem that does not exist"
     );
 }

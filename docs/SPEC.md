@@ -61,7 +61,7 @@ Three properties follow from the definition rather than from any check:
 
 - **Commutative** — `synthesize(a, b) == synthesize(b, a)`, because the
   pair is ordered before hashing.
-- **Irreflexive** — `synthesize(a, a) == a`, returned before hashing.
+- **Idempotent** — `synthesize(a, a) == a`, returned before hashing.
   An implementation that hashes `a ‖ a` is not conforming.
 - **Deterministic and engine-independent** — the result is a function of
   the two inputs alone.
@@ -116,7 +116,7 @@ agree on nothing, even though both follow §2 exactly.
 
 ### 4.1 Why a naive fold does not work
 
-The operator is commutative and irreflexive. So for an ordered sequence:
+The operator is commutative and idempotent. So for an ordered sequence:
 
 - `synthesize(x, y)` cannot be told from `synthesize(y, x)`, and
 - `synthesize(x, x)` returns `x`, dropping an element entirely.
@@ -130,7 +130,7 @@ Two rules make that fold injective:
 1. **The accumulator starts at an anchor, never at an element.** Seeding
    with the first element makes the first two positions an unordered
    pair, and lets a leading run of equal elements collapse through
-   irreflexivity. This is not hypothetical: it produced identical
+   idempotence. This is not hypothetical: it produced identical
    commitments for the integers 1 and 256, whose little-endian bytes are
    reorderings of each other.
 2. **The anchor may not be an element of the alphabet.** Otherwise the

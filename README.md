@@ -120,7 +120,7 @@ for details.
 ## What's inside
 
 - **4 axioms, 2 primordials, 1 operator** — [THEORY.md](THEORY.md) is
-  authoritative. Determinism, commutativity, irreflexivity, and
+  authoritative. Determinism, commutativity, idempotence, and
   content-addressing are enforced inline in
   [`DistinctionEngine::synthesize`](src/engine.rs).
 - **Merged-map engine** — one `DashMap<[u8;16], EngineNode { parents,

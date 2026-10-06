@@ -1,4 +1,4 @@
-//! wasm-bindgen-test smoke suite for `src/wasm.rs`.
+//! wasm-bindgen-test smoke suite for this crate's `src/lib.rs`.
 //!
 //! Run via `wasm-pack test --node --features wasm`. Gated on
 //! `target_arch = "wasm32"` so the default
@@ -429,7 +429,7 @@ fn hop_distance_entries_shape() {
 //
 // Why it is not redundant with the native tests: the bindings cross an ABI,
 // marshal `Vec<u8>` through JsValue, and compile under a different backend to
-// a 32-bit pointer width. Argument order and the irreflexive fast path are
+// a 32-bit pointer width. Argument order and the idempotent fast path are
 // both things a marshalling layer can disturb without any native test
 // noticing. `cond_d_prime_wasm.rs` pins agreement on published vectors;
 // these pin the operator's own laws.
@@ -453,7 +453,7 @@ fn axiom2_commutativity_holds_across_the_boundary() {
 }
 
 #[wasm_bindgen_test]
-fn axiom3_irreflexivity_holds_across_the_boundary() {
+fn axiom3_idempotence_holds_across_the_boundary() {
     let e = WasmEngine::new();
     let d0 = e.d0();
     let d1 = e.d1();

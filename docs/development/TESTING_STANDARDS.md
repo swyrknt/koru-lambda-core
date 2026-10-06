@@ -219,7 +219,7 @@ Choose metrics that directly measure the falsification target:
 |--------|----------|---------------------|
 | **Path Independence** | Verify timeless consistency | Compare final IDs from different paths |
 | **Determinism** | Same inputs → same outputs | Multiple engines, compare results |
-| **Irreflexivity** | `synthesize(a, a) = a` | Check ID unchanged |
+| **Idempotence** | `synthesize(a, a) = a` | Check ID unchanged |
 | **Symmetry** | `synthesize(a, b) = synthesize(b, a)` | Compare IDs in both orders |
 | **Connectivity** | Graph doesn't fragment | Count connected components |
 | **Degree Distribution** | Test for structural patterns | Histogram of node degrees |

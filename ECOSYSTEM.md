@@ -23,7 +23,7 @@ What the substrate guarantees, precisely:
 - **Operator-level identity is permanent** and version-independent. The same
   two identifiers synthesize to the same sixteen bytes in every process, on
   every conforming implementation, forever. *(Forced — determinism,
-  commutativity, irreflexivity and content addressing leave no freedom here.)*
+  commutativity, idempotence and content addressing leave no freedom here.)*
 - **Lift-level identity is pinned per major version**, not forever, *because
   the lift is the substrate's one free parameter.* It moved in this release:
   the byte lift went from seventeen synthesize calls per byte to eight, so

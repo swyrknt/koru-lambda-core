@@ -106,7 +106,7 @@ pub struct ByteMapping;
 ///
 /// # Why this exists as a primitive
 ///
-/// The operator is commutative and irreflexive, so a sequence cannot be
+/// The operator is commutative and idempotent, so a sequence cannot be
 /// folded naively: `synthesize` cannot tell `(x, y)` from `(y, x)`, and
 /// `synthesize(x, x)` returns `x`. An ordered encoding therefore has to
 /// carry order in the *nesting* — each step folds the running
@@ -115,7 +115,7 @@ pub struct ByteMapping;
 /// Two consumers wrote that fold by hand and both wrote it the same way
 /// and wrong: they seeded the accumulator with the **first element's**
 /// tip. That makes the first two positions an unordered pair, and a
-/// leading run of equal bytes vanishes through irreflexivity. Nonce 1
+/// leading run of equal bytes vanishes through idempotence. Nonce 1
 /// and nonce 256 produced identical commitments. The encoding is one
 /// primitive here so that it is specified once, tested once, and cannot
 /// be reinvented differently.
@@ -128,7 +128,7 @@ pub struct ByteMapping;
 ///   anchors get different results. Domain separation is an anchor
 ///   choice, which is why it does not need to enter the hash.
 /// - **The anchor may not be an element tip.** If it were, the first
-///   step could collapse through irreflexivity and silently drop an
+///   step could collapse through idempotence and silently drop an
 ///   element. This is checked, not assumed: the alphabet is 256 known
 ///   values, so membership is a lookup.
 /// - **Length is folded in before the elements.** Without it, a fold is
@@ -201,7 +201,7 @@ impl ByteFold {
         assert!(
             !self.is_tip(anchor),
             "fold: the anchor is an element tip, so the first step could collapse through \
-             irreflexivity and drop an element. Anchor on a synthesized root instead."
+             idempotence and drop an element. Anchor on a synthesized root instead."
         );
 
         // Length first, so sequences of different lengths cannot coincide.
@@ -292,7 +292,7 @@ impl ByteMapping {
         // Anchor: the primordial child. Not an element of this alphabet,
         // which is the same rule `ByteFold::fold` enforces for its own —
         // an anchor drawn from the alphabet could collapse the first step
-        // through irreflexivity.
+        // through idempotence.
         let mut acc = engine.synthesize(d0, d1);
 
         for bit_index in 0..Self::BITS_PER_BYTE {
@@ -623,7 +623,7 @@ mod tests {
         let nonce_512 = 512u64.to_le_bytes();
         assert_ne!(fold.fold(anchor, &nonce_2, &e), fold.fold(anchor, &nonce_512, &e));
 
-        // A leading run of equal bytes vanished through irreflexivity.
+        // A leading run of equal bytes vanished through idempotence.
         assert_ne!(
             fold.fold(anchor, &[0x00], &e),
             fold.fold(anchor, &[0x00, 0x00], &e),
@@ -689,7 +689,7 @@ mod tests {
         // The degenerate case, constructed directly. A property test would
         // reach it with probability 2^-128, so it has to be built by hand:
         // an anchor drawn from the element alphabet lets the first step
-        // collapse through irreflexivity and drop an element.
+        // collapse through idempotence and drop an element.
         let e = DistinctionEngine::new();
         let fold = ByteFold::new(&e);
         let _ = fold.fold(fold.tip(0x41), &[0x41, 0x42], &e);

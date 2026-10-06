@@ -8,7 +8,7 @@ This is the **core** of our entire system. The code here must be flawless, perfo
 Every change must preserve the four axioms, as stated in `THEORY.md`:
 - **Determinism**: the same two distinctions always synthesize to the same third
 - **Commutativity**: `synthesize(a, b)` and `synthesize(b, a)` are the same, because the pair is ordered before hashing
-- **Irreflexivity**: a distinction synthesized with itself yields itself
+- **Idempotence**: a distinction synthesized with itself yields itself
 - **Content addressing**: identity *is* the content — a distinction's bytes are derived from its parents, with no separate naming layer
 
 The two primordials are a given of the system rather than an axiom, and

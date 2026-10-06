@@ -129,7 +129,7 @@ first-time derivation from a Law 7 saturated repeat. The runtime path
 enforces [the four axioms](THEORY.md#the-four-axioms) directly:
 
 - Foreign-byte guard on both parents (Axiom 4 boundary enforcement)
-- Irreflexivity: `a == b` returns `a` directly
+- Idempotence: `a == b` returns `a` directly
 - Commutativity: canonical `(min, max)` ordering on raw bytes before hashing
 - Content addressing: 16-byte SHA-256 prefix of the canonical pair
 - Saturation: `contains_key` fast path before entry lock
@@ -395,7 +395,7 @@ No new heavyweight deps. Every addition serves a specific design goal.
 ### Test strategy — one-paragraph reference
 
 The substrate ships with axiom-verification tests (isolated
-determinism / commutativity / irreflexivity / content-addressing),
+determinism / commutativity / idempotence / content-addressing),
 scale probes ([`r = 2d − 3`](THEORY.md#law-6-r--2d--3) at 5 M synths
 with zero deviations, saturation at 1 M repeats), concurrency probes
 (8-thread byte-equivalence, loom kernel for Release/Acquire; a TSan

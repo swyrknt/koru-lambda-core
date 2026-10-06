@@ -112,9 +112,14 @@ cargo fmt -- --check
 ### What It Does
 This is your **team's Rust bible**. It teaches:
 
-#### 1. The Five Sacred Axioms
+#### 1. The Four Axioms
 Every developer understands that these are non-negotiable:
-- Identity, Nontriviality, Synthesis, Symmetry, Irreflexivity
+- Determinism, Commutativity, Idempotence, Content addressing
+
+(This listed five — Identity, Nontriviality, Synthesis, Symmetry,
+Irreflexivity — which was the previous release's set. Content addressing
+was not among them, and it is the one the rest of the substrate rests on.
+`THEORY.md` is authoritative.)
 
 #### 2. Borrow Checker Mastery
 **Pitfall 1: Holding References Across Mutations**

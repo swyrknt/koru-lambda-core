@@ -159,16 +159,16 @@ mod tests {
     }
 
     #[test]
-    fn irreflexive_synthesis_does_not_record() {
+    fn idempotent_synthesis_does_not_record() {
         // synth(a, a) == a (Axiom 3). The engine doesn't create a new
         // distinction. The recorder's `log.contains(&child)` check
         // sees `a` already exists (after a was previously logged).
         let e = DistinctionEngine::new();
         let mut r = SynthesisRecorder::new();
         let a = r.synthesize(&e, e.d0(), e.d1());
-        let a_again = r.synthesize(&e, a, a); // irreflexive → returns a
+        let a_again = r.synthesize(&e, a, a); // idempotent → returns a
         assert_eq!(a, a_again);
-        assert_eq!(r.log(), &[a], "irreflexive call should not add to log");
+        assert_eq!(r.log(), &[a], "idempotent call should not add to log");
     }
 
     #[test]

@@ -173,7 +173,8 @@ whether they saw it first.
 **Derived, and probed.** Direct self-reference is degenerate by Axiom 3. But
 `synthesize(synthesize(x, observation), x)` produces a distinction that
 genuinely refers to `x` while being distinct from `x`, for any observation not
-equal to `x`. The mediation breaks the irreflexive collapse.
+equal to `x`. The mediation breaks the collapse Axiom 3 would
+otherwise force.
 
 This is self-reference as a structural primitive — a legal composition of the
 one operator, with no fixed-point machinery, no encoding trick, and no
