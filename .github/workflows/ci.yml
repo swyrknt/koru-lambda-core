@@ -24,6 +24,7 @@ jobs:
       - run: ./scripts/gates/doc_anchors.sh
       - run: ./scripts/gates/roadmap.sh
       - run: ./scripts/gates/vectors_frozen.sh
+      - run: ./scripts/gates/no_consumer_names.sh
 
   fmt:
     name: Format

@@ -329,7 +329,7 @@ crates/koru-lambda-agents/src/
 
 Each subsystem is a worked example of the LCA pattern with real
 consensus-protocol semantics. They demonstrate how a productive consumer
-uses the substrate. They are **not** the substrate; if `koru-protocol`
+uses the substrate. They are **not** the substrate; if a consumer
 wants different semantics it forks them.
 
 Bug-correct from the start:
@@ -408,7 +408,7 @@ which every pure-Rust consumer would otherwise pay for.
 
 ```
             ┌─────────────────────────────────────┐
-            │  Consumer crate (ALIS, koru-protocol)│
+            │  Consumer crate                      │
             └────────────────┬────────────────────┘
                              │ depends on
                              ▼
@@ -461,7 +461,7 @@ TSan on the 8-thread FFI concurrent test.
 - Not a configuration framework. Subsystems are opinionated; parameters
   that vary between deployments are the consumer's choice, not a
   feature flag inside the crate.
-- Not a production consensus layer. Use `koru-protocol` for that.
+- Not a production consensus layer.
 - Not a general graph library. The graph is content-addressed,
   append-only, monotone. If you want mutable edges, this isn't the
   crate.

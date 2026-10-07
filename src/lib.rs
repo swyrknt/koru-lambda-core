@@ -54,12 +54,9 @@
 //! are `Distinction` on engine A (which has them) and `ForeignBytes` on
 //! engine B (until it replays the same synthesis history).
 //!
-//! **Downstream consumers migrating to this pattern:** koru-delta
-//! (wire-deserialize replay checkpoints), alis-ai (state
-//! checkpoint/resume), koru-engine (snapshot replay), koru-spatial
-//! (adjacency-from-wire), koru-mesh (telemetry ingest), koru-wave
-//! (dissolve/restart), koru-protocol (handshake payloads), koru-cli
-//! (hex CLI input), and the game-studio flagship consumer save/load.
+//! The pattern applies wherever identifiers cross a trust boundary:
+//! restoring a checkpoint, ingesting telemetry, accepting a handshake
+//! payload, or reading an identifier typed by a human.
 //!
 //! ```
 //! use koru_lambda_core::{DistinctionEngine, RawDistinctionId, VerifyError};
@@ -124,18 +121,12 @@
 //!
 //! ## Retires (six ad-hoc reinventions)
 //!
-//! The projection primitive replaces six domain-specific ad-hoc "field"
-//! or "walk" utilities that predated E02:
-//!
-//! - ALIS's `Field` (custom cone iterator)
-//! - koru-engine's `Field` (custom hop walker)
-//! - koru-spatial's adjacency listing
-//! - koru-mesh's seen-set tracking
-//! - koru-delta's replay-to-point verification
-//! - koru-wave's dissolve-on-read pattern
-//!
-//! Consumers of any of the above should migrate to `engine.project(...)`
-//! with the appropriate `Direction` / `Boundary` / `Signal` triple.
+//! The projection primitive replaces the ad-hoc cone iterators, hop
+//! walkers, adjacency listings and seen-set trackers that consumers
+//! otherwise write for themselves — each a partial, unnamed instance of
+//! the same read. A consumer holding one of those should move to
+//! `engine.project(...)` with the appropriate `Direction` / `Boundary` /
+//! `Signal` triple, which is the whole of it rather than a case.
 //!
 //! ## Lint floor
 //!

@@ -8,10 +8,11 @@ graph the operator writes, and any consistent read over it — the projection.
 [`THEORY.md` names both](THEORY.md#the-synthesis-projection-dual). v2.0.0
 makes that naming operational: v2.0.0 ships an API surface for the
 projection dual. Six independent koru projects have built
-projection-shaped wrappers under different names — Fields (alis-ai),
-Fields (koru-engine), Sessions (koru-wave), Peers (koru-mesh),
-Workspaces (koru-delta), PlayerState (game-studio consumers). What they
-share is what the axioms forced them to build. v2.0.0's contribution
+projection-shaped wrappers under different names — fields, sessions,
+peers, workspaces, player state. What they share is what the axioms
+forced them to build. They are not named here: the substrate does not
+depend on its consumers in prose any more than in code, and a claim
+about who built what is not verifiable from this repository. v2.0.0's contribution
 is that the substrate now provides it directly.
 
 Byte-identical across engines. No consensus. No handshake. Consumer
@@ -333,7 +334,7 @@ Common design principles across subsystems:
 5. **`#[serde(try_from = "Raw")]`** on any type with construction
    invariants — deserialization can't bypass the constructor.
 
-**Subsystems are NOT** production consensus (use `koru-protocol`),
+**Subsystems are NOT** production consensus (use a consensus protocol),
 configuration knobs (parameters are consumer choices), or optimal
 under every workload (they optimize for clarity). If a subsystem is
 growing past budget, either it's accreting bugs (fix at design level)
@@ -638,7 +639,7 @@ Enumerated. No hedging.
    per-handle ring, not a global stream.
 2. **No DID / crypto identity / X3DH / DoubleRatchet.** Peer identity
    remains a bounded byte string; cryptographic identity is
-   koru-liberation / koru-crypto-strategy.
+   a downstream strategy consumer.
 3. **No live `children_of` as a hot-path query.** Engine keeps degree
    as the Coding Law count; consumers who need enumeration call
    `replay::build_children_index` on a snapshot.
@@ -657,7 +658,7 @@ Enumerated. No hedging.
 7. **No production BFT consensus layer.**
    `[SHIPPED @ koru-lambda-agents: validator]` and
    `[SHIPPED @ koru-lambda-agents: commitment]` are reference LCA
-   implementations, not the pitch. `koru-protocol` remains the home
+   implementations, not the pitch. a consumer protocol crate remains the home
    for production consensus.
 8. **No networking stack.** Production networking is downstream of
    this crate.

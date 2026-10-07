@@ -73,12 +73,13 @@ Two consequences, both observed rather than predicted:
 - **Consumers could not tell which part they were meant to use.** Sixteen
   downstream crates across fifteen repositories depend on the substrate
   directly. At least one re-implemented a published export name-for-name:
-  `ParallelSynthesizer` in `stele` has the same single `Arc<DistinctionEngine>`
-  field, the same constructor signature and the same method name as the
-  1.2.0 export — and never uses the engine it holds. Two others redefined
-  the shipped `NetworkAgent`/`NetworkAction`/`NetworkStats` trio for
-  genuinely different functions. Meanwhile other consumers found and used
-  the shipped types. Nothing signposted which was intended.
+  One re-implemented a published export name-for-name — same single
+  field, same constructor signature, same method name — and never used
+  the engine it held. Two others redefined a shipped three-type cluster
+  for genuinely different functions. Meanwhile others found and used the
+  shipped types. Nothing signposted which was intended. (Who is not
+  recorded here; see the note in `DESIGN.md` on why the substrate does
+  not name its consumers.)
 - **Anything that wanted to change had to change the crate identity depends
   on.** Release 1.1.0 is one commit that touched `Cargo.toml`, `ffi.rs`,
   `network.rs` and `validator.rs` — no substrate file at all — to add a nonce

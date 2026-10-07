@@ -21,7 +21,7 @@
 //! The axioms constrain `synthesize`, not consumer shape —
 //! multi-perspective and non-root-anchored consumers can use the
 //! substrate directly. LCA is the **reference** because every consumer
-//! we've shipped (ALIS, koru-protocol, the reference subsystems) uses
+//! we've shipped uses
 //! it, and it captures "time is what consumers do" as a composable
 //! trait.
 
@@ -93,7 +93,7 @@ pub fn synthesize_causal_action<A: Canonicalizable>(
 mod tests {
     use super::*;
 
-    /// Minimal LCA used in tests. Real consumers (ALIS, koru-protocol)
+    /// Minimal LCA used in tests. Real consumers
     /// ship richer implementations; this is just enough to exercise
     /// the trait contract.
     struct TestLca {

@@ -123,21 +123,13 @@ impl Distinction {
 /// at the trust boundary; internal code that has already crossed the
 /// boundary operates on `Distinction`.
 ///
-/// # Consumer story
+/// # Crossing a trust boundary
 ///
-/// Nine substrate consumers exchange Distinction bytes across trust
-/// boundaries — `RawDistinctionId → verify → Distinction` is the
-/// recommended path for each:
-///
-/// - `koru-delta` wire-deserialize (replay-checkpoint restoration)
-/// - `alis-ai` state restore (checkpoint / resume)
-/// - `koru-engine` snapshot replay
-/// - `koru-spatial` adjacency-from-wire
-/// - `koru-mesh` telemetry-ingest
-/// - `koru-wave` dissolve-restart
-/// - `koru-protocol` handshake-payload
-/// - `koru-cli` hex-CLI-input
-/// - `game-studio` flagship consumer save/load
+/// Wherever identifier bytes arrive from outside — a restored
+/// checkpoint, a deserialised wire frame, ingested telemetry, a
+/// handshake payload, a hex string typed by a human — the recommended
+/// path is the same: `RawDistinctionId → verify → Distinction`. Bytes
+/// that have not crossed it are not a distinction, whatever their type.
 ///
 /// # Safety justification for `bytemuck::Pod` and `bytemuck::Zeroable`
 ///
@@ -753,10 +745,10 @@ impl DistinctionEngine {
     ///
     /// # Consumer story
     ///
-    /// Consumers that would otherwise re-query [`has`](Self::has) after
-    /// `synthesize` — for example, `koru-delta` replay-checkpoint
-    /// patterns, `koru-mesh` aggregate telemetry, `alis-ai`
-    /// event-driven memory — can match on the outcome instead:
+    /// A consumer that would otherwise re-query [`has`](Self::has) after
+    /// `synthesize` — replaying a checkpoint, aggregating telemetry,
+    /// reacting to a first observation — can match on the outcome
+    /// instead:
     ///
     /// ```
     /// use koru_lambda_core::{DistinctionEngine, SynthesisOutcome};
