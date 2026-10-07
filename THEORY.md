@@ -36,7 +36,7 @@ This document is upstream of `DESIGN.md`, `ARCHITECTURE.md`, `ECOSYSTEM.md`,
 
 Downstream references to concept-terms here (`synthesize`, `commutativity`,
 `idempotence`, `content addressing`, `Law 5`–`Law 12`, `Fold Law`,
-`Coding Law`, `local causal agent`, `synthesis/projection dual`) resolve to
+`Coding Law`, `local causal agent`, `synthesis-projection dual`) resolve to
 `THEORY.md#section-slug`. Section anchors survive edits; line numbers do not,
 and are rejected by `scripts/gates/doc_anchors.sh`.
 
@@ -110,12 +110,12 @@ Eight numbered consequences. Law 11 is numbered but is **not** an independent
 law — see its entry. Renumbering would break every downstream reference, so the
 number stays and the status travels with it.
 
-### Law 5 — Binary parentage
+### Law 5: Binary parentage
 
 **Derived.** Every non-primordial distinction has exactly two parents. The
 operator is binary and Axiom 4 encodes both parents in the child.
 
-### Law 6 — r = 2d − 3
+### Law 6: r = 2d − 3
 
 **Derived, and probed.** For `d` distinctions and `r` relationships,
 `r = 2d − 3` holds exactly at every scale. Each novel synthesis adds one
@@ -128,13 +128,13 @@ Mean degree therefore converges to 4 at every scale under every workload, so
 hub degree is paid for by leaves. The genesis edge is a theory-level
 relationship; an implementation may carry it implicitly or materialize it.
 
-### Law 7 — Saturation
+### Law 7: Saturation
 
 **Derived.** Repeating a synthesis adds nothing. The second
 `synthesize(a, b)` returns the same distinction and leaves the graph
 unchanged.
 
-### Law 8 — Engine independence
+### Law 8: Engine independence
 
 **Derived, and probed.** Two engines that process the same operations produce
 byte-identical state **at quiescence**, regardless of their independent
@@ -142,7 +142,7 @@ histories. Mid-flight they may transiently disagree while writes are in
 progress; the claim is post-processing convergence, not instantaneous
 equality.
 
-### Law 9 — Order-independent reconstruction
+### Law 9: Order-independent reconstruction
 
 **Derived, and probed.** Two engines synthesizing the same parent pairs
 converge to byte-identical state regardless of the order in which they apply
@@ -168,7 +168,7 @@ and degree are properties of an engine's state, not of an identifier. Two
 agents necessarily agree on *what a thing is* and may permanently disagree on
 whether they saw it first.
 
-### Law 10 — Mediated self-reference
+### Law 10: Mediated self-reference
 
 **Derived, and probed.** Direct self-reference is degenerate by Axiom 3. But
 `synthesize(synthesize(x, observation), x)` produces a distinction that
@@ -190,7 +190,7 @@ assertion the chain would be merely novel rather than self-referential.
 **Bounded by identity space, not by depth.** Distinctions are 128 bits, so the
 birthday bound arrives near 2⁶⁴. "Unbounded" means "not bounded by Axiom 3."
 
-### Law 11 — the Fold Law *(a corollary, not an independent law)*
+### Law 11: the Fold Law *(a corollary, not an independent law)*
 
 **Encoding, and probed. Independent-law status withdrawn.**
 
@@ -222,7 +222,7 @@ What survives: the lift concentrates degree wherever it routes, which is Law
 only while the folded corpus is smaller than the alphabet — at 64 KiB, d₀ is
 rank 42.
 
-### Law 12 — the Coding Law
+### Law 12: Coding Law
 
 Two parts that must not be conflated.
 
@@ -366,7 +366,7 @@ will disagree.
 This is an instance of **query stability**, not a new notion — see *Prior work*.
 What is contributed is the exhaustive enumeration for this read surface.
 
-## The synthesis/projection dual
+## The synthesis-projection dual
 
 The axioms describe `synthesize` directly, and produce two objects.
 
