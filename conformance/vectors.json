@@ -361,5 +361,100 @@
         "e": "synthesize(d, d1)"
       }
     }
+  },
+  "reject": {
+    "$comment": [
+      "The trust boundary is REJECTION semantics, and a fixture of values to",
+      "reproduce cannot express it. Without this section, 'conforming' means",
+      "'agrees on good input' \u2014 and an implementation that accepts a",
+      "well-formed forgery passes the rest of this suite perfectly.",
+      "",
+      "Each case is the valid adjacency_upstream_hops2 wire form with one",
+      "thing wrong, so a failure localises to the check that is missing.",
+      "`expect.kind` names the error class; `offset` and `reason` are given",
+      "where the specification fixes them. `any_rejection` means the input",
+      "must be refused but the specification does not fix which error.",
+      "",
+      "Restoring is verification, not deserialisation: a restored projection",
+      "is re-materialised from the receiver's own state and compared.",
+      "",
+      "Note on `any_rejection`: for a truncation, which check fires depends on where the shift lands, so the specification fixes only that the input is refused. Demanding a particular error there would fail a conforming implementation \u2014 this was found by the suite doing exactly that."
+    ],
+    "cases": [
+      {
+        "name": "bad_magic",
+        "why": "First four bytes are not ASCII KPRJ. An implementation that skips the magic will happily decode anything of the right length.",
+        "bytes": "5850524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
+        "expect": {
+          "kind": "Malformed",
+          "offset": 0,
+          "reason": "bad magic"
+        }
+      },
+      {
+        "name": "unsupported_version",
+        "why": "Version byte is not 0x02. A future wire format must be refused, not guessed at.",
+        "bytes": "4b50524a036cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
+        "expect": {
+          "kind": "Malformed",
+          "offset": 4,
+          "reason": "unsupported version"
+        }
+      },
+      {
+        "name": "unknown_boundary_tag",
+        "why": "Boundary tag outside {0x00 hops, 0x01 saturated}. 0x02 is reserved and withheld, so accepting it would admit an order-bearing read the substrate cannot honour.",
+        "bytes": "4b50524a026cc4f0e930b34481d03a4134331852eaff020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
+        "expect": {
+          "kind": "Malformed",
+          "offset": 21,
+          "reason": "unknown boundary tag"
+        }
+      },
+      {
+        "name": "unknown_direction_tag",
+        "why": "Direction tag outside {0x00 upstream, 0x01 downstream, 0x02 undirected}.",
+        "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea000200000000000000ffd0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
+        "expect": {
+          "kind": "Malformed",
+          "offset": 30,
+          "reason": "unknown direction tag"
+        }
+      },
+      {
+        "name": "truncated_header",
+        "why": "Fewer than the 55 bytes the header requires. The length check must come before any field read.",
+        "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3f",
+        "expect": {
+          "kind": "Malformed",
+          "offset": 0,
+          "reason": "wire bytes shorter than 55-byte header"
+        }
+      },
+      {
+        "name": "unwitnessed_root",
+        "why": "Header is well formed and the root is a plausible 16-byte identifier this engine has never witnessed. This is the forgery case: nothing about the bytes is wrong, and it must still be refused.",
+        "bytes": "4b50524a02abababababababababababababababab00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
+        "expect": {
+          "kind": "ForeignEngine"
+        }
+      },
+      {
+        "name": "truncated_entry_array",
+        "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea2100000001000000000000000000000000000000000100000000000000",
+        "why": "Entry count in the header promises more entries than the remaining bytes can hold. A decoder that trusts the count reads past the buffer or invents data. Which check catches it is NOT fixed by the specification and must not be: truncating shifts the parse, so an entry's identifier field reads bytes that are not a witnessed distinction, and the reference implementation reports a foreign entry rather than a length error. Both are correct refusals. A suite that demanded one would fail a conforming implementation.",
+        "expect": {
+          "kind": "any_rejection"
+        }
+      },
+      {
+        "name": "inflated_entry_count",
+        "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b77810010a5d4e80000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
+        "why": "Entry count is astronomically larger than the payload. An implementation that allocates from this field before validating it is a denial-of-service away from a hostile peer.",
+        "expect": {
+          "kind": "any_rejection"
+        }
+      }
+    ]
   }
 }

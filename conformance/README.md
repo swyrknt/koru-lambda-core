@@ -72,7 +72,13 @@ pinned **per major version**, not forever — `vectors.json` carries
 9. **Restoring is verification, not deserialisation** (§7). A restored
    projection is re-materialised and compared byte for byte.
 
-Check against `projections.cases`.
+10. **Refusing bad input** (§3, §7). Reproduction is not conformance: an
+    implementation that accepts a well-formed forgery satisfies every value in
+    this fixture. Check against `reject.cases`, and note that where
+    `expect.kind` is `any_rejection` the specification fixes only that the
+    input is refused, not which check refuses it.
+
+Check against `projections.cases` and `reject.cases`.
 
 ## What is not yet covered, and matters
 
@@ -86,12 +92,19 @@ that admits its gaps:
   the downstream and undirected node sets grow. The other fourteen are
   reproducible only against the engine history the fixture declares — build
   anything else first and you will disagree with them while being correct.
-- **No rejection cases.** The trust boundary (§3) is *rejection* semantics, and
-  a fixture of values to reproduce cannot express it. Until a `reject` section
-  exists, "conforming" means "agrees on good input", which is not what a trust
-  boundary is. An implementation that accepts a well-formed forgery, a wrong
-  magic byte, an out-of-range direction tag or a truncated entry array passes
-  this suite perfectly.
+- ~~No rejection cases.~~ **Closed.** `reject.cases` carries eight: bad magic,
+  unsupported version, unknown boundary tag, unknown direction tag, truncated
+  header, truncated entry array, inflated entry count, and — the one that
+  matters most — a **well-formed forgery**, a header with nothing wrong about
+  it naming a root this engine never witnessed. Each is the valid wire form
+  with one thing changed, so a failure localises to the missing check.
+
+  One case is deliberately loose. For a truncation, which check fires depends
+  on where the parse shift lands: the reference implementation reports a
+  foreign entry rather than a length error, because the shift makes an entry's
+  identifier field read unwitnessed bytes. Both are correct refusals, so the
+  fixture asks only that the input be refused. This was found by the suite
+  demanding one of them and failing a conforming implementation.
 - **The fold's general rule ships as one worked instance.** §4.2 specifies the
   fold over an arbitrary alphabet; only the `{d₀, d₁}` byte case has vectors,
   and composite framing — how a struct containing a variable-length field is

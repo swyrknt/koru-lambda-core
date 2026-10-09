@@ -371,6 +371,13 @@ Stated here so that a reader finds them rather than discovers them.
 - **Not a consensus protocol.** Two parties that perform the same
   operations agree on the resulting bytes. Nothing here decides which
   operations should be performed, in what order, or by whom.
+- **Not every rejection is offset-fixed.** The magic, the version byte, the
+  boundary tag and the direction tag each have a fixed offset and reason, and a
+  conforming implementation reports them there. A *truncation* does not: the
+  parse shifts, so the failure may surface as a length error or as an entry
+  whose identifier is not a witnessed distinction, depending on where the shift
+  lands. Both are correct refusals. An implementation must refuse the input; it
+  need not agree on which check caught it.
 - **A witness cannot be denied.** There is no expungement. An identifier is
   a one-way digest and does not reveal its content, so removing a value from
   an engine is not a leak — but anyone *holding* the content can re-derive the

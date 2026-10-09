@@ -19,7 +19,9 @@
 //!    fixture that agreed with the mirror but not with the engine would be two
 //!    files agreeing with each other about a lie.
 
-use koru_lambda_core::projection::{Adjacency, Degree, Direction, HopDistance, Signal};
+use koru_lambda_core::projection::{
+    Adjacency, Degree, Direction, HopDistance, RestoreError, Signal,
+};
 use koru_lambda_core::{
     domain_anchor, vectors, ByteFold, Distinction, DistinctionEngine, RawDistinctionId,
 };
@@ -274,4 +276,60 @@ fn the_published_wire_form_decodes() {
         proj_case["projection_id"].as_str().expect("projection_id"),
         "restored projection recovered a different spec than the one encoded"
     );
+}
+
+/// The trust boundary, as rejection.
+///
+/// Every other case in the fixture is a value to reproduce, and a fixture of
+/// values cannot express a boundary: an implementation that accepts a
+/// well-formed forgery reproduces all of them perfectly. These are the valid
+/// wire form with one thing wrong each, so a failure localises to the check
+/// that is missing rather than to "decoding broke".
+#[test]
+fn every_rejection_case_is_rejected() {
+    let f = fixture();
+    let e = DistinctionEngine::new();
+    let c = e.synthesize(e.d0(), e.d1());
+    let d = e.synthesize(c, e.d0());
+    let _ = e.synthesize(d, e.d1());
+
+    let cases = f.pointer("/reject/cases").and_then(Value::as_array).expect("reject cases");
+    assert!(cases.len() >= 8, "the rejection set should cover every documented offset");
+
+    for rc in cases {
+        let name = rc["name"].as_str().expect("name");
+        let wire = hex::decode(rc["bytes"].as_str().expect("bytes")).expect("case bytes are hex");
+        let want = rc["expect"]["kind"].as_str().expect("expect.kind");
+
+        let err = match e.restore_projection(&wire, Adjacency) {
+            Ok(_) => panic!(
+                "{name}: ACCEPTED. {}",
+                rc["why"].as_str().unwrap_or("this input must be refused")
+            ),
+            Err(err) => err,
+        };
+
+        match want {
+            "any_rejection" => {},
+            "ForeignEngine" => assert!(
+                matches!(err, RestoreError::ForeignEngine),
+                "{name}: expected ForeignEngine, got {err}"
+            ),
+            "Malformed" => {
+                let RestoreError::Malformed { offset, reason } = err else {
+                    panic!("{name}: expected Malformed, got {err}");
+                };
+                // Offset and reason are checked only where the fixture fixes
+                // them: an implementation may detect a truncation at a
+                // different offset and still be correct.
+                if let Some(want_offset) = rc["expect"]["offset"].as_u64() {
+                    assert_eq!(offset as u64, want_offset, "{name}: rejected at the wrong offset");
+                }
+                if let Some(want_reason) = rc["expect"]["reason"].as_str() {
+                    assert_eq!(reason, want_reason, "{name}: rejected for the wrong reason");
+                }
+            },
+            other => panic!("{name}: fixture asks for unknown error kind {other}"),
+        }
+    }
 }
