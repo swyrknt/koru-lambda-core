@@ -506,14 +506,15 @@ later minor releases carry a `[TARGET]` tag on the relevant line-item.
   persistence snapshot.
 - `replay_topological(snapshot) -> Result<Arc<DistinctionEngine>, ReplayError>` —
   round-trip reconstruction.
-- `build_children_index(&snapshot) -> HashMap<Distinction, Vec<Distinction>>` —
-  inverse projection for children-iteration consumers.
-- `SynthesisRecorder::new()` / `SynthesisRecorder::synthesize(&mut self, &engine, a, b)` /
-  `SynthesisRecorder::log(&self) -> &[Distinction]` — chronological
-  observer.
-- `LocalCausalAgent` trait — reference consumer pattern.
-- `synthesize_causal_action(root, action, &engine) -> Distinction` —
-  LCA helper.
+- `advances_from(candidate, previous) -> bool` — the read that makes a
+  forward advance checkable, one `parents_of` lookup.
+
+Four entries left this list in 2.0.0 and are **not** substrate surface:
+`build_children_index`, `SynthesisRecorder`, the `LocalCausalAgent` trait and
+`synthesize_causal_action`. None determines a byte, so by the membership test
+none belongs here; all four ship in `koru-lambda-agents`. They were still
+listed here after the move, with the sentence below asserting that every entry
+resolves to an anchor — which was false for exactly those four.
 
 Every entry above resolves to a `[SHIPPED @ <symbol-path>]` anchor per the
 substrate description sections above. `SynthesisOutcome` and the

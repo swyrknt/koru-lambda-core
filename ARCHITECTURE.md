@@ -116,7 +116,7 @@ pub struct DistinctionEngine {
 Identity-IS-process: each distinction is one `EngineNode`. The
 `children_of` enumeration is *not* in the engine — `node.degree`
 carries the count the theory names; consumers that need to iterate
-children call `replay::build_children_index` (O(N) once, O(1)
+children call the agents crate's `build_children_index` (O(N) once, O(1)
 thereafter).
 
 `IdentityHasher` is the engine's internal `DashMap` hasher. SHA-256
@@ -209,7 +209,8 @@ times under the shard write-lock and stalls every other thread trying
 to synthesize against d₀ or d₁. `AtomicUsize::fetch_add` is
 constant-cost, lock-free, and the count itself is what
 [Coding Law](THEORY.md#law-12-coding-law) actually names. Consumers
-wanting children iteration call `build_children_index` on a snapshot.
+wanting children iteration call `build_children_index`, in the agents
+crate, on a snapshot.
 
 **Hasher misuse guard.** In addition to the `debug_assert!` on 16-byte
 keys, `IdentityHasher` implements `unreachable!()` on every non-`write`

@@ -163,9 +163,13 @@ recorded parentage, so it travels with the witness. Convenience does not
 qualify: a recorder of call order, a hashing optimisation and a children
 index are consumer patterns.
 
-*Those three convenience items are still exported from the crate today.*
-Their removal is tracked, not done, and until it is done this section
-describes an intention rather than the shipped surface.
+*Two of those three have left. The recorder and the children index now ship
+in the agents crate; the hashing optimisation is still exported from the
+substrate, and this document saying it does not belong there while the crate
+exports it is a disagreement that has to be settled one way or the other.
+Note the measured constraint: `IdentityHasher` and `IdentityBuildHasher`
+cannot be split — making the former private while keeping the alias public is
+a hard error downstream — so they stand or fall together.*
 
 ## What makes a new agent
 
@@ -197,11 +201,11 @@ An agent may define its own signals, anchors and invariants. It may not:
 - **mix a domain tag into identity** — *Forced.* A tag in the hash is the
   separate naming layer content addressing excludes, and it would end
   cross-engine agreement.
-- **construct a distinction outside the operator** — *Forced* in principle;
-  see `docs/SPEC.md` §3. Note that today the type system does *not* close
-  this: several public paths produce a `Distinction` with no engine, and the
-  real boundary is the engine's runtime witness check. Removing those paths
-  is tracked.
+- **construct a distinction outside the operator** — *Forced*, and now
+  closed at the type level as well as at runtime. Four public paths used to
+  produce a `Distinction` with no engine — `from_hex`, `FromStr`, `Pod`,
+  `Zeroable` — and all four are gone, each pinned as a compile failure. The
+  runtime witness check remains the second line.
 - **describe its own invariants as laws of the substrate** — *Chosen.* A
   documentation convention, and the reason this file marks everything.
 

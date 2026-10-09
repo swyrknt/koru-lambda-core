@@ -155,8 +155,14 @@ pub use engine::{
     ParentPair, RawDistinctionId, SynthesisOutcome, VerifyError,
 };
 pub use primitives::{domain_anchor, ByteFold, ByteMapping, Canonicalizable, DomainLabel};
-// Curated re-exports at crate root (Option B — approved). The remaining
-// 12 projection items live under `koru_lambda_core::projection::*`.
+// Curated re-exports at the crate root. The other 16 projection items live
+// under `koru_lambda_core::projection::*`.
+//
+// This said "Option B — approved" and cited an approval that appears in no
+// file in the repository, and "the remaining 12" when it is 16. Eleven of
+// these root re-exports have no root-path consumer anywhere in the repo, four
+// of them because consumers reach the module path instead; trimming them is
+// tracked.
 pub use projection::{
     Adjacency, CoreSignal, Degree, HopDistance, Projection, ProjectionId, ProjectionSpec, Signal,
 };

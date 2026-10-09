@@ -5,7 +5,7 @@
 //! CONSUMER patterns built on top of the engine's canonical
 //! [`parents_of`](crate::DistinctionEngine::parents_of) projection.
 //!
-//! This module provides three helpers:
+//! This module provides two:
 //!
 //! - [`replay_topological`] — rebuild a fresh engine from a parentage
 //!   snapshot, in any input order, via repeated `synthesize` calls.

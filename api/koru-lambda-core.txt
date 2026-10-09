@@ -1,5 +1,10 @@
 pub mod koru_lambda_core
 pub mod koru_lambda_core::distinction_hex
+pub mod koru_lambda_core::distinction_hex::raw_serde_adapter
+pub fn koru_lambda_core::distinction_hex::raw_serde_adapter::deserialize<'de, D>(D) -> core::result::Result<koru_lambda_core::engine::RawDistinctionId, <D as serde_core::de::Deserializer>::Error> where D: serde_core::de::Deserializer<'de>
+pub fn koru_lambda_core::distinction_hex::raw_serde_adapter::serialize<S>(&koru_lambda_core::engine::RawDistinctionId, S) -> core::result::Result<<S as serde_core::ser::Serializer>::Ok, <S as serde_core::ser::Serializer>::Error> where S: serde_core::ser::Serializer
+pub mod koru_lambda_core::distinction_hex::serde_adapter
+pub fn koru_lambda_core::distinction_hex::serde_adapter::serialize<S>(&koru_lambda_core::engine::Distinction, S) -> core::result::Result<<S as serde_core::ser::Serializer>::Ok, <S as serde_core::ser::Serializer>::Error> where S: serde_core::ser::Serializer
 #[non_exhaustive] pub enum koru_lambda_core::distinction_hex::ParseError
 pub koru_lambda_core::distinction_hex::ParseError::InvalidChar
 pub koru_lambda_core::distinction_hex::ParseError::InvalidChar::found: char

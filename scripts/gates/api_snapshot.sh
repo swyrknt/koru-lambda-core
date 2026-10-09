@@ -28,7 +28,14 @@ trap 'rm -rf "$tmp"' EXIT
 for crate in "${CRATES[@]}"; do
     committed="api/${crate}.txt"
     current="$tmp/${crate}.txt"
-    cargo public-api --simplified -p "$crate" >"$current" 2>/dev/null
+    # --all-features, because without it the snapshot is not the surface.
+    # `Cargo.toml` sets `docs.rs all-features = true`, so the published
+    # surface includes the serde adapters; the gate was computing the
+    # default-feature surface instead and missing two public modules and
+    # three public functions. A semver break in the serde surface would not
+    # have tripped it, and `crates/koru-lambda-agents` depends on that path,
+    # so it is live surface rather than dormant.
+    cargo public-api --simplified --all-features -p "$crate" >"$current" 2>/dev/null
 
     if [ "$update" -eq 1 ]; then
         cp "$current" "$committed"
