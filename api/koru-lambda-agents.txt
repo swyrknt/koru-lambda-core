@@ -24,6 +24,8 @@ pub koru_lambda_agents::commitment::CommitmentError::EmptyLeaderId
 pub koru_lambda_agents::commitment::CommitmentError::LeaderIdTooLong
 pub koru_lambda_agents::commitment::CommitmentError::LeaderIdTooLong::cap: usize
 pub koru_lambda_agents::commitment::CommitmentError::LeaderIdTooLong::got: usize
+pub koru_lambda_agents::commitment::CommitmentError::UnwitnessedRoot
+pub koru_lambda_agents::commitment::CommitmentError::UnwitnessedRoot::got: alloc::string::String
 impl core::clone::Clone for koru_lambda_agents::commitment::CommitmentError
 pub fn koru_lambda_agents::commitment::CommitmentError::clone(&self) -> koru_lambda_agents::commitment::CommitmentError
 impl core::cmp::Eq for koru_lambda_agents::commitment::CommitmentError
@@ -177,6 +179,8 @@ pub koru_lambda_agents::validator::ValidatorError::NonceMismatch::tx_index: usiz
 pub koru_lambda_agents::validator::ValidatorError::RootMismatch
 pub koru_lambda_agents::validator::ValidatorError::RootMismatch::expected: koru_lambda_core::engine::Distinction
 pub koru_lambda_agents::validator::ValidatorError::RootMismatch::got: koru_lambda_core::engine::Distinction
+pub koru_lambda_agents::validator::ValidatorError::UnwitnessedRoot
+pub koru_lambda_agents::validator::ValidatorError::UnwitnessedRoot::got: alloc::string::String
 impl core::clone::Clone for koru_lambda_agents::validator::ValidatorError
 pub fn koru_lambda_agents::validator::ValidatorError::clone(&self) -> koru_lambda_agents::validator::ValidatorError
 impl core::cmp::Eq for koru_lambda_agents::validator::ValidatorError
@@ -241,7 +245,7 @@ impl core::marker::UnsafeUnpin for koru_lambda_agents::validator::TransactionAct
 impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::validator::TransactionAction
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::validator::TransactionAction
 pub struct koru_lambda_agents::validator::TransactionBatch
-pub koru_lambda_agents::validator::TransactionBatch::previous_root: koru_lambda_core::engine::Distinction
+pub koru_lambda_agents::validator::TransactionBatch::previous_root: koru_lambda_core::engine::RawDistinctionId
 pub koru_lambda_agents::validator::TransactionBatch::transactions: alloc::vec::Vec<koru_lambda_agents::validator::TransactionAction>
 impl core::clone::Clone for koru_lambda_agents::validator::TransactionBatch
 pub fn koru_lambda_agents::validator::TransactionBatch::clone(&self) -> koru_lambda_agents::validator::TransactionBatch
@@ -269,6 +273,8 @@ pub koru_lambda_agents::CommitmentError::EmptyLeaderId
 pub koru_lambda_agents::CommitmentError::LeaderIdTooLong
 pub koru_lambda_agents::CommitmentError::LeaderIdTooLong::cap: usize
 pub koru_lambda_agents::CommitmentError::LeaderIdTooLong::got: usize
+pub koru_lambda_agents::CommitmentError::UnwitnessedRoot
+pub koru_lambda_agents::CommitmentError::UnwitnessedRoot::got: alloc::string::String
 impl core::clone::Clone for koru_lambda_agents::commitment::CommitmentError
 pub fn koru_lambda_agents::commitment::CommitmentError::clone(&self) -> koru_lambda_agents::commitment::CommitmentError
 impl core::cmp::Eq for koru_lambda_agents::commitment::CommitmentError
@@ -305,6 +311,8 @@ pub koru_lambda_agents::ValidatorError::NonceMismatch::tx_index: usize
 pub koru_lambda_agents::ValidatorError::RootMismatch
 pub koru_lambda_agents::ValidatorError::RootMismatch::expected: koru_lambda_core::engine::Distinction
 pub koru_lambda_agents::ValidatorError::RootMismatch::got: koru_lambda_core::engine::Distinction
+pub koru_lambda_agents::ValidatorError::UnwitnessedRoot
+pub koru_lambda_agents::ValidatorError::UnwitnessedRoot::got: alloc::string::String
 impl core::clone::Clone for koru_lambda_agents::validator::ValidatorError
 pub fn koru_lambda_agents::validator::ValidatorError::clone(&self) -> koru_lambda_agents::validator::ValidatorError
 impl core::cmp::Eq for koru_lambda_agents::validator::ValidatorError
@@ -481,7 +489,7 @@ impl core::marker::UnsafeUnpin for koru_lambda_agents::validator::TransactionAct
 impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::validator::TransactionAction
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::validator::TransactionAction
 pub struct koru_lambda_agents::TransactionBatch
-pub koru_lambda_agents::TransactionBatch::previous_root: koru_lambda_core::engine::Distinction
+pub koru_lambda_agents::TransactionBatch::previous_root: koru_lambda_core::engine::RawDistinctionId
 pub koru_lambda_agents::TransactionBatch::transactions: alloc::vec::Vec<koru_lambda_agents::validator::TransactionAction>
 impl core::clone::Clone for koru_lambda_agents::validator::TransactionBatch
 pub fn koru_lambda_agents::validator::TransactionBatch::clone(&self) -> koru_lambda_agents::validator::TransactionBatch

@@ -13,7 +13,7 @@
 //!
 //! # Two hex constructors
 //!
-//! Both [`Distinction::from_hex`] and [`RawDistinctionId::from_hex`]
+//! [`RawDistinctionId::from_hex`]
 //! parse the same 32-character lowercase-hex grammar and produce the
 //! same 16 bytes. They differ only in what the returned type
 //! *claims about engine membership*:
@@ -22,10 +22,8 @@
 //!   path. The returned `RawDistinctionId` is bytes with a type name.
 //!   Pass it through [`DistinctionEngine::verify`] to obtain an
 //!   engine-witnessed [`Distinction`].
-//! - [`Distinction::from_hex`] — a legacy hatch. The returned
-//!   `Distinction` is unverified — the parse validated length and
-//!   charset, not engine membership. Consumers who use this path assume
-//!   the obligation `verify` would otherwise discharge.
+//! - `Distinction::from_hex` is gone. It was documented here as a legacy
+//!   hatch, and a hatch in a trust boundary is a hole.
 //!
 //! Under the hood, both route through a single crate-internal helper
 //! (`decode_hex_16`) so the [`ParseError`] surface stays uniform.
@@ -39,7 +37,7 @@ use crate::Distinction;
 use std::fmt;
 use std::str::FromStr;
 
-/// Errors produced by [`Distinction::from_hex`].
+/// Errors produced by [`RawDistinctionId::from_hex`].
 ///
 /// `#[non_exhaustive]`: future variants will not break consumer semver.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -72,33 +70,15 @@ pub enum ParseError {
 }
 
 impl Distinction {
-    /// Parse a 32-character lowercase-hex string into a [`Distinction`].
-    ///
-    /// **Trust boundary note.** The bytes are validated for length and
-    /// charset, but **not** for engine membership. A `Distinction`
-    /// returned by `from_hex` is unverified — call
-    /// [`DistinctionEngine::has`](crate::DistinctionEngine::has) before
-    /// use, or prefer the two-type path:
-    /// [`RawDistinctionId::from_hex`] followed by
-    /// [`DistinctionEngine::verify`](crate::DistinctionEngine::verify).
-    /// The latter is the recommended path per the crate's
-    /// `## Trust boundaries` framing.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ParseError::InvalidLength`] if the input is not exactly
-    /// 32 ASCII characters, [`ParseError::NonAscii`] for non-ASCII bytes,
-    /// or [`ParseError::InvalidChar`] for characters outside `[0-9a-f]`
-    /// (uppercase is explicitly rejected).
-    pub fn from_hex(s: &str) -> Result<Self, ParseError> {
-        // Route through `RawDistinctionId::from_hex` so the two parallel
-        // constructors share a single parse path and error surface. The
-        // resulting bytes are wrapped in a `Distinction` directly (no
-        // engine verification) — that matches this constructor's
-        // pre-two-type semantics and preserves the intentional hatch
-        // documented in the trust-boundaries block.
-        RawDistinctionId::from_hex(s).map(|r| Distinction::from_bytes_unchecked(r.0))
-    }
+    // `from_hex` is deliberately NOT provided.
+    //
+    // It was here, documented as "an intentional hatch", and it let a
+    // `Distinction` be built from a string with no engine involved — which is
+    // precisely what the two-type boundary exists to prevent. The README and
+    // the specification both claimed the boundary was closed at the type
+    // level while this was open. Parse into [`RawDistinctionId::from_hex`]
+    // and call [`DistinctionEngine::verify`](crate::DistinctionEngine::verify)
+    // instead; the second call is the whole point.
 
     /// Render this distinction as a 32-character lowercase hex string.
     #[must_use]
@@ -137,7 +117,7 @@ impl RawDistinctionId {
 
 /// Decode a 32-character lowercase-hex string into 16 raw bytes.
 ///
-/// The shared parse kernel behind [`Distinction::from_hex`] and
+/// The shared parse kernel behind
 /// [`RawDistinctionId::from_hex`]. Extracting the helper collapses ~15
 /// lines of duplication and guarantees a single [`ParseError`] surface
 /// across both constructors.
@@ -189,13 +169,12 @@ impl fmt::Debug for Distinction {
     }
 }
 
-impl FromStr for Distinction {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_hex(s)
-    }
-}
+// `FromStr` is deliberately NOT implemented for `Distinction`.
+//
+// `"...".parse::<Distinction>()` would be a distinction materialising from a
+// string with no engine involved, which is the boundary this type exists to
+// hold. Parse into `RawDistinctionId` and call `engine.verify` — that is two
+// lines instead of one, and the second line is the whole point.
 
 impl fmt::Display for RawDistinctionId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -217,25 +196,36 @@ impl FromStr for RawDistinctionId {
     }
 }
 
-/// Serde adapter — serialize/deserialize a [`Distinction`] as its hex string.
+/// Serde adapter — **serialize only** — rendering a [`Distinction`] as its
+/// hex string.
 ///
-/// Use with `#[serde(with = "koru_lambda_core::distinction_hex::serde_adapter")]`
-/// on any field of type `Distinction`:
+/// Use `serialize_with`, not `with`: there is deliberately no `deserialize`.
+/// A wire schema that *writes* an identifier is fine; one that *reads* one has
+/// to cross the trust boundary, so it types the field as
+/// [`RawDistinctionId`] and verifies on receipt. See [`raw_serde_adapter`].
 ///
 /// ```
-/// use koru_lambda_core::Distinction;
+/// use koru_lambda_core::{Distinction, RawDistinctionId};
 /// use serde::{Deserialize, Serialize};
 ///
-/// #[derive(Serialize, Deserialize)]
-/// struct TransactionBatch {
-///     #[serde(with = "koru_lambda_core::distinction_hex::serde_adapter")]
-///     previous_root: Distinction,
+/// // Writing an identifier out.
+/// #[derive(Serialize)]
+/// struct Receipt {
+///     #[serde(serialize_with = "koru_lambda_core::distinction_hex::serde_adapter::serialize")]
+///     root: Distinction,
+/// }
+///
+/// // Reading one in: unverified until the engine says otherwise.
+/// #[derive(Deserialize)]
+/// struct Batch {
+///     #[serde(with = "koru_lambda_core::distinction_hex::raw_serde_adapter")]
+///     previous_root: RawDistinctionId,
 /// }
 /// ```
 #[cfg(feature = "serde")]
 pub mod serde_adapter {
     use super::Distinction;
-    use serde::{Deserialize, Deserializer, Serializer};
+    use serde::Serializer;
 
     /// Return type of [`serialize`] — factored out to keep the signature
     /// below the `type-complexity-threshold` set in `clippy.toml`.
@@ -253,19 +243,16 @@ pub mod serde_adapter {
         serializer.serialize_str(&d.to_hex())
     }
 
-    /// Deserialize a [`Distinction`] from a hex string.
-    ///
-    /// # Errors
-    ///
-    /// Returns a deserializer error if the input is not valid 32-character
-    /// lowercase hex.
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Distinction, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = <&str>::deserialize(deserializer)?;
-        Distinction::from_hex(s).map_err(serde::de::Error::custom)
-    }
+    // `deserialize` is deliberately absent, which makes this a
+    // serialize-only adapter: use `#[serde(serialize_with = ...)]` rather
+    // than `#[serde(with = ...)]`.
+    //
+    // Deserializing straight into a `Distinction` produced one from the wire
+    // with no engine involved — the trust boundary bypassed by a derive
+    // macro, which is the hardest kind to notice. A wire schema that carries
+    // identifiers should type them as `RawDistinctionId` (see
+    // [`raw_serde_adapter`]) and verify on receipt. That turns a silent
+    // assumption into a call that can fail.
 }
 
 /// Serde adapter — serialize/deserialize a [`RawDistinctionId`] as its
@@ -347,8 +334,8 @@ mod tests {
         let d = Distinction::from_bytes_unchecked([0u8; 16]);
         let hex = d.to_hex();
         assert_eq!(hex, "00000000000000000000000000000000");
-        let parsed = Distinction::from_hex(&hex).expect("valid hex round-trips (invariant)");
-        assert_eq!(parsed, d);
+        let parsed = RawDistinctionId::from_hex(&hex).expect("valid hex round-trips (invariant)");
+        assert_eq!(parsed.as_bytes(), d.as_bytes());
     }
 
     #[test]
@@ -356,8 +343,8 @@ mod tests {
         let d = Distinction::from_bytes_unchecked([0xFFu8; 16]);
         let hex = d.to_hex();
         assert_eq!(hex, "ffffffffffffffffffffffffffffffff");
-        let parsed = Distinction::from_hex(&hex).expect("valid hex round-trips (invariant)");
-        assert_eq!(parsed, d);
+        let parsed = RawDistinctionId::from_hex(&hex).expect("valid hex round-trips (invariant)");
+        assert_eq!(parsed.as_bytes(), d.as_bytes());
     }
 
     #[test]
@@ -369,31 +356,31 @@ mod tests {
         let d = Distinction::from_bytes_unchecked(bytes);
         let hex = d.to_hex();
         assert_eq!(hex, "0123456789abcdeffedcba9876543210");
-        let parsed = Distinction::from_hex(&hex).expect("valid hex round-trips (invariant)");
-        assert_eq!(parsed, d);
+        let parsed = RawDistinctionId::from_hex(&hex).expect("valid hex round-trips (invariant)");
+        assert_eq!(parsed.as_bytes(), d.as_bytes());
         assert_eq!(parsed.as_bytes(), &bytes);
     }
 
     #[test]
     fn from_hex_rejects_empty() {
-        assert_eq!(Distinction::from_hex(""), Err(ParseError::InvalidLength(0)));
+        assert_eq!(RawDistinctionId::from_hex(""), Err(ParseError::InvalidLength(0)));
     }
 
     #[test]
     fn from_hex_rejects_too_short() {
-        assert_eq!(Distinction::from_hex("deadbeef"), Err(ParseError::InvalidLength(8)));
+        assert_eq!(RawDistinctionId::from_hex("deadbeef"), Err(ParseError::InvalidLength(8)));
     }
 
     #[test]
     fn from_hex_rejects_too_long() {
         let s = "0".repeat(33);
-        assert_eq!(Distinction::from_hex(&s), Err(ParseError::InvalidLength(33)));
+        assert_eq!(RawDistinctionId::from_hex(&s), Err(ParseError::InvalidLength(33)));
     }
 
     #[test]
     fn from_hex_rejects_uppercase() {
         // Uppercase is intentionally rejected — canonical form is lowercase.
-        let err = Distinction::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+        let err = RawDistinctionId::from_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
             .expect_err("known-bad input must reject (invariant)");
         assert!(matches!(err, ParseError::InvalidChar { .. }));
     }
@@ -401,7 +388,8 @@ mod tests {
     #[test]
     fn from_hex_rejects_non_hex_char() {
         let s = "g0000000000000000000000000000000";
-        let err = Distinction::from_hex(s).expect_err("known-bad input must reject (invariant)");
+        let err =
+            RawDistinctionId::from_hex(s).expect_err("known-bad input must reject (invariant)");
         assert_eq!(err, ParseError::InvalidChar { position: 0, found: 'g' });
     }
 
@@ -413,7 +401,8 @@ mod tests {
         // lead byte 0xC3 (≥ 128) and rejects via `NonAscii`.
         let s = format!("é{}", "0".repeat(30));
         assert_eq!(s.len(), 32, "constructed input must be 32 bytes (invariant)");
-        let err = Distinction::from_hex(&s).expect_err("non-ASCII byte must reject (invariant)");
+        let err =
+            RawDistinctionId::from_hex(&s).expect_err("non-ASCII byte must reject (invariant)");
         assert_eq!(err, ParseError::NonAscii { position: 0 });
     }
 
@@ -421,7 +410,8 @@ mod tests {
     fn from_hex_invalid_char_position_is_accurate() {
         // 16 valid hex chars, then 'z' at position 16, then padding to 32.
         let s = "0123456789abcdefz123456789abcdef";
-        let err = Distinction::from_hex(s).expect_err("known-bad input must reject (invariant)");
+        let err =
+            RawDistinctionId::from_hex(s).expect_err("known-bad input must reject (invariant)");
         assert_eq!(err, ParseError::InvalidChar { position: 16, found: 'z' });
     }
 
@@ -437,30 +427,36 @@ mod tests {
         assert_eq!(format!("{:?}", d), "Distinction(00000000000000000000000000000000)");
     }
 
+    /// `Distinction` deliberately has no `FromStr`, so a string cannot
+    /// become one by parsing. The positive case lives on
+    /// `RawDistinctionId`, where the result is honestly unverified.
     #[test]
-    fn from_str_works() {
+    fn a_string_parses_only_into_the_unverified_type() {
         let s = "0123456789abcdeffedcba9876543210";
-        let d: Distinction = s.parse().expect("valid hex parses (invariant)");
-        assert_eq!(d.to_hex(), s);
+        let raw: RawDistinctionId = s.parse().expect("valid hex parses (invariant)");
+        assert_eq!(raw.to_hex(), s);
+        // `s.parse::<Distinction>()` does not compile; `tests/trybuild/`
+        // holds that as a compile-fail case, since a test cannot assert the
+        // absence of a trait impl at runtime.
     }
 
     #[test]
     #[cfg(feature = "serde")]
-    fn serde_round_trip_via_adapter() {
-        use serde::{Deserialize, Serialize};
+    fn serde_serializes_via_adapter() {
+        use serde::Serialize;
 
-        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        // Serialize-only: `with` would require a `deserialize`, and there
+        // deliberately is not one. A wire schema that needs to READ an
+        // identifier types it as `RawDistinctionId` and verifies on receipt.
+        #[derive(Serialize, PartialEq, Debug)]
         struct Wrapper {
-            #[serde(with = "super::serde_adapter")]
+            #[serde(serialize_with = "super::serde_adapter::serialize")]
             d: Distinction,
         }
 
         let original = Wrapper { d: Distinction::from_bytes_unchecked([0x42u8; 16]) };
         let json = serde_json::to_string(&original).expect("serializes (invariant)");
         assert!(json.contains("42424242"));
-
-        let restored: Wrapper = serde_json::from_str(&json).expect("round-trips (invariant)");
-        assert_eq!(original, restored);
     }
 
     // ----- RawDistinctionId hex boundary ---------------------------------
@@ -490,7 +486,8 @@ mod tests {
         let uppercase = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
         assert_eq!(
             RawDistinctionId::from_hex(uppercase),
-            Distinction::from_hex(uppercase).map(|d| RawDistinctionId::from_bytes(*d.as_bytes()))
+            RawDistinctionId::from_hex(uppercase)
+                .map(|d| RawDistinctionId::from_bytes(*d.as_bytes()))
         );
         // Both should return the same InvalidChar error shape.
         assert!(matches!(

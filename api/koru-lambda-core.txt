@@ -111,10 +111,7 @@ impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::engine::VerifyEr
 impl koru_lambda_core::engine::Distinction
 pub const fn koru_lambda_core::engine::Distinction::as_bytes(&self) -> &[u8; 16]
 impl koru_lambda_core::engine::Distinction
-pub fn koru_lambda_core::engine::Distinction::from_hex(&str) -> core::result::Result<Self, koru_lambda_core::distinction_hex::ParseError>
 pub fn koru_lambda_core::engine::Distinction::to_hex(self) -> alloc::string::String
-impl bytemuck::pod::Pod for koru_lambda_core::engine::Distinction
-impl bytemuck::zeroable::Zeroable for koru_lambda_core::engine::Distinction
 impl core::clone::Clone for koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::Distinction::clone(&self) -> koru_lambda_core::engine::Distinction
 impl core::cmp::Eq for koru_lambda_core::engine::Distinction
@@ -132,9 +129,6 @@ impl core::hash::Hash for koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::Distinction::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for koru_lambda_core::engine::Distinction
 impl core::marker::StructuralPartialEq for koru_lambda_core::engine::Distinction
-impl core::str::traits::FromStr for koru_lambda_core::engine::Distinction
-pub type koru_lambda_core::engine::Distinction::Err = koru_lambda_core::distinction_hex::ParseError
-pub fn koru_lambda_core::engine::Distinction::from_str(&str) -> core::result::Result<Self, Self::Err>
 impl core::marker::Freeze for koru_lambda_core::engine::Distinction
 impl core::marker::Send for koru_lambda_core::engine::Distinction
 impl core::marker::Sync for koru_lambda_core::engine::Distinction
@@ -882,10 +876,7 @@ impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::Degr
 impl koru_lambda_core::engine::Distinction
 pub const fn koru_lambda_core::engine::Distinction::as_bytes(&self) -> &[u8; 16]
 impl koru_lambda_core::engine::Distinction
-pub fn koru_lambda_core::engine::Distinction::from_hex(&str) -> core::result::Result<Self, koru_lambda_core::distinction_hex::ParseError>
 pub fn koru_lambda_core::engine::Distinction::to_hex(self) -> alloc::string::String
-impl bytemuck::pod::Pod for koru_lambda_core::engine::Distinction
-impl bytemuck::zeroable::Zeroable for koru_lambda_core::engine::Distinction
 impl core::clone::Clone for koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::Distinction::clone(&self) -> koru_lambda_core::engine::Distinction
 impl core::cmp::Eq for koru_lambda_core::engine::Distinction
@@ -903,9 +894,6 @@ impl core::hash::Hash for koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::Distinction::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for koru_lambda_core::engine::Distinction
 impl core::marker::StructuralPartialEq for koru_lambda_core::engine::Distinction
-impl core::str::traits::FromStr for koru_lambda_core::engine::Distinction
-pub type koru_lambda_core::engine::Distinction::Err = koru_lambda_core::distinction_hex::ParseError
-pub fn koru_lambda_core::engine::Distinction::from_str(&str) -> core::result::Result<Self, Self::Err>
 impl core::marker::Freeze for koru_lambda_core::engine::Distinction
 impl core::marker::Send for koru_lambda_core::engine::Distinction
 impl core::marker::Sync for koru_lambda_core::engine::Distinction

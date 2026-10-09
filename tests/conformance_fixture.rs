@@ -20,7 +20,7 @@
 //!    files agreeing with each other about a lie.
 
 use koru_lambda_core::projection::{Adjacency, Direction};
-use koru_lambda_core::{vectors, ByteFold, Distinction, DistinctionEngine};
+use koru_lambda_core::{vectors, ByteFold, DistinctionEngine, RawDistinctionId};
 use serde_json::Value;
 
 fn fixture() -> Value {
@@ -131,7 +131,12 @@ fn a_live_engine_reproduces_the_fixture() {
     }
     let fold_case = case(&f, "/lift/folds", "fold_hi_anchored_at_d");
     let anchor_hex = fold_case["anchor"].as_str().expect("anchor");
-    let anchor = Distinction::from_hex(anchor_hex).expect("fixture anchor is valid hex");
+    // The fixture is a file: its bytes arrive from outside, so they cross
+    // the trust boundary like anything else. `verify` also checks the engine
+    // actually witnessed this anchor, which a bare parse would not.
+    let anchor = e
+        .verify(RawDistinctionId::from_hex(anchor_hex).expect("fixture anchor is valid hex"))
+        .expect("the engine witnessed the fixture's anchor");
     let bytes: Vec<u8> = fold_case["bytes"]
         .as_array()
         .expect("fold bytes")
@@ -146,8 +151,12 @@ fn a_live_engine_reproduces_the_fixture() {
 
     // The projection wire form.
     let proj_case = case(&f, "/projections/cases", "adjacency_upstream_hops2");
-    let root = Distinction::from_hex(proj_case["root"].as_str().expect("root"))
-        .expect("fixture root is valid hex");
+    let root = e
+        .verify(
+            RawDistinctionId::from_hex(proj_case["root"].as_str().expect("root"))
+                .expect("fixture root is valid hex"),
+        )
+        .expect("the engine witnessed the fixture's projection root");
     let hops = usize::try_from(
         proj_case.pointer("/boundary/value").and_then(Value::as_u64).expect("boundary value"),
     )

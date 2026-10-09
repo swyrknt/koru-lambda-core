@@ -30,22 +30,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 ///    external bytes (wire deserialization, hex parsing, checkpoint
 ///    restoration). Foreign bytes are rejected before they reach any
 ///    hot path.
-/// 3. [`Distinction::from_hex`] or a `bytemuck::Pod` cast from wire
-///    bytes — **unverified, consumer-responsibility.** The parse
-///    validates length/charset; the cast validates layout; neither
-///    validates engine membership. These paths remain public to serve
-///    intentional wire-format trust (e.g. `#[serde(with =
-///    "distinction_hex")]` field deserialization on trusted data,
-///    hex-CLI input). Consumers who take these paths assume the
-///    obligation that `verify` would otherwise discharge — call
-///    [`has`](DistinctionEngine::has) or route through `verify` before
-///    passing the value to [`synthesize`](DistinctionEngine::synthesize).
+///
+/// There is no third way. The hatches that existed — `from_hex`,
+/// `FromStr`, `Pod`, `Zeroable` — are removed, and each is pinned as a
+/// compile failure in `tests/trybuild/`.
 ///
 /// The field is `pub(crate)`: external code cannot mint a `Distinction`
-/// from nothing. `from_hex` and `bytemuck::cast` are the two named
-/// hatches; both are documented above as consumer-responsibility paths.
-/// Foreign-byte injection at [`synthesize`](DistinctionEngine::synthesize)
-/// panics in every build profile, before the engine changes state.
+/// from nothing, and as of 2026-10-07 nothing in the public surface does.
 ///
 /// `#[repr(transparent)]`: layout-compatible with `[u8; 16]`, enabling
 /// zero-copy FFI/WASM transit (`*const Distinction` ↔ `*const [u8; 16]`).
@@ -64,9 +55,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// distinction by definition.
 ///
 /// [`DistinctionEngine`]: crate::DistinctionEngine
-/// [`Distinction::from_hex`]: crate::Distinction::from_hex
 /// [`RawDistinctionId`]: crate::RawDistinctionId
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct Distinction(pub(crate) [u8; 16]);
 
@@ -75,7 +65,7 @@ impl Distinction {
     /// registration check.
     ///
     /// **Crate-internal** — used inside the substrate by
-    /// [`from_hex`](Distinction::from_hex) and by the engine itself.
+    /// the engine itself.
     /// External crates cannot reach this constructor.
     #[must_use]
     pub(crate) const fn from_bytes_unchecked(bytes: [u8; 16]) -> Self {
@@ -113,9 +103,8 @@ impl Distinction {
 /// 2. [`verify(RawDistinctionId)`](DistinctionEngine::verify) — proven
 ///    by engine witness. **`RawDistinctionId → verify → Distinction` is
 ///    the recommended trust-boundary path.**
-/// 3. [`Distinction::from_hex`] or a `bytemuck::Pod` cast — unverified,
-///    consumer-responsibility. Intentional hatches for wire-format
-///    trust and CLI parsing.
+///
+/// There is no third way; see `Distinction`'s own note.
 ///
 /// `RawDistinctionId` is the unverified peer of `Distinction` in the
 /// two-type discipline. Consumers write their public wire types in terms
@@ -144,7 +133,6 @@ impl Distinction {
 /// the type. Any 16-byte pattern is a valid `RawDistinctionId`; the
 /// all-zero case happens to also be `d0`'s identity.
 ///
-/// [`Distinction::from_hex`]: crate::Distinction::from_hex
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Pod, bytemuck::Zeroable)]
 #[repr(transparent)]
 pub struct RawDistinctionId(pub(crate) [u8; 16]);
@@ -1034,7 +1022,7 @@ impl DistinctionEngine {
     /// Returns `true` for d₀, d₁, and any distinction produced by
     /// `synthesize` against this engine. Returns `false` for any
     /// distinction whose bytes weren't registered (e.g., a value parsed
-    /// via `Distinction::from_hex` for an ID that has never been
+    /// for an identifier that has never been
     /// synthesized in this engine).
     ///
     /// Used by [`replay_topological`](crate::replay::replay_topological)
@@ -1320,7 +1308,9 @@ impl crate::projection::ReadOnlyEngine for DistinctionEngine {
 #[cfg(test)]
 mod compile_time_assertions {
     use super::*;
-    use static_assertions::{assert_eq_align, assert_eq_size, assert_impl_all};
+    use static_assertions::{
+        assert_eq_align, assert_eq_size, assert_impl_all, assert_not_impl_any,
+    };
 
     // `Distinction` is the size and alignment of a `[u8; 16]` — the
     // whole point of `#[repr(transparent)]`.
@@ -1330,8 +1320,16 @@ mod compile_time_assertions {
     // Threading safety — `Distinction` is `Copy + Send + Sync`.
     assert_impl_all!(Distinction: Copy, Send, Sync);
 
-    // bytemuck plain-old-data + zeroable — enables zero-copy slice views.
-    assert_impl_all!(Distinction: bytemuck::Pod, bytemuck::Zeroable);
+    // `Distinction` is deliberately NOT `Pod` or `Zeroable`. A zero-copy
+    // cast from a byte slice would produce one without the engine ever
+    // seeing it, and `Zeroable` would hand out an all-zero distinction that
+    // happens to collide with d0. The inverted assertion is the point: this
+    // line asserted the opposite until 2026-10-07, while the README claimed
+    // foreign-byte injection was closed at the type level.
+    //
+    // The casts belong on `RawDistinctionId`, where the result is honestly
+    // unverified — asserted immediately below.
+    assert_not_impl_any!(Distinction: bytemuck::Pod, bytemuck::Zeroable);
 
     // `RawDistinctionId` is the unverified peer of `Distinction`. Its
     // layout must match `[u8; 16]` and it must be `Pod + Zeroable` so

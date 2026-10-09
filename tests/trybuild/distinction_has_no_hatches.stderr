@@ -1,0 +1,73 @@
+error[E0599]: no associated function or constant named `from_hex` found for struct `Distinction` in the current scope
+  --> tests/trybuild/distinction_has_no_hatches.rs:15:26
+   |
+15 |     let _ = Distinction::from_hex(hex);
+   |                          ^^^^^^^^ associated function or constant not found in `Distinction`
+   |
+help: there is an associated function `from` with a similar name
+   |
+15 -     let _ = Distinction::from_hex(hex);
+15 +     let _ = Distinction::from(hex);
+   |
+
+error[E0277]: the trait bound `Distinction: FromStr` is not satisfied
+  --> tests/trybuild/distinction_has_no_hatches.rs:18:30
+   |
+18 |     let _: Distinction = hex.parse().unwrap();
+   |                              ^^^^^ the trait `FromStr` is not implemented for `Distinction`
+   |
+   = help: the following other types implement trait `FromStr`:
+             ByteString
+             CString
+             IpAddr
+             Ipv4Addr
+             Ipv6Addr
+             NonZero<i128>
+             NonZero<i16>
+             NonZero<i32>
+           and $N others
+note: required by a bound in `__core::str::<impl str>::parse`
+  --> $RUST/core/src/str/mod.rs
+   |
+   |     pub fn parse<F: FromStr>(&self) -> Result<F, F::Err> {
+   |                     ^^^^^^^ required by this bound in `__core::str::<impl str>::parse`
+
+error[E0277]: the trait bound `Distinction: AnyBitPattern` is not satisfied
+  --> tests/trybuild/distinction_has_no_hatches.rs:22:26
+   |
+22 |     let _: Distinction = bytemuck::cast(bytes);
+   |                          ^^^^^^^^^^^^^^^^^^^^^ the trait `Pod` is not implemented for `Distinction`
+   |
+   = help: the following other types implement trait `Pod`:
+             ()
+             ManuallyDrop<T>
+             Option<T>
+             PhantomData<T>
+             PhantomPinned
+             RawDistinctionId
+             Wrapping<T>
+             [T; 0]
+           and $N others
+   = note: required for `Distinction` to implement `AnyBitPattern`
+note: required by a bound in `bytemuck::cast`
+  --> $CARGO/bytemuck-$VERSION/src/lib.rs
+   |
+   | pub fn cast<A: NoUninit, B: AnyBitPattern>(a: A) -> B {
+   |                             ^^^^^^^^^^^^^ required by this bound in `cast`
+
+error[E0277]: the trait bound `Distinction: Zeroable` is not satisfied
+  --> tests/trybuild/distinction_has_no_hatches.rs:26:26
+   |
+26 |     let _: Distinction = bytemuck::Zeroable::zeroed();
+   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Zeroable` is not implemented for `Distinction`
+   |
+   = help: the following other types implement trait `Zeroable`:
+             ()
+             (A, B)
+             (A, B, C)
+             (A, B, C, D)
+             (A, B, C, D, E)
+             (A, B, C, D, E, F)
+             (A, B, C, D, E, F, G)
+             (A, B, C, D, E, F, G, H)
+           and $N others

@@ -46,7 +46,7 @@ use crate::{Distinction, DistinctionEngine};
 ///
 /// Implementations MUST use `engine.synthesize` for every step of the
 /// fold; constructing a [`Distinction`] from raw bytes (via
-/// `Distinction::from_hex` and bypassing synthesize) is forbidden
+/// bypassing synthesize) is forbidden
 /// because the resulting distinction would not be registered in
 /// `engine.all_distinctions` and would trip the foreign-byte guard on
 /// any subsequent `engine.synthesize` call that uses it as a parent.

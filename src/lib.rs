@@ -42,10 +42,11 @@
 //!    by engine witness. **This is the recommended path** for external
 //!    bytes crossing into the engine (wire deserialization, hex parse,
 //!    checkpoint restore).
-//! 3. [`Distinction::from_hex`] or a `bytemuck::Pod` cast — unverified,
-//!    consumer-responsibility. Intentional hatches for wire-format
-//!    trust and CLI parsing; consumers taking these paths assume the
-//!    obligation `verify` would otherwise discharge.
+//!
+//! There is no third way. `Distinction::from_hex`, `FromStr`, `Pod` and
+//! `Zeroable` all existed and all produced one without an engine; all four
+//! are gone, and `tests/trybuild/` holds each as a compile failure.
+//!
 //!
 //! The two-type discipline: consumers write their public wire types in
 //! terms of [`RawDistinctionId`] and call [`verify`](DistinctionEngine::verify)

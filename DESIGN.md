@@ -189,7 +189,7 @@ byte injection is caught by the two-type discipline above.
 `Distinction` is `#[must_use]`. Dropping a synthesis result is always a
 bug (you computed a distinction and threw it away). Applies to
 `engine.synthesize`, `engine.parents_of`, `engine.degree`, `engine.d0`,
-`engine.d1`, `Distinction::as_bytes`, `Distinction::from_hex`,
+`engine.d1`, `Distinction::as_bytes`,
 `Distinction::to_hex`, `engine.advances_from`, `snapshot_parentage`,
 `replay_topological`. The agent contract, the recorder and the children
 index were on this list until they left the crate; the policy applies to
@@ -498,8 +498,9 @@ later minor releases carry a `[TARGET]` tag on the relevant line-item.
 - `engine.has(d) -> bool` — registration probe; drives
   `replay_topological`'s topological pass.
 - `Distinction::as_bytes(&self) -> &[u8; 16]` — canonical bytes.
-- `Distinction::from_hex(s: &str) -> Result<Self, ParseError>` — hex
-  round-trip parse. Does not verify engine registration.
+- `Distinction::from_hex` — **removed 2026-10-07.** It produced a
+  verified-looking identifier from a string with no engine involved. Parse
+  into `RawDistinctionId` and call `engine.verify`.
 - `Distinction::to_hex(&self) -> String` — 32-char lowercase hex.
 - `snapshot_parentage(&engine) -> Vec<(Distinction, ParentPair)>` —
   persistence snapshot.

@@ -171,7 +171,7 @@ impl BatchCommitment {
     ) -> Result<Self, CommitmentError> {
         validate_leader_id(&leader_id)?;
 
-        let batch_root = compute_batch_root(batch, engine);
+        let batch_root = compute_batch_root(batch, engine)?;
         let batch_size = batch.transactions.len();
 
         let mut hasher = Sha256::new();
@@ -242,16 +242,29 @@ impl Canonicalizable for BatchCommitment {
 }
 
 /// Chain-fold every transaction starting from `batch.previous_root`.
-fn compute_batch_root(batch: &TransactionBatch, engine: &DistinctionEngine) -> Distinction {
+///
+/// # Errors
+///
+/// Returns [`CommitmentError::UnwitnessedRoot`] if the batch names a root this
+/// engine has never witnessed. The root arrives from the wire as a
+/// [`RawDistinctionId`], so it has to cross the trust boundary before it can
+/// be an argument to `synthesize` — and `synthesize` would otherwise refuse it
+/// by panicking, since a parent must be registered.
+fn compute_batch_root(
+    batch: &TransactionBatch,
+    engine: &DistinctionEngine,
+) -> Result<Distinction, CommitmentError> {
+    let mut current = engine
+        .verify(batch.previous_root)
+        .map_err(|_| CommitmentError::UnwitnessedRoot { got: batch.previous_root.to_hex() })?;
     // One fold for the whole batch: building the 256-tip table per
     // transaction would dominate a 1024-transaction batch.
     let fold = ByteFold::new(engine);
-    let mut current = batch.previous_root;
     for tx in &batch.transactions {
         let tx_d = tx.canonicalize_with(&fold, engine);
         current = engine.synthesize(current, tx_d);
     }
-    current
+    Ok(current)
 }
 
 // --- Errors ------------------------------------------------------------
@@ -262,6 +275,14 @@ fn compute_batch_root(batch: &TransactionBatch, engine: &DistinctionEngine) -> D
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum CommitmentError {
+    /// The batch names a `previous_root` this engine has never witnessed.
+    /// Checked before any synthesis, because `synthesize` requires a
+    /// registered parent and would otherwise panic.
+    #[error("unwitnessed root: {got} is not registered in this engine")]
+    UnwitnessedRoot {
+        /// The claimed root as hex, since it is not a verified distinction.
+        got: String,
+    },
     /// `leader_id` is empty.
     #[error("empty leader_id")]
     EmptyLeaderId,
@@ -447,6 +468,7 @@ impl LocalCausalAgent for CommitmentAgent {
 mod tests {
     use super::*;
     use crate::validator::TransactionAction;
+    use koru_lambda_core::RawDistinctionId;
 
     fn fresh() -> (Arc<DistinctionEngine>, CommitmentAgent) {
         let engine = Arc::new(DistinctionEngine::new());
@@ -456,7 +478,7 @@ mod tests {
 
     fn sample_batch(engine: &Arc<DistinctionEngine>) -> TransactionBatch {
         TransactionBatch {
-            previous_root: engine.d0(),
+            previous_root: RawDistinctionId::from_bytes(*engine.d0().as_bytes()),
             transactions: vec![
                 TransactionAction::new(0, b"hello".to_vec()).expect("valid tx (invariant)"),
                 TransactionAction::new(1, b"world".to_vec()).expect("valid tx (invariant)"),
@@ -631,7 +653,7 @@ mod tests {
         let commit = BatchCommitment::compute(&batch, 0, 42, "l".into(), &engine)
             .expect("valid compute (invariant)");
         let mut tampered = batch.clone();
-        tampered.previous_root = engine.d1(); // was d0
+        tampered.previous_root = RawDistinctionId::from_bytes(*engine.d1().as_bytes()); // was d0
         assert!(!commit.verify_batch(&tampered, &engine));
     }
 

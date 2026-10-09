@@ -29,7 +29,7 @@ use crate::agent::LocalCausalAgent;
 use crate::DOMAIN_TRANSACTION;
 use koru_lambda_core::domain_anchor;
 use koru_lambda_core::primitives::{ByteFold, Canonicalizable};
-use koru_lambda_core::{Distinction, DistinctionEngine};
+use koru_lambda_core::{Distinction, DistinctionEngine, RawDistinctionId};
 
 // --- Constants ---------------------------------------------------------
 
@@ -160,13 +160,19 @@ impl TryFrom<TransactionActionRaw> for TransactionAction {
 /// A batch of transaction actions rooted at a specific parent
 /// distinction.
 ///
-/// `previous_root` is typed as [`Distinction`] — N5's "String injection"
-/// class of bug is a compile error.
+/// `previous_root` is typed as [`RawDistinctionId`] — **unverified by
+/// construction**, because it arrives from the wire.
+///
+/// It was a [`Distinction`], deserialized straight from hex through a serde
+/// adapter. That produced a verified-looking identifier from untrusted bytes
+/// with no engine involved: the trust boundary bypassed by a derive macro,
+/// which is the hardest kind to notice. Typing it raw makes the verification
+/// a call that can fail, and [`ConsensusValidator::validate_batch`] makes it.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TransactionBatch {
-    /// The parent root this batch continues from.
-    #[serde(with = "koru_lambda_core::distinction_hex::serde_adapter")]
-    pub previous_root: Distinction,
+    /// The parent root this batch claims to continue from, unverified.
+    #[serde(with = "koru_lambda_core::distinction_hex::raw_serde_adapter")]
+    pub previous_root: RawDistinctionId,
     /// Ordered transactions. Non-empty at commit time (enforced in
     /// [`ConsensusValidator::validate_batch`]).
     pub transactions: Vec<TransactionAction>,
@@ -190,6 +196,14 @@ pub enum ValidatorError {
         expected: Distinction,
         /// The batch's claimed previous_root.
         got: Distinction,
+    },
+    /// The batch's claimed `previous_root` is not witnessed by the engine
+    /// validating it. Checked before the root-equality comparison, so bytes
+    /// this engine has never seen cannot reach that comparison at all.
+    #[error("unwitnessed root: {got} is not registered in this engine")]
+    UnwitnessedRoot {
+        /// The claimed root, as hex, since it is not a verified distinction.
+        got: String,
     },
     /// Batch has zero transactions.
     #[error("empty batch: at least one transaction required")]
@@ -306,11 +320,15 @@ impl ConsensusValidator {
     ) -> Result<Distinction, ValidatorError> {
         // ---- Pre-validation (pure, no engine mutation) --------------
 
-        if batch.previous_root != self.local_root {
-            return Err(ValidatorError::RootMismatch {
-                expected: self.local_root,
-                got: batch.previous_root,
-            });
+        // The claimed root crosses the trust boundary here, and this is the
+        // only place it can: an unwitnessed root fails before any comparison,
+        // so a batch naming bytes this engine has never seen cannot reach the
+        // root-equality check and pass it by coincidence.
+        let claimed = engine
+            .verify(batch.previous_root)
+            .map_err(|_| ValidatorError::UnwitnessedRoot { got: batch.previous_root.to_hex() })?;
+        if claimed != self.local_root {
+            return Err(ValidatorError::RootMismatch { expected: self.local_root, got: claimed });
         }
         if batch.transactions.is_empty() {
             return Err(ValidatorError::EmptyBatch);
@@ -396,7 +414,7 @@ mod tests {
     fn valid_batch_advances_root_and_nonce() {
         let (engine, mut v) = fresh();
         let batch = TransactionBatch {
-            previous_root: v.state_root_id(),
+            previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![tx(0, b"hello"), tx(1, b"world")],
         };
         let new_root = v.validate_batch(&engine, &batch).expect("valid batch");
@@ -408,10 +426,15 @@ mod tests {
     #[test]
     fn sequential_batches_chain_correctly() {
         let (engine, mut v) = fresh();
-        let b1 =
-            TransactionBatch { previous_root: v.state_root_id(), transactions: vec![tx(0, b"a")] };
+        let b1 = TransactionBatch {
+            previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
+            transactions: vec![tx(0, b"a")],
+        };
         let root1 = v.validate_batch(&engine, &b1).expect("b1 valid");
-        let b2 = TransactionBatch { previous_root: root1, transactions: vec![tx(1, b"b")] };
+        let b2 = TransactionBatch {
+            previous_root: RawDistinctionId::from_bytes(*root1.as_bytes()),
+            transactions: vec![tx(1, b"b")],
+        };
         let root2 = v.validate_batch(&engine, &b2).expect("b2 valid");
         assert_ne!(root1, root2);
         assert_eq!(v.expected_nonce(), 2);
@@ -425,7 +448,7 @@ mod tests {
         let oversized = vec![0u8; MAX_DATA_LEN + 1];
         // Bypass ctor to test the pre-validation path directly.
         let batch = TransactionBatch {
-            previous_root: v.state_root_id(),
+            previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![TransactionAction { nonce: 0, data: oversized }],
         };
         let err = v.validate_batch(&engine, &batch).expect_err("oversized data must reject");
@@ -478,7 +501,10 @@ mod tests {
         for i in 0..=MAX_TRANSACTIONS_PER_BATCH as u64 {
             txs.push(tx(i, b"x"));
         }
-        let batch = TransactionBatch { previous_root: v.state_root_id(), transactions: txs };
+        let batch = TransactionBatch {
+            previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
+            transactions: txs,
+        };
         let err = v.validate_batch(&engine, &batch).expect_err("oversized batch must reject");
         assert!(matches!(err, ValidatorError::BatchTooLarge { .. }));
     }
@@ -504,7 +530,7 @@ mod tests {
 
         // Batch with a mid-way bad nonce (nonce 0, then 5 instead of 1).
         let batch = TransactionBatch {
-            previous_root: v.state_root_id(),
+            previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![tx(0, b"ok"), tx(5, b"bad nonce")],
         };
         let err = v.validate_batch(&engine, &batch).expect_err("batch must reject");
@@ -541,7 +567,7 @@ mod tests {
         let count_before = engine.distinction_count();
         let nonce_before = v.expected_nonce();
         let batch = TransactionBatch {
-            previous_root: engine.d1(), // wrong root
+            previous_root: RawDistinctionId::from_bytes(*engine.d1().as_bytes()), // wrong root
             transactions: vec![tx(0, b"ok")],
         };
         let _ = v.validate_batch(&engine, &batch).expect_err("wrong root");
@@ -585,7 +611,7 @@ mod tests {
         let (engine, mut v) = fresh();
         // Bypass ctor to test pre-validation path.
         let batch = TransactionBatch {
-            previous_root: v.state_root_id(),
+            previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![TransactionAction { nonce: 0, data: vec![] }],
         };
         let err = v.validate_batch(&engine, &batch).expect_err("empty data must reject");
@@ -636,7 +662,7 @@ mod tests {
     fn batch_serde_roundtrip() {
         let (_engine, v) = fresh();
         let original = TransactionBatch {
-            previous_root: v.state_root_id(),
+            previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![tx(0, b"a"), tx(1, b"b"), tx(2, b"c")],
         };
         let json = serde_json::to_string(&original).expect("serialize");
