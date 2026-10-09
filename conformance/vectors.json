@@ -13,22 +13,40 @@
   ],
   "frozen_for_major": 2,
   "spec": "docs/SPEC.md",
-
   "primordials": {
     "$comment": "Asserted, not derived. Every other value below descends from these.",
     "d0": "00000000000000000000000000000000",
     "d1": "01000000000000000000000000000000"
   },
-
   "operator": {
     "$comment": "synthesize(a, b) = SHA-256(min(a,b) || max(a,b))[0..16], with a==b returning a before hashing.",
     "cases": [
-      { "name": "c", "parents": ["d0", "d1"], "id": "6cc4f0e930b34481d03a4134331852ea" },
-      { "name": "d", "parents": ["c", "d0"], "id": "3309377e376d6ca3c2e3bf9885900260" },
-      { "name": "e", "parents": ["d", "d1"], "id": "5f02c8386c05dc7311e0c73a011e18be" }
+      {
+        "name": "c",
+        "parents": [
+          "d0",
+          "d1"
+        ],
+        "id": "6cc4f0e930b34481d03a4134331852ea"
+      },
+      {
+        "name": "d",
+        "parents": [
+          "c",
+          "d0"
+        ],
+        "id": "3309377e376d6ca3c2e3bf9885900260"
+      },
+      {
+        "name": "e",
+        "parents": [
+          "d",
+          "d1"
+        ],
+        "id": "5f02c8386c05dc7311e0c73a011e18be"
+      }
     ]
   },
-
   "lift": {
     "$comment": [
       "The substrate's only free parameter, and therefore the thing that most",
@@ -39,28 +57,78 @@
     ],
     "bits_per_byte": 8,
     "tips": [
-      { "byte": 0, "id": "1c1a627159dcf9523304bd261346e876" },
-      { "byte": 1, "id": "d1da7982b838811998a709d6b93c4af8" },
-      { "byte": 65, "id": "f734ffd02c46262fbaa9c5c9d5726538" },
-      { "byte": 255, "id": "214032b0fd17b607a0ed4076a36f16ed" }
+      {
+        "byte": 0,
+        "id": "1c1a627159dcf9523304bd261346e876"
+      },
+      {
+        "byte": 1,
+        "id": "d1da7982b838811998a709d6b93c4af8"
+      },
+      {
+        "byte": 65,
+        "id": "f734ffd02c46262fbaa9c5c9d5726538"
+      },
+      {
+        "byte": 255,
+        "id": "214032b0fd17b607a0ed4076a36f16ed"
+      }
     ],
     "folds": [
       {
         "$comment": "Pins the sequence fold end to end: the anchor rule, the length folded first, and element order. The anchor is `d` because an anchor must not be a byte tip.",
         "name": "fold_hi_anchored_at_d",
         "anchor": "3309377e376d6ca3c2e3bf9885900260",
-        "bytes": [104, 105],
+        "bytes": [
+          104,
+          105
+        ],
         "id": "c92ea05207b80ce6bb3ef6995a203c3e"
       }
-    ]
+    ],
+    "domain_anchors": {
+      "$comment": [
+        "domain_anchor is public and identity-bearing: two implementations that",
+        "derive it differently separate domains differently, and then agree on",
+        "nothing a consumer folds. It had no vector before."
+      ],
+      "cases": [
+        {
+          "label": 1,
+          "id": "93927b780fa715ffa381b28cee016d0c"
+        },
+        {
+          "label": 2,
+          "id": "7f557565133618eac3d47991ed1fcda4"
+        },
+        {
+          "label": 127,
+          "id": "d9777980de7d16296c3e99c0111663dd"
+        },
+        {
+          "label": 255,
+          "id": "747f49abc60bafa407beae2089934331"
+        }
+      ]
+    }
   },
-
   "projections": {
     "$comment": [
-      "One wire form today. CONF-1 widens this to the full cross product of",
-      "3 signals x 3 directions x 2 boundary kinds, each with its projection_id;",
-      "until then a conforming implementation can agree on everything here and",
-      "still differ on 17 of 18 reads."
+      "The full cross product: 3 signals x 3 directions x 2 boundary kinds,",
+      "each with its projection_id.",
+      "",
+      "IMPORTANT: a projection vector is only meaningful relative to a stated",
+      "engine history, and this is why. Only four of these eighteen are",
+      "invariant under appending \u2014 Upstream crossed with {Adjacency,",
+      "HopDistance} \u2014 because ancestry is fixed at creation. Degree grows as",
+      "children appear, and the Downstream and Undirected node sets grow. So",
+      "the other fourteen are reproducible only against exactly the history",
+      "below, and an implementation that builds anything else first will",
+      "disagree with them while being entirely correct.",
+      "",
+      "This was found by the vectors failing to reproduce: the generator ran",
+      "on a three-synthesis engine while the verifying test had already built",
+      "256 byte tips for the lift cases, and the Degree forms disagreed."
     ],
     "cases": [
       {
@@ -68,9 +136,230 @@
         "root": "6cc4f0e930b34481d03a4134331852ea",
         "signal": "Adjacency",
         "direction": "Upstream",
-        "boundary": { "kind": "Hops", "value": 2 },
+        "boundary": {
+          "kind": "Hops",
+          "value": 2
+        },
+        "projection_id": "347d60094a92c906880c8af79f51066b775eafba250709ccd4d8090c24b82f0c",
         "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000"
+      },
+      {
+        "name": "degree_upstream_hops2",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Degree",
+        "direction": "Upstream",
+        "boundary": {
+          "kind": "Hops",
+          "value": 2
+        },
+        "projection_id": "3cbc47d24153d57df1e2d4c748dd18dceed12ee55e8008353b06b81939d1c8c6",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea000200000000000000003e00a8008de5cea3e4680f70ca0eb566030000000000000000000000000000000000000000000000080000000300000000000000010000000000000000000000000000000800000003000000000000006cc4f0e930b34481d03a4134331852ea080000000300000000000000"
+      },
+      {
+        "name": "hopdistance_upstream_hops2",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "HopDistance",
+        "direction": "Upstream",
+        "boundary": {
+          "kind": "Hops",
+          "value": 2
+        },
+        "projection_id": "e6b607fccc9cf5acdec82e549c2e8cfde7687caa06e3950d1a8ab35f4e7db570",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000ef620945309fc353e2d8f8cbb1d39076030000000000000000000000000000000000000000000000080000000100000000000000010000000000000000000000000000000800000001000000000000006cc4f0e930b34481d03a4134331852ea080000000000000000000000"
+      },
+      {
+        "name": "adjacency_upstream_saturated",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Adjacency",
+        "direction": "Upstream",
+        "boundary": {
+          "kind": "Saturated"
+        },
+        "projection_id": "fa772d94e6d56c12d0bb71dba12e2cf593c0bef2dca91e33fe205bbb21fc0e59",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea01000000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000"
+      },
+      {
+        "name": "degree_upstream_saturated",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Degree",
+        "direction": "Upstream",
+        "boundary": {
+          "kind": "Saturated"
+        },
+        "projection_id": "ea10946a788868a4e14dcf537555889b5992c96dc822e6ebc8df1155ef618a01",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea010000000000000000003e00a8008de5cea3e4680f70ca0eb566030000000000000000000000000000000000000000000000080000000300000000000000010000000000000000000000000000000800000003000000000000006cc4f0e930b34481d03a4134331852ea080000000300000000000000"
+      },
+      {
+        "name": "hopdistance_upstream_saturated",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "HopDistance",
+        "direction": "Upstream",
+        "boundary": {
+          "kind": "Saturated"
+        },
+        "projection_id": "c3e6e948f0edad06ff75d6785b5e67c31c35a4252c18a928aa67153bdf883234",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea01000000000000000000ef620945309fc353e2d8f8cbb1d39076030000000000000000000000000000000000000000000000080000000100000000000000010000000000000000000000000000000800000001000000000000006cc4f0e930b34481d03a4134331852ea080000000000000000000000"
+      },
+      {
+        "name": "adjacency_downstream_hops2",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Adjacency",
+        "direction": "Downstream",
+        "boundary": {
+          "kind": "Hops",
+          "value": 2
+        },
+        "projection_id": "4142849e8685f7d8550d7ee448ef2aa1c431af217b6d58e834abdf87dd15ccca",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000001d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000003309377e376d6ca3c2e3bf98859002602100000001000000000000000000000000000000006cc4f0e930b34481d03a4134331852ea5f02c8386c05dc7311e0c73a011e18be2100000001010000000000000000000000000000003309377e376d6ca3c2e3bf98859002606cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000"
+      },
+      {
+        "name": "degree_downstream_hops2",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Degree",
+        "direction": "Downstream",
+        "boundary": {
+          "kind": "Hops",
+          "value": 2
+        },
+        "projection_id": "1cb58efea99963fb6624918192473c3fd8cc3f9c2af381261c9f507578ef1061",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea000200000000000000013e00a8008de5cea3e4680f70ca0eb56603000000000000003309377e376d6ca3c2e3bf98859002600800000003000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000300000000000000"
+      },
+      {
+        "name": "hopdistance_downstream_hops2",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "HopDistance",
+        "direction": "Downstream",
+        "boundary": {
+          "kind": "Hops",
+          "value": 2
+        },
+        "projection_id": "f2b6b77cb20a4ff1a5b496603ec69c087a48219739260c036a62d7f373006a2c",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000001ef620945309fc353e2d8f8cbb1d3907603000000000000003309377e376d6ca3c2e3bf98859002600800000001000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000000000000000000"
+      },
+      {
+        "name": "adjacency_downstream_saturated",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Adjacency",
+        "direction": "Downstream",
+        "boundary": {
+          "kind": "Saturated"
+        },
+        "projection_id": "472b5f63b6336ba09d2526163274b366a40aed4a643d0b2150bceb3100827132",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea01000000000000000001d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000003309377e376d6ca3c2e3bf98859002602100000001000000000000000000000000000000006cc4f0e930b34481d03a4134331852ea5f02c8386c05dc7311e0c73a011e18be2100000001010000000000000000000000000000003309377e376d6ca3c2e3bf98859002606cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000"
+      },
+      {
+        "name": "degree_downstream_saturated",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Degree",
+        "direction": "Downstream",
+        "boundary": {
+          "kind": "Saturated"
+        },
+        "projection_id": "2ec6f718dc688f40f884c9f652bca44e473fce4fbe1a98a779a14cb0ad2ac9a7",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea010000000000000000013e00a8008de5cea3e4680f70ca0eb56603000000000000003309377e376d6ca3c2e3bf98859002600800000003000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000300000000000000"
+      },
+      {
+        "name": "hopdistance_downstream_saturated",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "HopDistance",
+        "direction": "Downstream",
+        "boundary": {
+          "kind": "Saturated"
+        },
+        "projection_id": "cb0982919d9e7e09757b975209cf3bd3ae8e3790b1763c160b2be6e5268346cd",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea01000000000000000001ef620945309fc353e2d8f8cbb1d3907603000000000000003309377e376d6ca3c2e3bf98859002600800000001000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000000000000000000"
+      },
+      {
+        "name": "adjacency_undirected_hops2",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Adjacency",
+        "direction": "Undirected",
+        "boundary": {
+          "kind": "Hops",
+          "value": 2
+        },
+        "projection_id": "942bbe54eca85f69378561fc7e5ff99c48a66e4b7647b02f61c11d7252890b7b",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000002d0b9d2562fdb2c3f3fa4b8a3258b778105000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000003309377e376d6ca3c2e3bf98859002602100000001000000000000000000000000000000006cc4f0e930b34481d03a4134331852ea5f02c8386c05dc7311e0c73a011e18be2100000001010000000000000000000000000000003309377e376d6ca3c2e3bf98859002606cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000"
+      },
+      {
+        "name": "degree_undirected_hops2",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Degree",
+        "direction": "Undirected",
+        "boundary": {
+          "kind": "Hops",
+          "value": 2
+        },
+        "projection_id": "005c51e687b156a44db50b4294288492860ea320874857cbc15cf7e1ff4fafa6",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea000200000000000000023e00a8008de5cea3e4680f70ca0eb566050000000000000000000000000000000000000000000000080000000300000000000000010000000000000000000000000000000800000003000000000000003309377e376d6ca3c2e3bf98859002600800000003000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000300000000000000"
+      },
+      {
+        "name": "hopdistance_undirected_hops2",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "HopDistance",
+        "direction": "Undirected",
+        "boundary": {
+          "kind": "Hops",
+          "value": 2
+        },
+        "projection_id": "c837491b44c183379762b3b50f76c1944a53b58da7c2d5d2a4b72d636ec85398",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000002ef620945309fc353e2d8f8cbb1d39076050000000000000000000000000000000000000000000000080000000100000000000000010000000000000000000000000000000800000001000000000000003309377e376d6ca3c2e3bf98859002600800000001000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000000000000000000"
+      },
+      {
+        "name": "adjacency_undirected_saturated",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Adjacency",
+        "direction": "Undirected",
+        "boundary": {
+          "kind": "Saturated"
+        },
+        "projection_id": "1cb035efe4fe9c3f2d83fa7b4db68033e4777ef6abaea41a055e9d3a887f0def",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea01000000000000000002d0b9d2562fdb2c3f3fa4b8a3258b778105000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000003309377e376d6ca3c2e3bf98859002602100000001000000000000000000000000000000006cc4f0e930b34481d03a4134331852ea5f02c8386c05dc7311e0c73a011e18be2100000001010000000000000000000000000000003309377e376d6ca3c2e3bf98859002606cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000"
+      },
+      {
+        "name": "degree_undirected_saturated",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "Degree",
+        "direction": "Undirected",
+        "boundary": {
+          "kind": "Saturated"
+        },
+        "projection_id": "15170bfbbe6f76b07866727950fc7a2ffeb04437a82f6c4e0fe86ec1335d059f",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea010000000000000000023e00a8008de5cea3e4680f70ca0eb566050000000000000000000000000000000000000000000000080000000300000000000000010000000000000000000000000000000800000003000000000000003309377e376d6ca3c2e3bf98859002600800000003000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000300000000000000"
+      },
+      {
+        "name": "hopdistance_undirected_saturated",
+        "root": "6cc4f0e930b34481d03a4134331852ea",
+        "signal": "HopDistance",
+        "direction": "Undirected",
+        "boundary": {
+          "kind": "Saturated"
+        },
+        "projection_id": "c3762ff2a6d2cf6ada8d0733939edf2d635475ded68b32477cb97d0f8026fafd",
+        "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea01000000000000000002ef620945309fc353e2d8f8cbb1d39076050000000000000000000000000000000000000000000000080000000100000000000000010000000000000000000000000000000800000001000000000000003309377e376d6ca3c2e3bf98859002600800000001000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000000000000000000"
       }
-    ]
+    ],
+    "history": {
+      "$comment": "Apply in order against a fresh engine, then project from `root`.",
+      "pairs": [
+        [
+          "d0",
+          "d1"
+        ],
+        [
+          "c",
+          "d0"
+        ],
+        [
+          "d",
+          "d1"
+        ]
+      ],
+      "names": {
+        "c": "synthesize(d0, d1)",
+        "d": "synthesize(c, d0)",
+        "e": "synthesize(d, d1)"
+      }
+    }
   }
 }

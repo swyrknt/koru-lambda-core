@@ -79,10 +79,13 @@ Check against `projections.cases`.
 Stated plainly, because a suite that implies completeness is worse than one
 that admits its gaps:
 
-- **One projection wire form of eighteen.** The axes are 3 signals × 3
-  directions × 2 boundary kinds. Only `Adjacency` / `Upstream` / `Hops(2)` is
-  pinned, and no `projection_id` is pinned at all. An implementation can agree
-  on everything here and still differ on seventeen reads.
+- ~~One projection wire form of eighteen.~~ **Closed.** All eighteen are
+  pinned, each with its `projection_id`. Note the requirement that came with
+  them: only four are invariant under appending (`Upstream` × `{Adjacency,
+  HopDistance}`), because ancestry is fixed at creation while degree grows and
+  the downstream and undirected node sets grow. The other fourteen are
+  reproducible only against the engine history the fixture declares — build
+  anything else first and you will disagree with them while being correct.
 - **No rejection cases.** The trust boundary (§3) is *rejection* semantics, and
   a fixture of values to reproduce cannot express it. Until a `reject` section
   exists, "conforming" means "agrees on good input", which is not what a trust
@@ -94,9 +97,10 @@ that admits its gaps:
   and composite framing — how a struct containing a variable-length field is
   laid out before folding — is unspecified. Two implementations that pass
   everything here will disagree on the first composite value either one lifts.
-- **Domain anchors have no vectors and no registry.** Anchor derivation is
-  identity-bearing, so two implementations can agree on every vector here and
-  still derive the same anchor for different domains.
+- **Domain anchors have vectors now, but still no registry.** Four labels are
+  pinned, so anchor *derivation* is checkable. What is not: nothing reserves a
+  label, so two consumers can independently choose the same one and collide
+  silently in a shared engine.
 - **No reference implementation ships yet.** The specification's sufficiency —
   that an implementation can be written from the document alone — is therefore
   untested. Treat it as a claim, not a result.
