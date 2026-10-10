@@ -54,12 +54,10 @@ pub enum ReplayError {
     /// Input claims `child = synthesize(a, b)` but replay produced
     /// different bytes. Parentage was tampered or corrupted in transit.
     /// Checked in release (not debug-only).
-    #[error("content-address mismatch: expected {expected:?}, got {actual:?}")]
+    #[error("content-address mismatch: {child:?} re-derived as {actual:?}")]
     Mismatch {
-        /// The claimed child.
+        /// The claimed child — what the snapshot said this pair produces.
         child: Distinction,
-        /// Same as `child` (the input's claim).
-        expected: Distinction,
         /// What `synthesize(a, b)` actually produced.
         actual: Distinction,
     },
@@ -123,11 +121,7 @@ pub fn replay_topological(
             if engine.has(*a) && engine.has(*b) {
                 let result = engine.synthesize(*a, *b);
                 if result != *child {
-                    err = Some(ReplayError::Mismatch {
-                        child: *child,
-                        expected: *child,
-                        actual: result,
-                    });
+                    err = Some(ReplayError::Mismatch { child: *child, actual: result });
                 }
                 // Drop this entry whether it succeeded or mismatched —
                 // err is checked after retain completes.

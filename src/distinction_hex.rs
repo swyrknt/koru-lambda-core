@@ -35,7 +35,6 @@
 use crate::engine::RawDistinctionId;
 use crate::Distinction;
 use std::fmt;
-use std::str::FromStr;
 
 /// Errors produced by [`RawDistinctionId::from_hex`].
 ///
@@ -188,13 +187,10 @@ impl fmt::Debug for RawDistinctionId {
     }
 }
 
-impl FromStr for RawDistinctionId {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_hex(s)
-    }
-}
+// `FromStr` is not implemented for `RawDistinctionId` either. It delegated
+// verbatim to `from_hex`, so it was a second door to one parse, reached by
+// type inference rather than by name — the duplication half of the argument
+// that removed `Distinction: FromStr`. Call `from_hex`.
 
 /// Serde adapter — **serialize only** — rendering a [`Distinction`] as its
 /// hex string.
@@ -427,13 +423,13 @@ mod tests {
         assert_eq!(format!("{:?}", d), "Distinction(00000000000000000000000000000000)");
     }
 
-    /// `Distinction` deliberately has no `FromStr`, so a string cannot
-    /// become one by parsing. The positive case lives on
-    /// `RawDistinctionId`, where the result is honestly unverified.
+    /// Neither identifier type has `FromStr`. A string becomes an
+    /// identifier only by naming the parse — `RawDistinctionId::from_hex` —
+    /// and then only an unverified one.
     #[test]
-    fn a_string_parses_only_into_the_unverified_type() {
+    fn hex_parses_only_into_the_unverified_type() {
         let s = "0123456789abcdeffedcba9876543210";
-        let raw: RawDistinctionId = s.parse().expect("valid hex parses (invariant)");
+        let raw = RawDistinctionId::from_hex(s).expect("valid hex parses (invariant)");
         assert_eq!(raw.to_hex(), s);
         // `s.parse::<Distinction>()` does not compile; `tests/trybuild/`
         // holds that as a compile-fail case, since a test cannot assert the
@@ -504,13 +500,6 @@ mod tests {
         let r = RawDistinctionId::from_bytes([0u8; 16]);
         assert_eq!(format!("{}", r), "00000000000000000000000000000000");
         assert_eq!(format!("{:?}", r), "RawDistinctionId(00000000000000000000000000000000)");
-    }
-
-    #[test]
-    fn raw_from_str_works() {
-        let s = "0123456789abcdeffedcba9876543210";
-        let r: RawDistinctionId = s.parse().expect("valid hex parses (invariant)");
-        assert_eq!(r.to_hex(), s);
     }
 
     #[test]

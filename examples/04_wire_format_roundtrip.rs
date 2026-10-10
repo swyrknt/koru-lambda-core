@@ -10,8 +10,8 @@
 //! cargo run --example 04_wire_format_roundtrip
 //! ```
 
-use koru_lambda_core::projection::Direction;
-use koru_lambda_core::{Adjacency, Distinction, DistinctionEngine, RawDistinctionId};
+use koru_lambda_core::projection::{Adjacency, Direction};
+use koru_lambda_core::{Distinction, DistinctionEngine, RawDistinctionId};
 
 fn run_history(engine: &DistinctionEngine) -> Distinction {
     let d0 = engine.d0();

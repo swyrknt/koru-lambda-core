@@ -52,12 +52,12 @@ substrate.
 ```
 src/
   lib.rs              public re-exports
-  engine.rs           Distinction, IdentityHasher, DistinctionEngine,
+  engine.rs           Distinction, DistinctionEngine,
                       RawDistinctionId + verify, SynthesisOutcome
   projection.rs       projection primitive (Root, Direction, Signal,
                       Materialized) and its wire codec
   primitives.rs       Canonicalizable, ByteMapping, ByteFold,
-                      domain_anchor — the lift
+                      DomainLabel, domain_anchor — the lift
   distinction_hex.rs  to_hex / from_hex / Display / Debug / serde
   replay.rs           snapshot_parentage / replay_topological
   vectors.rs          the published vectors, mirroring
@@ -66,8 +66,9 @@ src/
 
 Seven modules. `agent.rs` and `recorder.rs` were here until 2.0.0, and
 `build_children_index` was part of `replay.rs`; all three now live in the
-agents crate. What the substrate kept from the agent contract is the read —
-`DistinctionEngine::advances_from`, in `engine.rs`.
+agents crate. What the substrate kept from the agent contract is not a
+function but the fact every such function reads: parentage, via
+`DistinctionEngine::parents_of` in `engine.rs`.
 
 This is the heart of the crate.
 
@@ -218,8 +219,11 @@ keys, `IdentityHasher` implements `unreachable!()` on every non-`write`
 Misuse — hashing a slice, a non-16-byte key, or a typed integer —
 triggers an immediate panic instead of silently corrupting state.
 v2.0.0 has no tuple keys, so the hasher only ever sees single 16-byte
-writes. `pub type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>`
-is what the `DashMap` field type parameterizes on.
+writes. `pub(crate) type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>`
+is what the `DashMap` field type parameterizes on. Both are crate-private as
+of 2.0.0: a hashing choice is not something to promise anyone. They went
+private together because they cannot be split — a public alias over a private
+struct is a hard error.
 
 The `expect("…invariant")` panic messages encode the proof obligation
 in source — a contributor who breaks the pre-seed invariant gets a
@@ -248,7 +252,7 @@ field names are preserved from the pre-merge three-map design for
 public-API stability; their semantic mapping in the merged-map layout
 is documented on the variant itself.
 
-### `engine.rs` — `advances_from`, and the trait that left
+### `engine.rs` — the trait that left, and the read that replaced it
 
 This document used to carry the `LocalCausalAgent` trait here, as part of the
 substrate. It is no longer in this crate. The reason is not that it was
@@ -260,31 +264,60 @@ condition holds with `a` as the root, then again with the parents swapped. So
 agent-ness is a *reading of the graph*, available everywhere, and a trait
 asserting that only some types have it misdescribes the structure.
 
-What the substrate keeps is the read:
+What the substrate keeps is `parents_of`. Advancement is then one
+comparison on top of it:
 
 ```rust
-pub fn advances_from(&self, candidate: Distinction, previous: Distinction) -> bool
+engine.parents_of(candidate) == Some((previous, _)) // or (_, previous)
 ```
 
-One `parents_of` lookup, answering whether an advance was forward. An advance
-that does not descend from the root it replaces is not a causal step but an
-unrelated assignment, and this makes that checkable. It returns `false` for an
-unregistered or primordial candidate, neither of which has parents.
+The substrate shipped that comparison as `advances_from` for three days and
+then removed it. It failed the membership test this document applies to
+everything else: it determines no byte, no identifier and no wire field, and
+it is derivable in one line by anyone holding `parents_of`. A substrate that
+names every one-line question about parentage has stopped being a substrate.
+The distinction worth keeping is the *observation* the function encoded — an
+advance that does not descend from the root it replaces is not a causal step
+but an unrelated assignment — and that belongs in prose, where it now is.
 
 The contract that *chooses* to advance, and its `synthesize_causal_action`
 helper, ship in `koru-lambda-agents` with the consumers that use them. See
 [`THEORY.md § Using the substrate`](THEORY.md#using-the-substrate).
 
-### `primitives.rs` — Canonicalizable and ByteMapping
+### `primitives.rs` — the lift
 
-The `Canonicalizable` trait — "how do you turn this type into the
-canonical chain of distinctions that represents it?" — is the contract
-LCAs use to lift their action data into the substrate.
+The substrate's only free parameter, and one rule at three levels. All
+three call the same private fold; the levels differ only in which
+alphabet supplies the element tips.
 
-`ByteMapping` folds a single byte through the calling engine. There is
-no static cache: every byte folded gets every intermediate distinction
-registered in the engine that folded it. The phantom-node problem is
-closed by construction.
+| Level | Alphabet | Elements | Entry point |
+|---|---|---|---|
+| bits | `{d₀, d₁}` | a byte's 8 bits | `ByteMapping::map_byte_to_distinction` |
+| bytes | the 256 bit-tips | a sequence's bytes | `ByteFold::fold` |
+| composites | the parts' own tips | a value's parts, in order | `ByteFold::fold_distinctions` |
+
+There is no fourth level for nesting: a composite's fold is a
+distinction, so it is an element one level up. That is why the composite
+rule folds distinctions rather than specifying a byte layout — a layout
+would have had to say how a nested composite is framed *within* bytes,
+which is a serialisation format growing inside `docs/SPEC.md`.
+
+`Canonicalizable` is the contract a liftable type satisfies, taking
+`&self` and a prebuilt `ByteFold`. Both parameters were learned from its
+implementors bypassing it: a batch commit folds `for tx in
+&transactions` and cannot consume, and rebuilding the 256-tip table per
+call dominates a thousand-transaction batch. The substrate ships one
+impl, `u8`, because every other candidate type has no domain of its own
+and a substrate-chosen one would collide — see ENC-4 in `CHECKLIST.md`
+for why that clause was rejected rather than implemented.
+
+`DomainLabel` is a newtype over the label byte. It makes the choice
+typed; it does not prevent two crates choosing `0x01`, and says so
+rather than implying a registry.
+
+No static cache anywhere: every byte folded gets every intermediate
+distinction registered in the engine that folded it, so the phantom-node
+problem is closed by construction.
 
 ### `distinction_hex.rs` — the hex display boundary
 
@@ -416,7 +449,7 @@ which every pure-Rust consumer would otherwise pay for.
             ┌─────────────────────────────────────┐
             │  koru-lambda-core  (crates.io)       │
             │   Distinction, DistinctionEngine,    │
-            │   synthesize, verify, advances_from, │
+            │   synthesize, verify, parents_of,    │
             │   Projection, ByteFold, replay,      │
             │   vectors                            │
             ├─────────────────────────────────────┤

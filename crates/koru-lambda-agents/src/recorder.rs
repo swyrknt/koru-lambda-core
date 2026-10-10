@@ -19,7 +19,7 @@
 //! the substrate doesn't ship the wrapper because the right discipline
 //! is workload-dependent.
 
-use koru_lambda_core::{Distinction, DistinctionEngine, IdentityBuildHasher};
+use koru_lambda_core::{Distinction, DistinctionEngine};
 use std::collections::HashSet;
 use std::marker::PhantomData;
 
@@ -45,10 +45,11 @@ pub struct SynthesisRecorder {
     /// Chronological order of novel observations. Each entry appears
     /// exactly once; presence is mirrored in `seen` for O(1) dedup.
     log: Vec<Distinction>,
-    /// Shadow set for O(1) dedup. `IdentityBuildHasher` reads the
-    /// leading 8 bytes of the 16-byte distinction identity as the
-    /// hash key (SHA-256 prefixes are uniformly distributed).
-    seen: HashSet<Distinction, IdentityBuildHasher>,
+    /// Shadow set for O(1) dedup, on the default hasher. The substrate's
+    /// own prefix hasher is crate-private — it is an internal choice, not
+    /// a published one — and the cost of not having it here is a hash of
+    /// sixteen already-uniform bytes per novel synthesis.
+    seen: HashSet<Distinction>,
     /// Marker that makes this `!Send + !Sync`. The `*const ()` choice
     /// is the canonical idiom (used internally by `Rc`); negative
     /// impls (`impl !Send`) require nightly.
@@ -59,19 +60,14 @@ impl SynthesisRecorder {
     /// Create an empty recorder.
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            log: Vec::new(),
-            seen: HashSet::with_hasher(IdentityBuildHasher::default()),
-            _not_thread_safe: PhantomData,
-        }
+        Self { log: Vec::new(), seen: HashSet::new(), _not_thread_safe: PhantomData }
     }
 
     /// Synthesize `a` ⊗ `b` through `engine`, recording the result in
     /// the log if it has not been seen by this recorder before.
     ///
-    /// Deduplication via a `HashSet<Distinction, IdentityBuildHasher>`
-    /// shadow — O(1) per call. The shadow shares the substrate's
-    /// `IdentityBuildHasher` so dedup is cheap on dense workloads.
+    /// Deduplication via a `HashSet<Distinction>` shadow — O(1) per
+    /// call.
     ///
     /// **Single-thread only** — `!Send + !Sync` enforced at compile
     /// time.

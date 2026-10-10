@@ -20,8 +20,8 @@
 // `tests/wasm_smoke.rs`.
 #![cfg(not(target_arch = "wasm32"))]
 
-use koru_lambda_core::projection::Direction;
-use koru_lambda_core::{Adjacency, Distinction, DistinctionEngine};
+use koru_lambda_core::projection::{Adjacency, Direction};
+use koru_lambda_core::{Distinction, DistinctionEngine};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 

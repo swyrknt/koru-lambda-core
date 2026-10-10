@@ -232,12 +232,11 @@ impl Canonicalizable for BatchCommitment {
     /// Fold the commitment_hash bytes into a distinction. Consumers
     /// use this to advance an LCA's local root after processing a
     /// commitment.
-    fn to_canonical_structure(self, engine: &DistinctionEngine) -> Distinction {
+    fn to_canonical_structure(&self, fold: &ByteFold, engine: &DistinctionEngine) -> Distinction {
         // Anchored, and under a different domain than a transaction, so a
         // commitment and a transaction carrying identical bytes do not
         // fold to the same distinction.
-        let fold = ByteFold::new(engine);
-        fold.fold(domain_anchor(engine, &fold, DOMAIN_COMMITMENT), &self.commitment_hash, engine)
+        fold.fold(domain_anchor(engine, fold, DOMAIN_COMMITMENT), &self.commitment_hash, engine)
     }
 }
 
@@ -261,7 +260,7 @@ fn compute_batch_root(
     // transaction would dominate a 1024-transaction batch.
     let fold = ByteFold::new(engine);
     for tx in &batch.transactions {
-        let tx_d = tx.canonicalize_with(&fold, engine);
+        let tx_d = tx.to_canonical_structure(&fold, engine);
         current = engine.synthesize(current, tx_d);
     }
     Ok(current)
@@ -439,8 +438,13 @@ impl CommitmentAgent {
     /// Delegates to the [`LocalCausalAgent::synthesize_action`] default
     /// so the canonicalize + synthesize + update_local_root sequence
     /// stays consistent with the LCA contract.
-    pub fn advance(&mut self, commitment: BatchCommitment, engine: &Arc<DistinctionEngine>) {
-        let _new_root = self.synthesize_action(commitment, engine);
+    pub fn advance(
+        &mut self,
+        commitment: BatchCommitment,
+        fold: &ByteFold,
+        engine: &Arc<DistinctionEngine>,
+    ) {
+        let _new_root = self.synthesize_action(commitment, fold, engine);
         self.commitments_processed = self.commitments_processed.wrapping_add(1);
     }
 }
@@ -720,7 +724,7 @@ mod tests {
         let (engine, mut agent) = fresh();
         let r0 = agent.local_root();
         let commit = sample_commitment(&engine);
-        agent.advance(commit, &engine);
+        agent.advance(commit, &ByteFold::new(&engine), &engine);
         assert_eq!(agent.commitments_processed(), 1);
         assert_ne!(agent.local_root(), r0);
     }

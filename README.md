@@ -25,7 +25,8 @@ crate: it ships separately as `koru-lambda-wasm`.
 ## Quickstart (Rust)
 
 ```rust
-use koru_lambda_core::{Adjacency, DistinctionEngine, RawDistinctionId};
+use koru_lambda_core::projection::Adjacency;
+use koru_lambda_core::{DistinctionEngine, RawDistinctionId};
 use koru_lambda_core::projection::Direction;
 
 let engine = DistinctionEngine::new();

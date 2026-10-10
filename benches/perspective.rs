@@ -25,10 +25,8 @@
 //! idle discipline as `substrate.rs` for cross-run comparability.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-use koru_lambda_core::projection::Direction;
-use koru_lambda_core::{
-    Adjacency, Degree, Distinction, DistinctionEngine, HopDistance, Projection, RawDistinctionId,
-};
+use koru_lambda_core::projection::{Adjacency, Degree, Direction, HopDistance, Projection};
+use koru_lambda_core::{Distinction, DistinctionEngine, RawDistinctionId};
 use std::time::Instant;
 
 // ---------------------------------------------------------------------------

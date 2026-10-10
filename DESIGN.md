@@ -190,8 +190,7 @@ byte injection is caught by the two-type discipline above.
 bug (you computed a distinction and threw it away). Applies to
 `engine.synthesize`, `engine.parents_of`, `engine.degree`, `engine.d0`,
 `engine.d1`, `Distinction::as_bytes`,
-`Distinction::to_hex`, `engine.advances_from`, `snapshot_parentage`,
-`replay_topological`. The agent contract, the recorder and the children
+`Distinction::to_hex`, `snapshot_parentage`, `replay_topological`. The agent contract, the recorder and the children
 index were on this list until they left the crate; the policy applies to
 them where they now live.
 
@@ -233,15 +232,17 @@ resolved a contradiction `THEORY.md` had carried, which described the same
 construct as both "a pattern, not an axiom" and "a substrate-level construct."
 It is neither; the argument was about where to put a type.
 
-What the substrate keeps is the **read**:
+What the substrate keeps is `parents_of`
+`[SHIPPED @ engine::DistinctionEngine::parents_of]`. Whether a given advance
+was forward is then one comparison against it, and the observation that makes
+the comparison worth making is this: an advance that does not descend from the
+root it replaces is not a causal step but an unrelated assignment.
 
-`pub fn advances_from(&self, candidate, previous) -> bool`
-`[SHIPPED @ engine::DistinctionEngine::advances_from]`
-
-One `parents_of` lookup, answering whether a given advance was forward — which
-is a question about the graph, and reads belong here. An advance that does not
-descend from the root it replaces is not a causal step but an unrelated
-assignment, and this is what makes that checkable.
+The substrate shipped that comparison as `advances_from` and removed it three
+days later. It determined no byte and was one line to write, so the same
+membership test that moved four other items out of the crate applies to it
+too. Keeping it would have meant exempting a function from a rule because we
+had just written it.
 
 The contract that *chooses* to advance belongs to consumers and ships with
 them, at `[SHIPPED @ koru_lambda_agents::agent::LocalCausalAgent]`. See
@@ -446,8 +447,8 @@ without a theory change.
    parents, so agent-ness is a reading of the graph available
    everywhere rather than a property some types have; a trait asserting
    otherwise is the wrong kind of thing, and both sides of the old
-   argument were debating where to file a type. The substrate keeps the
-   read, `[SHIPPED @ engine::DistinctionEngine::advances_from]`, and the
+   argument were debating where to file a type. The substrate keeps
+   parentage, `[SHIPPED @ engine::DistinctionEngine::parents_of]`, and the
    contract ships with the consumers that choose to use it. Recorded
    rather than deleted because the reasoning is the useful part.
 
@@ -506,13 +507,13 @@ later minor releases carry a `[TARGET]` tag on the relevant line-item.
   persistence snapshot.
 - `replay_topological(snapshot) -> Result<Arc<DistinctionEngine>, ReplayError>` —
   round-trip reconstruction.
-- `advances_from(candidate, previous) -> bool` — the read that makes a
-  forward advance checkable, one `parents_of` lookup.
 
-Four entries left this list in 2.0.0 and are **not** substrate surface:
-`build_children_index`, `SynthesisRecorder`, the `LocalCausalAgent` trait and
-`synthesize_causal_action`. None determines a byte, so by the membership test
-none belongs here; all four ship in `koru-lambda-agents`. They were still
+Five entries left this list in 2.0.0 and are **not** substrate surface:
+`build_children_index`, `SynthesisRecorder`, the `LocalCausalAgent` trait,
+`synthesize_causal_action`, and `advances_from`. None determines a byte, so by
+the membership test none belongs here; the first four ship in
+`koru-lambda-agents` and the fifth is one comparison on `parents_of` that a
+reader writes. They were still
 listed here after the move, with the sentence below asserting that every entry
 resolves to an anchor — which was false for exactly those four.
 
@@ -652,11 +653,18 @@ Enumerated. No hedging.
 6. **~~No byte-fold / Fold Law changes.~~** Withdrawn 2026-09-30. The
    byte fold changed: it is now the anchored sequence fold instantiated
    on the two-letter alphabet `{d₀, d₁}`, 8 synthesize calls per byte
-   rather than 17, so the substrate carries one lift rule applied
-   recursively instead of a sequence fold plus a special-cased byte
-   encoding. Measurement drove it: both shapes produce 256 distinct
+   rather than 17. Measurement drove it: both shapes produce 256 distinct
    tips, so the extra calls bought no injectivity while doubling the
    graph. See Law 11 on what that does to the quoted magnitudes.
+
+   "One lift rule applied recursively" was written here while the code
+   still wrote the loop out once per level. It is now literal — one
+   private fold, three callers, three levels (bits over the primordials,
+   bytes over the bit tips, composites over their parts' tips) — and the
+   third level is new: `docs/SPEC.md` §4.4 and
+   `[SHIPPED @ primitives::ByteFold::fold_distinctions]`. Published
+   identity did not move; the conformance fixture and its digest pin
+   that.
 7. **No production BFT consensus layer.**
    `[SHIPPED @ koru-lambda-agents: validator]` and
    `[SHIPPED @ koru-lambda-agents: commitment]` are reference LCA

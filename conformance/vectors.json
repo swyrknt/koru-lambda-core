@@ -110,6 +110,125 @@
           "id": "747f49abc60bafa407beae2089934331"
         }
       ]
+    },
+    "canonical_bytes": {
+      "$comment": "The three byte encodings the substrate publishes for signal outputs. They are pinned here rather than inferred from a projection because the wire format depends on them directly: a conforming implementation must agree on these bytes for any signal whose output has one of these shapes, including signals it defines itself. `bool` had no vector anywhere until 2026-10-09 and no shipped signal produces it, so an implementation encoding `true` as 0xFF would have passed every other case in this file.",
+      "cases": [
+        {
+          "type": "bool",
+          "value": false,
+          "bytes": "00"
+        },
+        {
+          "type": "bool",
+          "value": true,
+          "bytes": "01"
+        },
+        {
+          "type": "usize",
+          "value": 0,
+          "bytes": "0000000000000000"
+        },
+        {
+          "type": "usize",
+          "value": 1,
+          "bytes": "0100000000000000"
+        },
+        {
+          "$comment": "Pins the width as 8 bytes little-endian independent of target pointer size \u2014 a wasm32 producer and an x86_64 consumer must agree.",
+          "type": "usize",
+          "value": 4294967296,
+          "bytes": "0000000001000000"
+        },
+        {
+          "$comment": "`None` is a single zero tag byte, not an empty output.",
+          "type": "Option<ParentPair>",
+          "value": null,
+          "bytes": "00"
+        },
+        {
+          "$comment": "`Some` is the tag byte 0x01 then min then max, 33 bytes. The pair is (d0, d1), already in canonical order.",
+          "type": "Option<ParentPair>",
+          "value": [
+            "00000000000000000000000000000000",
+            "01000000000000000000000000000000"
+          ],
+          "bytes": "010000000000000000000000000000000001000000000000000000000000000000"
+        }
+      ]
+    },
+    "composites": {
+      "$comment": "The composite rule of `docs/SPEC.md` \u00a74.4: the \u00a74.2 fold with the caller's own already-lifted distinctions as the alphabet. Every element is *derived* rather than listed \u2014 `{tip_of_byte: n}` is the tip in `lift.tips`, and `{case: name}` is the result of an earlier case here \u2014 so no value in this block is written down twice and none can be copied in wrong. The anchor is `d` from `projections.history` unless a case names a domain. The pair that matters is `flat_1_2_3` against `nested_1_2_then_3`: same leaves, same order, different grouping, so an implementation that flattens structure disagrees with them while reproducing every other value in this file.",
+      "cases": [
+        {
+          "name": "flat_1_2_3",
+          "anchor": {
+            "case_history": "d"
+          },
+          "elements": [
+            {
+              "tip_of_byte": 1
+            },
+            {
+              "tip_of_byte": 2
+            },
+            {
+              "tip_of_byte": 3
+            }
+          ],
+          "id": "c9211c7822ef0549b38ae9eed84a0f73"
+        },
+        {
+          "name": "inner_1_2",
+          "anchor": {
+            "case_history": "d"
+          },
+          "elements": [
+            {
+              "tip_of_byte": 1
+            },
+            {
+              "tip_of_byte": 2
+            }
+          ],
+          "id": "e5602c8da1b26ebdc71b3154778af74d"
+        },
+        {
+          "$comment": "An inner composite is an element at the next level, which is why nesting needs no byte-layout rule.",
+          "name": "nested_1_2_then_3",
+          "anchor": {
+            "case_history": "d"
+          },
+          "elements": [
+            {
+              "case": "inner_1_2"
+            },
+            {
+              "tip_of_byte": 3
+            }
+          ],
+          "id": "30abdef870bea83aea4efa221a68b506"
+        },
+        {
+          "$comment": "The same three leaves anchored on domain 0x01 rather than `d`: domains separate composites as they separate byte folds.",
+          "name": "flat_1_2_3_under_domain_01",
+          "anchor": {
+            "domain": 1
+          },
+          "elements": [
+            {
+              "tip_of_byte": 1
+            },
+            {
+              "tip_of_byte": 2
+            },
+            {
+              "tip_of_byte": 3
+            }
+          ],
+          "id": "c5f853eea7642741e32204b59d637a16"
+        }
+      ]
     }
   },
   "projections": {

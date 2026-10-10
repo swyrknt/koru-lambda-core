@@ -17,8 +17,8 @@ error[E0038]: the trait `Signal` is not dyn compatible
    = note: for a trait to be dyn compatible it needs to allow building a vtable
            for more information, visit <https://doc.rust-lang.org/reference/items/traits.html#dyn-compatibility>
    = help: the following types implement `Signal`:
-             koru_lambda_core::Adjacency
-             koru_lambda_core::Degree
-             koru_lambda_core::HopDistance
+             koru_lambda_core::projection::Adjacency
+             koru_lambda_core::projection::Degree
+             koru_lambda_core::projection::HopDistance
            consider defining an enum where each variant holds one of these types,
            implementing `Signal` for this new enum and using it instead

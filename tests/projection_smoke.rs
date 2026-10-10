@@ -7,8 +7,8 @@
 
 use std::sync::Arc;
 
-use koru_lambda_core::projection::{Direction, ReadOnlyEngine, RestoreError};
-use koru_lambda_core::{Adjacency, Degree, DistinctionEngine};
+use koru_lambda_core::projection::{Adjacency, Degree, Direction, ReadOnlyEngine, RestoreError};
+use koru_lambda_core::DistinctionEngine;
 
 #[test]
 fn basic_projection_construction() {

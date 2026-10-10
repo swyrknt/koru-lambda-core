@@ -19,7 +19,7 @@
 //! anyway. It is also a quantitative claim rather than a vibe, so the test
 //! counts — see `the_flat_fold_loses_exactly_the_leading_transposition`.
 
-use koru_lambda_core::{domain_anchor, ByteFold, Distinction, DistinctionEngine};
+use koru_lambda_core::{domain_anchor, ByteFold, Distinction, DistinctionEngine, DomainLabel};
 use std::collections::HashSet;
 
 /// Every permutation of this many distinct bytes is enumerated, so keep it
@@ -135,7 +135,7 @@ fn the_flat_fold_loses_exactly_the_leading_transposition() {
 fn the_anchored_fold_recovers_every_ordering() {
     let engine = DistinctionEngine::new();
     let fold = ByteFold::new(&engine);
-    let anchor = domain_anchor(&engine, &fold, 0x01);
+    let anchor = domain_anchor(&engine, &fold, DomainLabel::new(0x01));
     assert!(
         !fold.is_tip(anchor),
         "the anchor must not be an element tip, or the first element would be handed to a \
@@ -164,7 +164,7 @@ fn the_anchored_fold_recovers_every_ordering() {
 fn the_anchor_is_load_bearing_not_decorative() {
     let engine = DistinctionEngine::new();
     let fold = ByteFold::new(&engine);
-    let anchor = domain_anchor(&engine, &fold, 0x01);
+    let anchor = domain_anchor(&engine, &fold, DomainLabel::new(0x01));
 
     // Two sequences differing only in their leading pair.
     let forward = fold.fold(anchor, &[0x41, 0x42, 0x43], &engine);

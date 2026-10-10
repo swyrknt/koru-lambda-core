@@ -426,10 +426,12 @@ it described this construct as both "a pattern, not an axiom" and "a
 substrate-level construct." It is neither. The argument was about where to put
 a type, and the thing is not a type.
 
-What the substrate keeps is the **read** — whether a given advance was
-forward, which is a question about the graph answered by one parentage lookup
-`[SHIPPED @ engine::DistinctionEngine::advances_from]`. The contract that
-chooses to advance belongs to consumers, and ships with them.
+What the substrate keeps is **parentage**
+`[SHIPPED @ engine::DistinctionEngine::parents_of]`. Whether a given advance
+was forward is a question about the graph, and the graph answers it: the
+candidate's parents either include the root it replaces or they do not. The
+substrate does not need to name that comparison to make it available, and the
+contract that *chooses* to advance belongs to consumers, who ship with it.
 
 **Encoding.** Nothing requires a consumer to carry one root. Multi-root
 consumers, consumers that synthesize from non-root state, and consumers that

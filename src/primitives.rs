@@ -1,30 +1,87 @@
-//! Primitives — [`Canonicalizable`] trait and [`ByteMapping`].
+//! The lift — getting a value that is not a distinction into the graph.
 //!
-//! How arbitrary types lift into the substrate: every consumer-side
-//! value that wants to participate in a synthesis must produce a
-//! canonical chain of distinctions through `engine.synthesize` calls.
-//! [`Canonicalizable`] is the trait that captures this contract.
+//! This is the substrate's only free parameter. Everything downstream of
+//! the primordials is forced by the axioms; the lift is the one place a
+//! choice enters, which is why `docs/SPEC.md` §4 specifies it and why two
+//! implementations that lift differently agree on nothing.
 //!
-//! The substrate ships one impl: [`u8`] via [`ByteMapping`]. Higher-level
-//! consumer types (transactions, peer IDs, custom action data) implement
-//! the trait themselves by composing byte-level folds.
+//! It is **one rule at three levels**, and in this module that is literal:
+//! all three call the same private fold.
 //!
-//! # Phantom-node fix (v2.0)
+//! | Level | Alphabet | Elements | Length folded |
+//! |---|---|---|---|
+//! | bits | `{d₀, d₁}` | the byte's 8 bits | no, width is fixed |
+//! | bytes | the 256 bit-tips | the sequence's bytes | yes |
+//! | composites | the parts' own tips | a value's parts, in order | yes |
 //!
-//! The v1.2 [`ByteMapping`] cached byte→distinction IDs against a
-//! throwaway engine and handed those IDs to the calling engine. The
-//! returned IDs were "valid" hex strings but the corresponding
-//! distinctions were never registered in the consumer's engine — hence
-//! "phantom nodes" appearing in `parents_of` entries without
-//! corresponding `all_distinctions` entries. Violated `r = 2d − 3`
-//! semantically and broke engine-state-independence for byte folds.
+//! [`ByteMapping::map_byte_to_distinction`] is the first,
+//! [`ByteFold::fold`] the second, [`ByteFold::fold_distinctions`] the
+//! third. Nesting needs no fourth: a composite's fold is a distinction,
+//! so it is an element one level up.
 //!
-//! v2.0's [`ByteMapping::map_byte_to_distinction`] takes the calling
-//! engine and folds each byte through it via `engine.synthesize` calls.
-//! Every intermediate distinction in the fold is registered. No phantoms
-//! possible by construction.
+//! [`Canonicalizable`] names the contract a liftable type satisfies. The
+//! substrate ships [`u8`]; a consumer lifting its own type decides how
+//! that type decomposes into parts and folds them.
+//!
+//! # Every step goes through the engine
+//!
+//! A lift must use `engine.synthesize` for every step. The v1.2 byte
+//! mapping cached tips from a throwaway engine and handed them to the
+//! caller's, producing identifiers whose distinctions that engine had
+//! never witnessed — present in `parents_of`, absent from
+//! `all_distinctions`, and breaking `r = 2d − 3` semantically. That is
+//! why these take `&DistinctionEngine` rather than returning free-standing
+//! values, and why the trust boundary has no third path.
 
 use crate::{Distinction, DistinctionEngine};
+
+/// `docs/SPEC.md` §4.2's anchored fold: continue the chain at `acc` by
+/// folding each element's tip into it, in order.
+///
+/// This function is the whole of the lift. Everything the substrate lifts is
+/// it at one of three levels — bits over the primordials, bytes over the bit
+/// tips, composites over their field tips — and the levels differ only in
+/// which alphabet `tip` reads from. The documentation claimed "one lift rule,
+/// applied recursively" while the code wrote the loop out twice, once per
+/// level, which is two implementations of one rule and two places for it to
+/// drift.
+///
+/// It takes an accumulator rather than an anchor so that the stages compose:
+/// a length prefix folded over the byte alphabet can be continued by elements
+/// folded over a different one, which is what §4.2 requires and what a
+/// composite fold needs.
+///
+/// # Panics
+///
+/// Panics if an element's tip equals the accumulator it is folded into.
+/// `synthesize(a, a)` returns `a` by Axiom 3, so that step would silently
+/// drop the element — the exact failure the anchor rule exists to prevent,
+/// arriving one step later. For the two byte-level alphabets this cannot
+/// happen (an accumulator past the first step is a hash-chain node while
+/// elements come from a fixed finite alphabet, so it is the collision bound
+/// of §11), and the assertion says so rather than assuming it. For
+/// caller-supplied element distinctions it is reachable, which is why the
+/// check is not a `debug_assert!`.
+fn fold_into<S>(
+    engine: &DistinctionEngine,
+    acc: Distinction,
+    elements: impl IntoIterator<Item = S>,
+    tip: impl Fn(S) -> Distinction,
+) -> Distinction {
+    let mut acc = acc;
+    for element in elements {
+        let t = tip(element);
+        assert!(
+            t != acc,
+            "fold: an element's tip equals the accumulator it folds into, so Axiom 3 would \
+             return the accumulator and drop the element. Anchor elsewhere, or do not fold a \
+             distinction that is already in the chain."
+        );
+        // Nesting carries position; the tip carries the value.
+        acc = engine.synthesize(acc, t);
+    }
+    acc
+}
 
 /// Lift a value into its canonical chain of distinctions in `engine`.
 ///
@@ -51,12 +108,32 @@ use crate::{Distinction, DistinctionEngine};
 /// `engine.all_distinctions` and would trip the foreign-byte guard on
 /// any subsequent `engine.synthesize` call that uses it as a parent.
 ///
-/// The v2.0 [`ByteMapping`] implementation demonstrates the contract.
+/// # A type brings its own domain
+///
+/// There is no anchor parameter, and that is the design rather than an
+/// omission. A liftable type chooses its own [`domain_anchor`], because the
+/// separation has to hold between *types*: a commitment and a transaction
+/// carrying identical bytes must not fold alike. A caller-supplied anchor
+/// would move that decision to the call site, where one forgetful consumer
+/// collapses the separation for everyone sharing the engine.
+///
+/// The consequence is that the substrate ships exactly one impl — [`u8`],
+/// whose anchor §4.3 forces — and no impls for `&[u8]`, `u64` or `&str`.
+/// Those types have no domain of their own, and a substrate-chosen
+/// `DOMAIN_BYTES` would put every consumer's sequences in one domain, which
+/// is the collision the anchor exists to prevent. A consumer lifts its own
+/// named type instead, and names the domain there.
 pub trait Canonicalizable {
     /// Fold `self` into a chain of synthesize calls on `engine`, returning
     /// the tip distinction.
+    ///
+    /// Takes `&self` and a prebuilt `fold`. Both were learned from the two
+    /// real implementors, which bypassed this method for exactly those two
+    /// reasons: a batch commit folds `for tx in &transactions` and cannot
+    /// consume, and building the 256-tip table per call dominates a
+    /// thousand-transaction batch.
     #[must_use]
-    fn to_canonical_structure(self, engine: &DistinctionEngine) -> Distinction;
+    fn to_canonical_structure(&self, fold: &ByteFold, engine: &DistinctionEngine) -> Distinction;
 }
 
 /// Byte → distinction folding (v2.0: engine-registered, no phantoms).
@@ -203,16 +280,71 @@ impl ByteFold {
             "fold: the anchor is an element tip, so the first step could collapse through \
              idempotence and drop an element. Anchor on a synthesized root instead."
         );
+        let acc = self.fold_length(anchor, bytes.len(), engine);
+        fold_into(engine, acc, bytes.iter().copied(), |b| self.tip(b))
+    }
 
-        // Length first, so sequences of different lengths cannot coincide.
-        let mut acc = anchor;
-        for len_byte in (bytes.len() as u64).to_le_bytes() {
-            acc = engine.synthesize(acc, self.tip(len_byte));
-        }
-        for &b in bytes {
-            acc = engine.synthesize(acc, self.tip(b));
-        }
-        acc
+    /// Fold an ordered sequence of distinctions, anchored at `anchor`.
+    ///
+    /// This is the composite rule, and it is the same rule as
+    /// [`Self::fold`] one level up: where that folds byte tips, this folds
+    /// whatever the caller already lifted. A struct is lifted by lifting each
+    /// field to a distinction and folding those in declared field order.
+    ///
+    /// # Why this rather than a byte-layout rule
+    ///
+    /// `docs/SPEC.md` §4.2 specifies the fold over an arbitrary alphabet, but
+    /// only the byte case shipped, so a consumer holding a struct with a
+    /// variable-length field had to invent its own framing — which is the
+    /// collision class [`Self::fold`] closed, reappearing one level up. Two
+    /// implementations could pass every published vector and disagree on the
+    /// first composite either one lifted.
+    ///
+    /// The alternative was a documented byte-concatenation rule: serialise
+    /// the fields with length prefixes, then byte-fold the result. It was
+    /// rejected because a composite containing a composite would then need
+    /// the rule to specify nesting *within bytes*, which is a serialisation
+    /// format growing inside the substrate's specification. Here nesting is
+    /// free: an inner composite's fold is a distinction, and a distinction is
+    /// an element at the next level. The specification stays one rule.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `anchor` is a byte tip (the length prefix folds over the
+    /// byte alphabet, so the first step could collapse), or if any element
+    /// equals the accumulator it folds into, which Axiom 3 would answer by
+    /// returning the accumulator and dropping that element.
+    #[must_use]
+    pub fn fold_distinctions(
+        &self,
+        anchor: Distinction,
+        elements: &[Distinction],
+        engine: &DistinctionEngine,
+    ) -> Distinction {
+        assert!(
+            !self.is_tip(anchor),
+            "fold_distinctions: the anchor is a byte tip, and the length prefix folds over the \
+             byte alphabet, so the first step could collapse through idempotence. Anchor on a \
+             synthesized root instead."
+        );
+        let acc = self.fold_length(anchor, elements.len(), engine);
+        fold_into(engine, acc, elements.iter().copied(), |d| d)
+    }
+
+    /// Fold a length prefix over the byte alphabet, per `docs/SPEC.md` §4.2.
+    ///
+    /// Shared by both sequence folds so the length discipline is written
+    /// once: `u64` little-endian, folded before the elements, so a sequence
+    /// and a prefix of it cannot coincide. The width is `u64` and not the
+    /// element count's native width so that a 32-bit and a 64-bit producer
+    /// agree.
+    fn fold_length(
+        &self,
+        anchor: Distinction,
+        len: usize,
+        engine: &DistinctionEngine,
+    ) -> Distinction {
+        fold_into(engine, anchor, (len as u64).to_le_bytes(), |b| self.tip(b))
     }
 }
 
@@ -225,7 +357,42 @@ impl ByteFold {
 /// would end the property that two engines performing the same
 /// operations agree. Anchoring keeps separation in the structure that is
 /// synthesized instead.
-pub type DomainLabel = u8;
+///
+/// # What this type does, and what it cannot
+///
+/// It makes the choice explicit and typed. It was a `pub type … = u8`, so
+/// any byte in scope satisfied the parameter and a call read
+/// `domain_anchor(&e, &f, DomainLabel::new(0x01))` — an integer literal pointing at no
+/// documentation and distinguishable from a nonce byte only by position.
+///
+/// What it does **not** do is prevent a collision. Nothing here reserves a
+/// label: two crates can each choose `0x01`, and in a shared engine their
+/// folds of the same bytes land on the same distinction. The substrate
+/// cannot fix that, and should not pretend to — a registry would have to be
+/// a naming authority, which is the thing content addressing replaces. Two
+/// consumers sharing an engine have to agree on labels out of band, the way
+/// they agree on anything else outside the axioms.
+///
+/// No range is reserved either. `conformance/vectors.json` pins the anchors
+/// for labels 1, 2, 127 and 255, but those are *derivation* vectors — they
+/// check the anchor formula across the byte range — and claiming them as
+/// reserved would be inventing policy the substrate does not enforce.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct DomainLabel(u8);
+
+impl DomainLabel {
+    /// Name a domain by its label byte.
+    #[must_use]
+    pub const fn new(label: u8) -> Self {
+        Self(label)
+    }
+
+    /// The label byte, for a consumer that needs to serialise it.
+    #[must_use]
+    pub const fn get(self) -> u8 {
+        self.0
+    }
+}
 
 /// A domain anchor to fold against.
 ///
@@ -240,18 +407,10 @@ pub fn domain_anchor(
     domain: DomainLabel,
 ) -> Distinction {
     let base = engine.synthesize(engine.d0(), engine.d1());
-    engine.synthesize(base, fold.tip(domain))
+    engine.synthesize(base, fold.tip(domain.get()))
 }
 
 impl ByteMapping {
-    /// Number of bit-steps per byte fold, one `synthesize` call each.
-    ///
-    /// One synthesize call per bit, so this is also the per-byte cost of
-    /// the lift. After folding all 256 byte values each primordial
-    /// reaches `2^BITS_PER_BYTE + 1 = 257`: `2^i` novel bumps at step
-    /// `i`, plus the anchoring synthesis, plus the genesis addend.
-    pub const BITS_PER_BYTE: usize = 8;
-
     /// Fold an 8-bit byte through `engine` into a single tip
     /// [`Distinction`].
     ///
@@ -293,15 +452,11 @@ impl ByteMapping {
         // which is the same rule `ByteFold::fold` enforces for its own —
         // an anchor drawn from the alphabet could collapse the first step
         // through idempotence.
-        let mut acc = engine.synthesize(d0, d1);
+        let anchor = engine.synthesize(d0, d1);
 
-        for bit_index in 0..Self::BITS_PER_BYTE {
-            // Nesting carries position; the element carries the value.
-            // `synthesize(acc, d0)` and `synthesize(acc, d1)` differ by
-            // content addressing, so each bit survives into the chain.
-            acc = engine.synthesize(acc, if (byte >> bit_index) & 1 == 0 { d0 } else { d1 });
-        }
-        acc
+        // Width is fixed, so no length is folded in: every byte produces a
+        // chain of the same depth and only the bit values distinguish them.
+        fold_into(engine, anchor, 0..u8::BITS, |bit| if (byte >> bit) & 1 == 0 { d0 } else { d1 })
     }
 }
 
@@ -310,8 +465,13 @@ impl ByteMapping {
 // ---------------------------------------------------------------------------
 
 impl Canonicalizable for u8 {
-    fn to_canonical_structure(self, engine: &DistinctionEngine) -> Distinction {
-        ByteMapping::map_byte_to_distinction(self, engine)
+    /// A table lookup, not a fold: the caller already holds the 256 tips,
+    /// and a byte's tip is one of them. Identical in value to
+    /// [`ByteMapping::map_byte_to_distinction`] — `ByteFold::new` is what
+    /// computed the table — and eight synthesize calls cheaper. Pinned by
+    /// `the_byte_impl_is_the_tip_table`.
+    fn to_canonical_structure(&self, fold: &ByteFold, _engine: &DistinctionEngine) -> Distinction {
+        fold.tip(*self)
     }
 }
 
@@ -489,10 +649,10 @@ mod tests {
             let _ = ByteMapping::map_byte_to_distinction(byte, &e);
         }
 
-        // 1. The construction cost is exact, not a floor: 2^BITS_PER_BYTE
+        // 1. The construction cost is exact, not a floor: 2^u8::BITS
         //    novel bumps minus one, plus the anchoring synthesize(d0, d1),
         //    plus the genesis addend `degree()` adds for a primordial.
-        let expected = (1usize << ByteMapping::BITS_PER_BYTE) + 1;
+        let expected = (1usize << u8::BITS) + 1;
         assert_eq!(e.degree(e.d0()), expected, "d0 construction cost");
         assert_eq!(e.degree(e.d1()), expected, "d1 construction cost");
 
@@ -512,7 +672,7 @@ mod tests {
         //    first step is ceilinged at the alphabet size, so the ratio above
         //    decays as 1/corpus and is not a property of the substrate.
         let fold = ByteFold::new(&e);
-        let anchor = domain_anchor(&e, &fold, 0x7F);
+        let anchor = domain_anchor(&e, &fold, DomainLabel::new(0x7F));
         for chunk in 0u8..64 {
             let payload = [chunk, chunk.wrapping_add(1), chunk.wrapping_add(2)];
             let _ = fold.fold(anchor, &payload, &e);
@@ -543,12 +703,21 @@ mod tests {
 
     // ----- Canonicalizable trait ---------------------------------------
 
+    /// The `u8` impl reads the tip table; `map_byte_to_distinction` folds.
+    /// They must agree on every byte, not just one, because the table is
+    /// what the fold produced and a divergence would mean the lift has two
+    /// values for one byte.
     #[test]
-    fn canonicalizable_u8_matches_byte_mapping() {
+    fn the_byte_impl_is_the_tip_table() {
         let e = DistinctionEngine::new();
-        let via_trait = 0x42_u8.to_canonical_structure(&e);
-        let via_direct = ByteMapping::map_byte_to_distinction(0x42, &e);
-        assert_eq!(via_trait, via_direct);
+        let f = ByteFold::new(&e);
+        for byte in 0u8..=255 {
+            assert_eq!(
+                byte.to_canonical_structure(&f, &e),
+                ByteMapping::map_byte_to_distinction(byte, &e),
+                "byte {byte:#04x} lifts differently through the trait than through the fold"
+            );
+        }
     }
 
     // ----- The anchored fold -------------------------------------------
@@ -708,6 +877,186 @@ mod tests {
         assert!(e.check_structural_invariant().is_ok());
         // And it can be used as a parent without tripping the guard.
         let _ = e.synthesize(out, e.d0());
+    }
+
+    // -------------------------------------------------------------------
+    // The composite rule — `fold_distinctions`
+    // -------------------------------------------------------------------
+
+    /// Order survives, which is the whole reason the fold nests.
+    #[test]
+    fn composite_fold_distinguishes_field_order() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let anchor = domain_anchor(&e, &f, DomainLabel::new(0x01));
+        let (a, b) = (f.tip(0xAA), f.tip(0xBB));
+
+        assert_ne!(
+            f.fold_distinctions(anchor, &[a, b], &e),
+            f.fold_distinctions(anchor, &[b, a], &e),
+            "a struct's fields are ordered; swapping two must change the composite"
+        );
+    }
+
+    /// A prefix is not the sequence, which is what the length prefix buys.
+    #[test]
+    fn composite_fold_distinguishes_a_prefix_from_the_whole() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let anchor = domain_anchor(&e, &f, DomainLabel::new(0x01));
+        let (a, b) = (f.tip(0xAA), f.tip(0xBB));
+
+        assert_ne!(
+            f.fold_distinctions(anchor, &[a], &e),
+            f.fold_distinctions(anchor, &[a, b], &e),
+            "length is folded in first, so a prefix cannot coincide with the whole"
+        );
+    }
+
+    /// A repeated field survives rather than collapsing through Axiom 3.
+    ///
+    /// This is the failure the anchor rule exists to prevent, at the
+    /// composite level: a naive fold seeded on the first element loses a
+    /// leading run of equal elements entirely.
+    #[test]
+    fn composite_fold_keeps_a_repeated_element() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let anchor = domain_anchor(&e, &f, DomainLabel::new(0x01));
+        let a = f.tip(0xAA);
+
+        let once = f.fold_distinctions(anchor, &[a], &e);
+        let twice = f.fold_distinctions(anchor, &[a, a], &e);
+        let thrice = f.fold_distinctions(anchor, &[a, a, a], &e);
+        assert_ne!(once, twice);
+        assert_ne!(twice, thrice);
+        assert_ne!(once, thrice);
+    }
+
+    /// Nesting is free: an inner composite is an element of the outer one.
+    ///
+    /// This is why the composite rule folds distinctions rather than
+    /// specifying a byte layout — a byte layout would have to say how a
+    /// nested composite is framed *within bytes*, which is a serialisation
+    /// format inside the specification.
+    #[test]
+    fn composite_fold_nests_without_a_framing_rule() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let anchor = domain_anchor(&e, &f, DomainLabel::new(0x01));
+        let (a, b, c) = (f.tip(0x01), f.tip(0x02), f.tip(0x03));
+
+        // `{ inner: { a, b }, c }` against `{ a, b, c }` — a flat fold of
+        // three fields must not equal a nested fold of two.
+        let inner = f.fold_distinctions(anchor, &[a, b], &e);
+        let nested = f.fold_distinctions(anchor, &[inner, c], &e);
+        let flat = f.fold_distinctions(anchor, &[a, b, c], &e);
+        assert_ne!(nested, flat, "structure is part of the value, not just the leaves");
+    }
+
+    /// The domain anchor separates composites, as it does byte folds.
+    #[test]
+    fn composite_fold_separates_by_domain() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let a = f.tip(0xAA);
+
+        assert_ne!(
+            f.fold_distinctions(domain_anchor(&e, &f, DomainLabel::new(0x01)), &[a], &e),
+            f.fold_distinctions(domain_anchor(&e, &f, DomainLabel::new(0x02)), &[a], &e),
+            "two domains folding the same field must not collide"
+        );
+    }
+
+    /// Every intermediate is registered, so the result is foldable again.
+    #[test]
+    fn composite_fold_registers_its_chain() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let anchor = domain_anchor(&e, &f, DomainLabel::new(0x01));
+        let r = f.fold_distinctions(anchor, &[f.tip(0x01), f.tip(0x02)], &e);
+
+        // If any step had produced an unregistered distinction, using the
+        // result as a parent would trip the foreign-byte guard.
+        let _ = e.synthesize(r, e.d0());
+        assert!(e.snapshot_distinctions().contains(&r));
+    }
+
+    /// A byte tip is refused as a composite anchor.
+    ///
+    /// The length prefix folds over the byte alphabet, so the first step of
+    /// a composite fold has the same collapse exposure as a byte fold's.
+    #[test]
+    #[should_panic(expected = "the anchor is a byte tip")]
+    fn composite_fold_refuses_a_byte_tip_anchor() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let _ = f.fold_distinctions(f.tip(0x00), &[f.tip(0xAA)], &e);
+    }
+
+    /// An element equal to the accumulator it folds into is refused.
+    ///
+    /// Reachable only by a caller who computes the accumulator, which this
+    /// test does from public API alone — `tip` and `synthesize`. That it can
+    /// be reconstructed this way is also the check that the documented
+    /// length discipline is the one implemented: eight `u64` little-endian
+    /// length bytes over the byte alphabet, before any element.
+    #[test]
+    #[should_panic(expected = "equals the accumulator it folds into")]
+    fn composite_fold_refuses_an_element_already_in_the_chain() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let anchor = domain_anchor(&e, &f, DomainLabel::new(0x01));
+        let a = f.tip(0xAA);
+
+        // Rebuild what `fold_distinctions(anchor, &[a, _], &e)` accumulates
+        // after its first element: the length prefix for two elements, then
+        // `a`.
+        let mut acc = anchor;
+        for len_byte in 2u64.to_le_bytes() {
+            acc = e.synthesize(acc, f.tip(len_byte));
+        }
+        let after_a = e.synthesize(acc, a);
+
+        let _ = f.fold_distinctions(anchor, &[a, after_a], &e);
+    }
+
+    /// The reconstruction above is the implementation, not a coincidence.
+    #[test]
+    fn the_documented_length_discipline_is_the_implemented_one() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let anchor = domain_anchor(&e, &f, DomainLabel::new(0x01));
+        let a = f.tip(0xAA);
+
+        let mut acc = anchor;
+        for len_byte in 1u64.to_le_bytes() {
+            acc = e.synthesize(acc, f.tip(len_byte));
+        }
+        let by_hand = e.synthesize(acc, a);
+
+        assert_eq!(
+            f.fold_distinctions(anchor, &[a], &e),
+            by_hand,
+            "u64 little-endian length over the byte alphabet, then the elements"
+        );
+    }
+
+    /// Both shipped byte-level instances are the same rule as the composite
+    /// one, so a change to the core cannot silently move only one of them.
+    #[test]
+    fn the_byte_fold_is_the_composite_fold_over_byte_tips() {
+        let e = DistinctionEngine::new();
+        let f = ByteFold::new(&e);
+        let anchor = domain_anchor(&e, &f, DomainLabel::new(0x07));
+        let bytes: &[u8] = b"hi";
+
+        let as_elements: Vec<Distinction> = bytes.iter().map(|&b| f.tip(b)).collect();
+        assert_eq!(
+            f.fold(anchor, bytes, &e),
+            f.fold_distinctions(anchor, &as_elements, &e),
+            "folding bytes and folding their tips are one rule, not two"
+        );
     }
 
     #[test]

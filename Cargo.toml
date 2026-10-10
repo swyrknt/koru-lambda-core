@@ -63,7 +63,6 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)', 'cfg(loom_mutant)'
 sha2 = "0.10"
 dashmap = "6.0"
 hex = "0.4"
-bytemuck = { version = "1", features = ["derive"] }
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 
@@ -89,6 +88,14 @@ harness = false
 [dev-dependencies]
 # Universally-safe dev-deps — compile fine on both native and wasm32.
 static_assertions = "1"
+# Dev-only, and deliberately so. `bytemuck` was a MANDATORY dependency,
+# carried solely for `Pod`/`Zeroable` derives on the two identifier types.
+# Both derives are gone — `Distinction`'s because a zero-copy cast is a hole
+# in the trust boundary, `RawDistinctionId`'s because it existed for a
+# zero-copy path over `&[Distinction]` that stopped being possible when
+# `Distinction` lost its own. It stays here only so the static assertions can
+# name the traits they assert the ABSENCE of, which costs a consumer nothing.
+bytemuck = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 
 # Native-only dev-deps. `proptest`, `criterion`, `loom`, `dhat`, `trybuild`

@@ -163,13 +163,13 @@ recorded parentage, so it travels with the witness. Convenience does not
 qualify: a recorder of call order, a hashing optimisation and a children
 index are consumer patterns.
 
-*Two of those three have left. The recorder and the children index now ship
-in the agents crate; the hashing optimisation is still exported from the
-substrate, and this document saying it does not belong there while the crate
-exports it is a disagreement that has to be settled one way or the other.
-Note the measured constraint: `IdentityHasher` and `IdentityBuildHasher`
-cannot be split — making the former private while keeping the alias public is
-a hard error downstream — so they stand or fall together.*
+*All three have left. The recorder and the children index ship in the agents
+crate; the hashing optimisation went crate-private on 2026-10-09, which
+settles a disagreement this document used to record — it said the
+optimisation did not belong in the substrate while the crate exported it.
+The two names went together because they cannot be split: making the struct
+private while keeping `BuildHasherDefault<_>` over it public is a hard error,
+measured with a two-crate repro rather than assumed.*
 
 ## What makes a new agent
 
@@ -331,7 +331,7 @@ wrongly implied it had.
 | Bindings | Ship with the substrate; the lift is not reachable from them, and the published npm name changed from 1.2.0 |
 | Agents | Two consumers in `crates/koru-lambda-agents`, unpublished, pending their own repository and their wire-facing fixes |
 | Vectors | Published in `conformance/vectors.json`, language-neutral, with `src/vectors.rs` as a test-asserted mirror. Coverage is thin: three operator cases, four of 256 byte tips, one fold, **one of eighteen** projection wire forms, and no projection identity at all |
-| Conformance fixtures | `conformance/vectors.json` and `conformance/README.md` ship, keyed to the specification's sections in three levels. The cross product of reads is not covered, and there are no rejection cases — so "conforming" currently means "agrees on good input", which is not what a trust boundary is |
+| Conformance fixtures | `conformance/vectors.json` and `conformance/README.md` ship, keyed to the specification's sections in three levels. All eighteen reads are covered, and eight rejection cases are, so "conforming" now includes refusing a well-formed forgery rather than only agreeing on good input. `conformance/MANIFEST.json` plus `scripts/gates/fixture_coverage.sh` make the coverage derived rather than asserted: a public function that produces a published value fails the gate until a vector or a reason is written down. What is still untested is the specification's **sufficiency** — no implementation has been written from the document alone |
 | Reference implementations | None in the repository. An independent reimplementation was reported but no artifact survives, so treat the specification's sufficiency as untested until one ships |
 | The freeze | Mechanical. The vectors live outside the crate they pin, their digest is pinned in a separate file, and a live engine is asserted against them — so moving a published identifier takes four coordinated, visible edits. The limit, stated in the gate: a deliberate change can still make all four at once. What is closed is identity moving as a *side effect* |
 | C ABI | Not built; an open owner decision |

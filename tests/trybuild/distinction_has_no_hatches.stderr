@@ -44,9 +44,9 @@ error[E0277]: the trait bound `Distinction: AnyBitPattern` is not satisfied
              Option<T>
              PhantomData<T>
              PhantomPinned
-             RawDistinctionId
              Wrapping<T>
              [T; 0]
+             [T; 1024]
            and $N others
    = note: required for `Distinction` to implement `AnyBitPattern`
 note: required by a bound in `bytemuck::cast`

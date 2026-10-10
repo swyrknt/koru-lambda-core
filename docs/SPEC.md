@@ -183,12 +183,43 @@ tip_of_byte(v):
 
 Eight synthesize calls per byte, and 256 distinct tips.
 
-So the substrate has one lift rule applied at two levels: bytes fold
-over the primordials, sequences fold over the byte tips. An
-implementation reproducing §10's vectors — which include byte tips and a
-sequence fold — must implement this exactly;
-an encoding that produces distinct tips by some other route is a
-different substrate.
+### 4.4 Composite values
+
+A value with named parts is lifted by lifting each part to a distinction
+and folding those, in declared part order, by §4.2 — the alphabet being
+the parts' own tips. Length is folded in first, as always, over the byte
+alphabet.
+
+Nesting needs no further rule. A composite's fold is a distinction, and a
+distinction is an element one level up, so a part that is itself a
+composite is folded as its own tip. Grouping is therefore part of the
+value: `{{a, b}, c}` and `{a, b, c}` carry the same parts in the same
+order and do not coincide.
+
+This is specified because the alternative is worse, not because it is the
+only option. A rule laying composites out as **bytes** — fields
+concatenated with length prefixes, then byte-folded — would have to say
+how a nested composite is framed within those bytes, which is a
+serialisation format growing inside this document. Folding distinctions
+keeps the specification at one rule.
+
+Two constraints are not negotiable at this level:
+
+1. **The anchor may not be a byte tip.** The length prefix folds over the
+   byte alphabet, so the first step has the same collapse exposure as a
+   byte fold's.
+2. **No part may equal the accumulator it folds into.** `synthesize(a, a)`
+   returns `a`, so such a step drops the part. With parts drawn from a
+   fixed alphabet this is the collision bound of §11; with
+   caller-supplied distinctions it is reachable, and an implementation
+   must refuse it rather than silently produce a shorter fold.
+
+So the substrate has one lift rule applied at three levels: bits fold
+over the primordials, bytes fold over the bit tips, composites fold over
+their parts' tips. An implementation reproducing §10's vectors — which
+include byte tips, a sequence fold, and a nested composite — must
+implement this exactly; an encoding that produces distinct tips by some
+other route is a different substrate.
 
 ## 5. Projections
 
@@ -352,6 +383,25 @@ string.)
 
 Reading the first bytes against §7: `4b 50 52 4a` is `KPRJ`, `02` is the
 version, and the next 16 bytes are `c`.
+
+The complete set — byte tips, the sequence fold, the four domain anchors,
+the three output encodings of §6, the composite folds of §4.4, all
+eighteen projections with their identifiers, and the inputs an
+implementation must **refuse** — is `conformance/vectors.json`, with
+`conformance/README.md` naming which level each belongs to. This section
+is the subset a reader can check by hand; that file is the one to certify
+against.
+
+Two of those deserve naming here, because an implementation can satisfy
+everything else and still fail them:
+
+- The §4.4 composite cases include a nested fold and its flattened
+  counterpart. They carry the same parts in the same order and differ
+  only in grouping, so an implementation that flattens structure
+  reproduces every other value in the file and disagrees with these.
+- Only four of the eighteen projections are invariant under appending to
+  the engine. The other fourteen are reproducible only against the
+  history the fixture declares.
 
 ## 11. Limits
 

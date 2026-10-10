@@ -25,7 +25,7 @@
 //! it, and it captures "time is what consumers do" as a composable
 //! trait.
 
-use koru_lambda_core::primitives::Canonicalizable;
+use koru_lambda_core::primitives::{ByteFold, Canonicalizable};
 use koru_lambda_core::{Distinction, DistinctionEngine};
 use std::sync::Arc;
 
@@ -51,13 +51,18 @@ pub trait LocalCausalAgent {
     /// [`synthesize_causal_action`] +
     /// [`update_local_root`](LocalCausalAgent::update_local_root);
     /// override only for finer control.
+    ///
+    /// Takes the [`ByteFold`] rather than building one, because an agent
+    /// acting in a loop would otherwise rebuild the 256-tip table on every
+    /// action.
     #[must_use]
     fn synthesize_action(
         &mut self,
         action: Self::ActionData,
+        fold: &ByteFold,
         engine: &Arc<DistinctionEngine>,
     ) -> Distinction {
-        let new_root = synthesize_causal_action(self.get_current_root(), action, engine);
+        let new_root = synthesize_causal_action(self.get_current_root(), action, fold, engine);
         self.update_local_root(new_root);
         new_root
     }
@@ -83,9 +88,10 @@ pub trait LocalCausalAgent {
 pub fn synthesize_causal_action<A: Canonicalizable>(
     local_root: Distinction,
     action: A,
+    fold: &ByteFold,
     engine: &Arc<DistinctionEngine>,
 ) -> Distinction {
-    let action_d = action.to_canonical_structure(engine);
+    let action_d = action.to_canonical_structure(fold, engine);
     engine.synthesize(local_root, action_d)
 }
 
@@ -134,10 +140,11 @@ mod tests {
         let mut lca_b = TestLca::new(initial);
 
         let actions: Vec<u8> = vec![1, 2, 3, 5, 8, 13, 21, 42, 0xFF, 0x00];
+        let fold = ByteFold::new(&engine);
 
         for &action in &actions {
-            let root_a = lca_a.synthesize_action(action, &engine);
-            let root_b = lca_b.synthesize_action(action, &engine);
+            let root_a = lca_a.synthesize_action(action, &fold, &engine);
+            let root_b = lca_b.synthesize_action(action, &fold, &engine);
             assert_eq!(
                 root_a, root_b,
                 "LCA chains diverged on action {action}; substrate broke determinism"
@@ -157,7 +164,7 @@ mod tests {
         let mut lca = TestLca::new(engine.d0());
 
         let old_root = lca.get_current_root();
-        let new_root = lca.synthesize_action(42, &engine);
+        let new_root = lca.synthesize_action(42, &ByteFold::new(&engine), &engine);
 
         assert_ne!(old_root, new_root, "advance produced same root");
         let (p1, p2) = engine
@@ -178,8 +185,9 @@ mod tests {
         let mut lca = TestLca::new(engine.d0());
         let mut chain = vec![lca.get_current_root()];
 
+        let fold = ByteFold::new(&engine);
         for action in 1u8..=5 {
-            let new_root = lca.synthesize_action(action, &engine);
+            let new_root = lca.synthesize_action(action, &fold, &engine);
             chain.push(new_root);
         }
 
@@ -201,8 +209,9 @@ mod tests {
         let mut lca = TestLca::new(engine.d0());
         let root = lca.get_current_root();
 
-        let via_helper = synthesize_causal_action(root, 42u8, &engine);
-        let via_trait = lca.synthesize_action(42u8, &engine);
+        let fold = ByteFold::new(&engine);
+        let via_helper = synthesize_causal_action(root, 42u8, &fold, &engine);
+        let via_trait = lca.synthesize_action(42u8, &fold, &engine);
 
         assert_eq!(via_helper, via_trait);
     }

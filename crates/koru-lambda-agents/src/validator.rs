@@ -87,25 +87,18 @@ impl TransactionAction {
 }
 
 impl TransactionAction {
-    /// Fold this transaction into a distinction by reference.
+    /// Fold this transaction, building a [`ByteFold`] for the call.
     ///
-    /// Reference-taking counterpart to the [`Canonicalizable`] trait's
-    /// `to_canonical_structure` (which consumes). Used by
-    /// [`ConsensusValidator::validate_batch`]'s commit loop and by
-    /// [`commitment::BatchCommitment::compute`](super::commitment)
-    /// to fold each transaction without cloning.
-    ///
-    /// Folds nonce (8 bytes little-endian) followed by the data bytes,
-    /// through the substrate's anchored fold.
-    ///
-    /// Builds a [`ByteFold`] per call. Loops over many transactions should
-    /// use [`Self::canonicalize_with`] and share one.
+    /// Convenience for a single transaction. A loop over many should build
+    /// one fold and call [`Canonicalizable::to_canonical_structure`]
+    /// directly, which is what `compute_batch_root` does — the 256-tip
+    /// table would otherwise dominate a thousand-transaction batch.
     pub(crate) fn canonicalize(&self, engine: &DistinctionEngine) -> Distinction {
-        self.canonicalize_with(&ByteFold::new(engine), engine)
+        self.to_canonical_structure(&ByteFold::new(engine), engine)
     }
+}
 
-    /// Fold against an already-built [`ByteFold`].
-    ///
+impl Canonicalizable for TransactionAction {
     /// The sequence is `nonce ‖ data`. The nonce is a fixed eight bytes,
     /// so the boundary between the two is unambiguous, and the fold binds
     /// the total length.
@@ -116,21 +109,20 @@ impl TransactionAction {
     /// distinction, and so did data `[0x00]` and `[0x00, 0x00]`. The
     /// anchored fold is the fix, and the anchor also separates
     /// transactions from other folded types.
-    pub(crate) fn canonicalize_with(
-        &self,
-        fold: &ByteFold,
-        engine: &DistinctionEngine,
-    ) -> Distinction {
+    ///
+    /// The hand-rolled `nonce ‖ data` concatenation predates
+    /// `docs/SPEC.md` §4.4, which now specifies composites as a fold over
+    /// their parts' tips. The argument above — "the nonce is a fixed eight
+    /// bytes, so the boundary is unambiguous" — is the framing reasoning a
+    /// consumer had to supply for itself, and §4.4 is what removes the
+    /// need for it. Moving to `fold_distinctions` would change this
+    /// type's identities, so it is a consumer-layer decision and not part
+    /// of the substrate change that made it available.
+    fn to_canonical_structure(&self, fold: &ByteFold, engine: &DistinctionEngine) -> Distinction {
         let mut bytes = Vec::with_capacity(8 + self.data.len());
         bytes.extend_from_slice(&self.nonce.to_le_bytes());
         bytes.extend_from_slice(&self.data);
         fold.fold(domain_anchor(engine, fold, DOMAIN_TRANSACTION), &bytes, engine)
-    }
-}
-
-impl Canonicalizable for TransactionAction {
-    fn to_canonical_structure(self, engine: &DistinctionEngine) -> Distinction {
-        self.canonicalize(engine)
     }
 }
 
@@ -625,7 +617,12 @@ mod tests {
         let (engine, mut v) = fresh();
         let r0 = v.get_current_root();
         let action = tx(0, b"single");
-        let new_root = synthesize_causal_action(v.get_current_root(), action, &engine);
+        let new_root = synthesize_causal_action(
+            v.get_current_root(),
+            action,
+            &ByteFold::new(&engine),
+            &engine,
+        );
         v.update_local_root(new_root);
         assert_ne!(v.get_current_root(), r0);
         assert_eq!(v.get_current_root(), new_root);

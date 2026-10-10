@@ -10,8 +10,8 @@
 //! on [`DistinctionEngine::project`]:
 //!
 //! ```
-//! use koru_lambda_core::{Adjacency, DistinctionEngine};
-//! use koru_lambda_core::projection::Direction;
+//! use koru_lambda_core::projection::{Adjacency, Direction};
+//! use koru_lambda_core::DistinctionEngine;
 //!
 //! let engine = DistinctionEngine::new();
 //! let child = engine.synthesize(engine.d0(), engine.d1());
@@ -49,31 +49,6 @@ use std::any::TypeId;
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::marker::PhantomData;
 use std::sync::Arc;
-
-// -------------------------------------------------------------------------
-// Precomputed `TYPE_ID<S>` const-table
-// -------------------------------------------------------------------------
-//
-// Hardcoded 16-byte truncations of `SHA-256(b"koru:signal:v1:<name>")`
-// for each substrate `CoreSignal` ZST. The wire format uses
-// [`signal_identity`] (runtime SHA-256) for the general `S: Signal`
-// path; these constants short-circuit the SHA-256 for the fast
-// `CoreSignal`-bounded [`type_id_of`] path.
-//
-// Single source of truth (no `build.rs`, no `include!`, no `sha2`
-// build-dep). The `type_id_constants_match_runtime_sha` inline test is
-// the drift guard: if any tag string here diverges from the constant
-// derivation, `cargo test` fails immediately.
-
-/// `SHA-256(b"koru:signal:v1:adjacency")[..16]`.
-pub(crate) const ADJACENCY_TYPE_ID: [u8; 16] =
-    [208, 185, 210, 86, 47, 219, 44, 63, 63, 164, 184, 163, 37, 139, 119, 129];
-/// `SHA-256(b"koru:signal:v1:degree")[..16]`.
-pub(crate) const DEGREE_TYPE_ID: [u8; 16] =
-    [62, 0, 168, 0, 141, 229, 206, 163, 228, 104, 15, 112, 202, 14, 181, 102];
-/// `SHA-256(b"koru:signal:v1:hop_distance")[..16]`.
-pub(crate) const HOPDISTANCE_TYPE_ID: [u8; 16] =
-    [239, 98, 9, 69, 48, 159, 195, 83, 226, 216, 248, 203, 177, 211, 144, 118];
 
 // -------------------------------------------------------------------------
 // Sealed marker — external crates cannot reach this module.
@@ -147,13 +122,15 @@ impl CanonicalBytes for Option<ParentPair> {
 /// and by [`ReadyBuilder::materialize`]'s compute fallback path.
 ///
 /// Naming the shape once avoids repeating `BTreeMap<Distinction,
-/// <S as Signal>::Output>` at every substrate dispatch boundary. The
-/// alias is exposed under `koru_lambda_core::projection::SignalOutputs`
-/// for consumers that need to name the shape in their own type
-/// signatures (e.g., wrappers around `__materialize_special`); it is
-/// intentionally NOT re-exported at the flat crate root (Option B —
-/// implementation-detail alias, not top-level API).
-pub type SignalOutputs<S> = BTreeMap<Distinction, <S as Signal>::Output>;
+/// <S as Signal>::Output>` at every substrate dispatch boundary.
+///
+/// Crate-private, and necessarily so: the alias appears in exactly one
+/// signature, [`CoreSignal::__materialize_special`], and `CoreSignal` is
+/// sealed. No consumer can write that signature, so no consumer can need
+/// the name. It was public, under a doc claiming it was there "for
+/// consumers that need to name the shape in their own type signatures" —
+/// a use the sealing had already made impossible.
+pub(crate) type SignalOutputs<S> = BTreeMap<Distinction, <S as Signal>::Output>;
 
 /// A signal — a per-node computation over the projection cone.
 ///
@@ -362,7 +339,7 @@ impl CoreSignal for HopDistance {
 }
 
 /// Domain-separated byte tag for [`Adjacency`] — feeds the
-/// `signal_identity` header and the `ADJACENCY_TYPE_ID` constant.
+/// `signal_identity` header.
 const ADJACENCY_TAG: &[u8] = b"koru:signal:v1:adjacency";
 /// Domain-separated byte tag for [`Degree`].
 const DEGREE_TAG: &[u8] = b"koru:signal:v1:degree";
@@ -410,24 +387,6 @@ impl Signal for HopDistance {
 
     fn canonical_bytes(&self) -> &[u8] {
         HOPDISTANCE_TAG
-    }
-}
-
-/// Return the 16-byte precomputed `TYPE_ID` for a `CoreSignal`. Reduces
-/// to a compiler-inlined constant lookup (no runtime SHA-256).
-///
-/// For general `S: Signal`, use [`signal_identity`] instead.
-#[must_use]
-pub fn type_id_of<S: CoreSignal>() -> [u8; 16] {
-    let tid = TypeId::of::<S>();
-    if tid == TypeId::of::<Adjacency>() {
-        ADJACENCY_TYPE_ID
-    } else if tid == TypeId::of::<Degree>() {
-        DEGREE_TYPE_ID
-    } else if tid == TypeId::of::<HopDistance>() {
-        HOPDISTANCE_TYPE_ID
-    } else {
-        unreachable!("CoreSignal is sealed to Adjacency/Degree/HopDistance")
     }
 }
 
@@ -648,7 +607,15 @@ pub trait ReadOnlyEngine: private::Sealed + Send + Sync {
 #[must_use = "Projection carries an owned BTreeMap; drop it explicitly if intentional"]
 #[non_exhaustive]
 pub struct Projection<'e, S: Signal> {
-    pub(crate) engine: &'e (dyn ReadOnlyEngine + Send + Sync),
+    /// The binding is the lifetime, not a reference. A materialized
+    /// projection is a value: nothing it answers — identity, wire bytes,
+    /// the entry map, membership — consults the engine again. Holding
+    /// `&'e dyn ReadOnlyEngine` here implied otherwise, and the field sat
+    /// unread once `aggregate()` was removed. `PhantomData<&'e _>` has
+    /// the same variance and the same `Send`/`Sync` result, and says the
+    /// true thing: a projection cannot outlive the engine that witnessed
+    /// its cone.
+    pub(crate) engine: PhantomData<&'e (dyn ReadOnlyEngine + Send + Sync)>,
     pub(crate) spec: ProjectionSpec<S>,
     pub(crate) output: ProjectionOutput<S>,
 }
@@ -766,21 +733,6 @@ impl<'e, S: Signal> Projection<'e, S> {
     #[must_use]
     pub fn contains(&self, d: &Distinction) -> bool {
         self.output.contains(d)
-    }
-
-    /// The signal aggregate over the cone (see
-    /// [`Signal::compute_aggregate`]). Returns `None` for non-aggregate
-    /// signals.
-    #[must_use]
-    pub fn aggregate(&self) -> Option<S::Output> {
-        let ctx = SignalContext {
-            engine: self.engine,
-            root: self.spec.root,
-            direction: self.spec.direction,
-            boundary: self.spec.boundary,
-        };
-        let cone: Vec<Distinction> = self.output.inner.keys().copied().collect();
-        self.spec.signal.compute_aggregate(&ctx, cone)
     }
 }
 
@@ -1132,7 +1084,7 @@ impl<'e, S: Signal> ReadyBuilder<'e, S> {
             });
 
         Projection {
-            engine: self.engine,
+            engine: PhantomData,
             spec: ProjectionSpec {
                 root: self.root,
                 boundary: self.boundary,
@@ -1372,13 +1324,6 @@ mod tests {
         // structurally identical after the lifetime narrowing.
         let narrowed = narrow_lifetime(proj);
         assert!(narrowed.contains(&e.d0()));
-    }
-
-    #[test]
-    fn type_id_constants_match_runtime_sha() {
-        assert_eq!(type_id_of::<Adjacency>(), signal_identity(&Adjacency));
-        assert_eq!(type_id_of::<Degree>(), signal_identity(&Degree));
-        assert_eq!(type_id_of::<HopDistance>(), signal_identity(&HopDistance));
     }
 
     #[test]

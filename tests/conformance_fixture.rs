@@ -20,10 +20,10 @@
 //!    files agreeing with each other about a lie.
 
 use koru_lambda_core::projection::{
-    Adjacency, Degree, Direction, HopDistance, RestoreError, Signal,
+    Adjacency, CanonicalBytes, Degree, Direction, HopDistance, RestoreError, Signal,
 };
 use koru_lambda_core::{
-    domain_anchor, vectors, ByteFold, Distinction, DistinctionEngine, RawDistinctionId,
+    domain_anchor, vectors, ByteFold, Distinction, DistinctionEngine, DomainLabel, RawDistinctionId,
 };
 use serde_json::Value;
 
@@ -162,7 +162,7 @@ fn a_live_engine_reproduces_the_fixture() {
         let label =
             u8::try_from(anchor_case["label"].as_u64().expect("label")).expect("label fits u8");
         assert_eq!(
-            hex::encode(domain_anchor(&e, &fold, label).as_bytes()),
+            hex::encode(domain_anchor(&e, &fold, DomainLabel::new(label)).as_bytes()),
             anchor_case["id"].as_str().expect("id"),
             "a live engine disagrees with the fixture on the anchor for domain {label:#04x}"
         );
@@ -332,4 +332,122 @@ fn every_rejection_case_is_rejected() {
             other => panic!("{name}: fixture asks for unknown error kind {other}"),
         }
     }
+}
+
+/// The three byte encodings the substrate publishes for signal outputs,
+/// asserted against the live impls.
+///
+/// These are part of the wire format rather than of any one signal, and
+/// `bool` proves why that distinction matters: no shipped signal has
+/// `Output = bool`, so the projection cases could never reach its encoding,
+/// and an implementation that wrote `true` as `0xFF` would have passed every
+/// other case in the fixture. The encoding is still published — a consumer
+/// signal with a boolean output serialises through it and a second
+/// implementation has to agree.
+#[test]
+fn the_published_output_encodings_are_what_the_impls_produce() {
+    let f = fixture();
+    let cases =
+        f.pointer("/lift/canonical_bytes/cases").and_then(Value::as_array).expect("encoding cases");
+
+    let e = DistinctionEngine::new();
+    let mut checked = 0usize;
+    for c in cases {
+        let ty = c["type"].as_str().expect("type");
+        let want = c["bytes"].as_str().expect("bytes");
+        let got = match ty {
+            "bool" => c["value"].as_bool().expect("bool value").canonical_bytes(),
+            "usize" => {
+                let n = usize::try_from(c["value"].as_u64().expect("usize value"))
+                    .expect("fixture usize fits this target");
+                n.canonical_bytes()
+            },
+            "Option<ParentPair>" => match c["value"].as_array() {
+                None => None.canonical_bytes(),
+                Some(pair) => {
+                    let mut ds = pair.iter().map(|h| {
+                        let raw = RawDistinctionId::from_hex(h.as_str().expect("hex"))
+                            .expect("fixture pair is hex");
+                        e.verify(raw).expect("fixture pair names a primordial this engine has")
+                    });
+                    let (min, max) = (ds.next().expect("min"), ds.next().expect("max"));
+                    Some((min, max)).canonical_bytes()
+                },
+            },
+            other => panic!("fixture names an output type with no impl to check: {other}"),
+        };
+        assert_eq!(hex::encode(&got), want, "{ty} {} encodes differently", c["value"]);
+        checked += 1;
+    }
+    assert_eq!(checked, cases.len(), "every encoding case must be checked, not skipped");
+
+    // Cond D width: the usize encoding must not follow the target pointer.
+    assert_eq!(usize::MAX.canonical_bytes().len(), 8, "usize encodes as 8 bytes on every target");
+}
+
+/// The composite rule, asserted against a live engine.
+///
+/// Every element in these cases is derived rather than listed — a byte whose
+/// tip it is, or an earlier case in the same block — so the fixture states no
+/// value twice and this test has to resolve the references to check anything.
+/// That is deliberate: the one thing a composite fixture must not do is carry
+/// a hand-copied identifier, because then it certifies a transcription.
+#[test]
+fn the_composite_fold_is_what_a_live_engine_produces() {
+    let f = fixture();
+    let e = DistinctionEngine::new();
+    let c = e.synthesize(e.d0(), e.d1());
+    let d = e.synthesize(c, e.d0());
+    let _ = e.synthesize(d, e.d1());
+    let fold = ByteFold::new(&e);
+
+    let cases =
+        f.pointer("/lift/composites/cases").and_then(Value::as_array).expect("composite cases");
+    assert!(cases.len() >= 4, "the composite block needs the flat/nested pair and a domain case");
+
+    let mut by_name: std::collections::BTreeMap<String, Distinction> = Default::default();
+    for case in cases {
+        let name = case["name"].as_str().expect("name").to_owned();
+
+        let anchor = &case["anchor"];
+        let anchor = if let Some(h) = anchor.get("case_history").and_then(Value::as_str) {
+            assert_eq!(h, "d", "{name}: only `d` is declared as a composite anchor");
+            d
+        } else if let Some(label) = anchor.get("domain").and_then(Value::as_u64) {
+            let label = u8::try_from(label).expect("a domain label is one byte");
+            domain_anchor(&e, &fold, DomainLabel::new(label))
+        } else {
+            panic!("{name}: anchor names neither a history node nor a domain");
+        };
+
+        let elements: Vec<Distinction> = case["elements"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{name}: elements"))
+            .iter()
+            .map(|el| {
+                if let Some(b) = el.get("tip_of_byte").and_then(Value::as_u64) {
+                    fold.tip(u8::try_from(b).expect("a byte"))
+                } else if let Some(prior) = el.get("case").and_then(Value::as_str) {
+                    *by_name.get(prior).unwrap_or_else(|| {
+                        panic!("{name}: references case `{prior}`, which is not listed before it")
+                    })
+                } else {
+                    panic!("{name}: an element is neither a byte tip nor an earlier case")
+                }
+            })
+            .collect();
+
+        let got = fold.fold_distinctions(anchor, &elements, &e);
+        assert_eq!(
+            got.to_hex(),
+            case["id"].as_str().expect("id"),
+            "{name}: the composite fold disagrees with the fixture"
+        );
+        by_name.insert(name, got);
+    }
+
+    // The point of the pair: same leaves, same order, different grouping.
+    let flat = by_name["flat_1_2_3"];
+    let nested = by_name["nested_1_2_then_3"];
+    assert_ne!(flat, nested, "grouping must be part of the value, or nesting carries nothing");
 }

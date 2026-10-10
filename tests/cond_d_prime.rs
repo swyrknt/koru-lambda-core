@@ -33,12 +33,12 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
-    use koru_lambda_core::projection::Direction;
+    use koru_lambda_core::projection::{Adjacency, Direction};
     use koru_lambda_core::vectors::{
         ADJACENCY_UPSTREAM_HOPS2_CANONICAL_HEX as EXPECTED_CANONICAL_BYTES_HEX,
         C_HEX as EXPECTED_C_HEX, D_HEX as EXPECTED_D_HEX, E_HEX as EXPECTED_E_HEX,
     };
-    use koru_lambda_core::{Adjacency, DistinctionEngine};
+    use koru_lambda_core::DistinctionEngine;
 
     #[test]
     fn cond_d_prime_native_matches_fixture() {

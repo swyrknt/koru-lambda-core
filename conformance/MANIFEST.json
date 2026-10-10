@@ -1,0 +1,107 @@
+{
+  "$comment": "Which public functions that produce an identity, a projection identifier, or wire bytes `vectors.json` pins, and which it deliberately does not. `scripts/gates/fixture_coverage.sh` derives the same set from the committed API snapshot and fails if the two disagree in either direction, so a function added in 2.1 fails the gate until someone writes down a vector or a reason. Coverage without that gate holds for today's surface and lapses for tomorrow's.\n\nThis lives outside `vectors.json` on purpose. That file's digest is pinned in `VECTORS.sha256` and changing it is a statement that published identity moved. Coverage bookkeeping changes whenever the surface does, which is often and which says nothing about identity; keeping it here means the two diffs cannot be mistaken for each other.\n\nKeys are the module path with generic arguments dropped, which is how the gate spells a derived name; there is one impl per shape, so nothing collides. Pointers in `covered` are JSON pointers into `vectors.json`.",
+  "covered": {
+    "Option::canonical_bytes": [
+      "/lift/canonical_bytes/cases"
+    ],
+    "bool::canonical_bytes": [
+      "/lift/canonical_bytes/cases"
+    ],
+    "engine::Distinction::to_hex": [
+      "/operator/cases"
+    ],
+    "engine::DistinctionEngine::d0": [
+      "/primordials/d0"
+    ],
+    "engine::DistinctionEngine::d1": [
+      "/primordials/d1"
+    ],
+    "engine::DistinctionEngine::parents_of": [
+      "/projections/cases"
+    ],
+    "engine::DistinctionEngine::restore_projection": [
+      "/projections/cases",
+      "/reject/cases"
+    ],
+    "engine::DistinctionEngine::synthesize": [
+      "/operator/cases"
+    ],
+    "engine::DistinctionEngine::verify": [
+      "/reject/cases"
+    ],
+    "engine::RawDistinctionId::to_hex": [
+      "/operator/cases"
+    ],
+    "primitives::ByteFold::fold": [
+      "/lift/folds"
+    ],
+    "primitives::ByteFold::fold_distinctions": [
+      "/lift/composites/cases"
+    ],
+    "primitives::ByteFold::tip": [
+      "/lift/tips"
+    ],
+    "primitives::ByteMapping::map_byte_to_distinction": [
+      "/lift/tips"
+    ],
+    "primitives::Canonicalizable::to_canonical_structure": [
+      "/lift/tips"
+    ],
+    "primitives::domain_anchor": [
+      "/lift/domain_anchors/cases"
+    ],
+    "projection::CanonicalBytes::canonical_bytes": [
+      "/lift/canonical_bytes/cases"
+    ],
+    "projection::Projection::canonical_bytes": [
+      "/projections/cases"
+    ],
+    "projection::Projection::projection_id": [
+      "/projections/cases"
+    ],
+    "projection::Projection::try_canonical_bytes": [
+      "/projections/cases"
+    ],
+    "projection::ProjectionOutput::iter": [
+      "/projections/cases"
+    ],
+    "projection::ReadOnlyEngine::d0": [
+      "/primordials/d0"
+    ],
+    "projection::ReadOnlyEngine::d1": [
+      "/primordials/d1"
+    ],
+    "projection::ReadOnlyEngine::parents_of": [
+      "/projections/cases"
+    ],
+    "projection::ReadyBuilder::materialize": [
+      "/projections/cases"
+    ],
+    "projection::signal_identity": [
+      "/projections/cases"
+    ],
+    "u8::to_canonical_structure": [
+      "/lift/tips"
+    ],
+    "usize::canonical_bytes": [
+      "/lift/canonical_bytes/cases"
+    ]
+  },
+  "exempt": {
+    "distinction_hex::raw_serde_adapter::deserialize": "A serde adapter over the hex form /operator/cases pins, in a Rust-specific serialization framework. `docs/SPEC.md` defines no JSON envelope.",
+    "engine::Distinction::as_bytes": "Borrows the sixteen bytes the identity already is. Pinning it would pin the same value twice.",
+    "engine::Distinction::clone": "Returns its receiver unchanged; there is no second value for a vector to pin.",
+    "engine::DistinctionEngine::snapshot_distinctions": "In-memory Rust, no wire form. Order is unspecified by `docs/SPEC.md` and implementations need not agree.",
+    "engine::DistinctionEngine::snapshot_parentage": "Same: in-memory, no wire form.",
+    "engine::DistinctionEngine::synthesize_novel": "The identity is /operator/cases. The novelty bit is this engine's history, not a published value: the same synthesis is Novel on a fresh engine and Existing on one that has seen it, and both are correct.",
+    "engine::RawDistinctionId::as_bytes": "Same: a borrow, not a derivation.",
+    "engine::RawDistinctionId::clone": "Returns its receiver unchanged; there is no second value for a vector to pin.",
+    "engine::SynthesisOutcome::clone": "Returns its receiver unchanged; there is no second value for a vector to pin.",
+    "engine::SynthesisOutcome::distinction": "Projects out the value /operator/cases already pins.",
+    "projection::ProjectionId::as_bytes": "Same: a borrow of the identity /projections/cases pins.",
+    "projection::ProjectionId::clone": "Returns its receiver unchanged; there is no second value for a vector to pin.",
+    "projection::ReadOnlyEngine::snapshot_distinctions": "The read-only view of a method already exempt on the engine, for the same reason: in-memory Rust with no wire form and no specified order.",
+    "projection::ReadOnlyEngine::snapshot_parentage": "The read-only view of a method already exempt on the engine, for the same reason: in-memory Rust with no wire form and no specified order.",
+    "replay::replay_topological": "Reconstructs an engine from a Rust snapshot. The theorem it proves (parentage suffices) is pinned by /projections/cases via Adjacency; the function signature is Rust-specific and has no wire form to agree on."
+  }
+}

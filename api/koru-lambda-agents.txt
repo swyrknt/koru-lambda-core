@@ -3,19 +3,19 @@ pub mod koru_lambda_agents::agent
 pub trait koru_lambda_agents::agent::LocalCausalAgent
 pub type koru_lambda_agents::agent::LocalCausalAgent::ActionData: koru_lambda_core::primitives::Canonicalizable
 pub fn koru_lambda_agents::agent::LocalCausalAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::agent::LocalCausalAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::agent::LocalCausalAgent::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::agent::LocalCausalAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::commitment::CommitmentAgent
 pub type koru_lambda_agents::commitment::CommitmentAgent::ActionData = koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::commitment::CommitmentAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::commitment::CommitmentAgent::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::commitment::CommitmentAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::validator::ConsensusValidator
 pub type koru_lambda_agents::validator::ConsensusValidator::ActionData = koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::ConsensusValidator::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::validator::ConsensusValidator::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::validator::ConsensusValidator::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::validator::ConsensusValidator::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
-pub fn koru_lambda_agents::agent::synthesize_causal_action<A: koru_lambda_core::primitives::Canonicalizable>(koru_lambda_core::engine::Distinction, A, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::agent::synthesize_causal_action<A: koru_lambda_core::primitives::Canonicalizable>(koru_lambda_core::engine::Distinction, A, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub mod koru_lambda_agents::children_index
 pub fn koru_lambda_agents::children_index::build_children_index(&[(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)]) -> std::collections::hash::map::HashMap<koru_lambda_core::engine::Distinction, alloc::vec::Vec<koru_lambda_core::engine::Distinction>>
 pub mod koru_lambda_agents::commitment
@@ -62,7 +62,7 @@ impl core::fmt::Debug for koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::BatchCommitment::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for koru_lambda_agents::commitment::BatchCommitment
 impl koru_lambda_core::primitives::Canonicalizable for koru_lambda_agents::commitment::BatchCommitment
-pub fn koru_lambda_agents::commitment::BatchCommitment::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::commitment::BatchCommitment::to_canonical_structure(&self, &koru_lambda_core::primitives::ByteFold, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
 impl serde_core::ser::Serialize for koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::BatchCommitment::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_agents::commitment::BatchCommitment
@@ -122,7 +122,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::commitment:
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::commitment::BatchDataResponse
 pub struct koru_lambda_agents::commitment::CommitmentAgent
 impl koru_lambda_agents::commitment::CommitmentAgent
-pub fn koru_lambda_agents::commitment::CommitmentAgent::advance(&mut self, koru_lambda_agents::commitment::BatchCommitment, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>)
+pub fn koru_lambda_agents::commitment::CommitmentAgent::advance(&mut self, koru_lambda_agents::commitment::BatchCommitment, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>)
 pub fn koru_lambda_agents::commitment::CommitmentAgent::cache_batch(&mut self, koru_lambda_agents::validator::TransactionBatch, koru_lambda_agents::commitment::BatchCommitment)
 pub const fn koru_lambda_agents::commitment::CommitmentAgent::commitments_processed(&self) -> u64
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_cached_batch(&mut self, &[u8; 32]) -> core::option::Option<&koru_lambda_agents::commitment::CachedBatch>
@@ -133,7 +133,7 @@ pub fn koru_lambda_agents::commitment::CommitmentAgent::with_capacity(&koru_lamb
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::commitment::CommitmentAgent
 pub type koru_lambda_agents::commitment::CommitmentAgent::ActionData = koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::commitment::CommitmentAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::commitment::CommitmentAgent::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::commitment::CommitmentAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 impl core::marker::Freeze for koru_lambda_agents::commitment::CommitmentAgent
 impl core::marker::Send for koru_lambda_agents::commitment::CommitmentAgent
@@ -209,7 +209,7 @@ pub fn koru_lambda_agents::validator::ConsensusValidator::validate_batch(&mut se
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::validator::ConsensusValidator
 pub type koru_lambda_agents::validator::ConsensusValidator::ActionData = koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::ConsensusValidator::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::validator::ConsensusValidator::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::validator::ConsensusValidator::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::validator::ConsensusValidator::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 impl core::marker::Freeze for koru_lambda_agents::validator::ConsensusValidator
 impl core::marker::Send for koru_lambda_agents::validator::ConsensusValidator
@@ -232,7 +232,7 @@ impl core::fmt::Debug for koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::TransactionAction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for koru_lambda_agents::validator::TransactionAction
 impl koru_lambda_core::primitives::Canonicalizable for koru_lambda_agents::validator::TransactionAction
-pub fn koru_lambda_agents::validator::TransactionAction::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::validator::TransactionAction::to_canonical_structure(&self, &koru_lambda_core::primitives::ByteFold, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
 impl serde_core::ser::Serialize for koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::TransactionAction::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_agents::validator::TransactionAction
@@ -349,7 +349,7 @@ impl core::fmt::Debug for koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::BatchCommitment::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for koru_lambda_agents::commitment::BatchCommitment
 impl koru_lambda_core::primitives::Canonicalizable for koru_lambda_agents::commitment::BatchCommitment
-pub fn koru_lambda_agents::commitment::BatchCommitment::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::commitment::BatchCommitment::to_canonical_structure(&self, &koru_lambda_core::primitives::ByteFold, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
 impl serde_core::ser::Serialize for koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::BatchCommitment::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_agents::commitment::BatchCommitment
@@ -409,7 +409,7 @@ impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::commitment:
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::commitment::BatchDataResponse
 pub struct koru_lambda_agents::CommitmentAgent
 impl koru_lambda_agents::commitment::CommitmentAgent
-pub fn koru_lambda_agents::commitment::CommitmentAgent::advance(&mut self, koru_lambda_agents::commitment::BatchCommitment, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>)
+pub fn koru_lambda_agents::commitment::CommitmentAgent::advance(&mut self, koru_lambda_agents::commitment::BatchCommitment, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>)
 pub fn koru_lambda_agents::commitment::CommitmentAgent::cache_batch(&mut self, koru_lambda_agents::validator::TransactionBatch, koru_lambda_agents::commitment::BatchCommitment)
 pub const fn koru_lambda_agents::commitment::CommitmentAgent::commitments_processed(&self) -> u64
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_cached_batch(&mut self, &[u8; 32]) -> core::option::Option<&koru_lambda_agents::commitment::CachedBatch>
@@ -420,7 +420,7 @@ pub fn koru_lambda_agents::commitment::CommitmentAgent::with_capacity(&koru_lamb
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::commitment::CommitmentAgent
 pub type koru_lambda_agents::commitment::CommitmentAgent::ActionData = koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::commitment::CommitmentAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::commitment::CommitmentAgent::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::commitment::CommitmentAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 impl core::marker::Freeze for koru_lambda_agents::commitment::CommitmentAgent
 impl core::marker::Send for koru_lambda_agents::commitment::CommitmentAgent
@@ -439,7 +439,7 @@ pub fn koru_lambda_agents::validator::ConsensusValidator::validate_batch(&mut se
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::validator::ConsensusValidator
 pub type koru_lambda_agents::validator::ConsensusValidator::ActionData = koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::ConsensusValidator::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::validator::ConsensusValidator::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::validator::ConsensusValidator::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::validator::ConsensusValidator::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 impl core::marker::Freeze for koru_lambda_agents::validator::ConsensusValidator
 impl core::marker::Send for koru_lambda_agents::validator::ConsensusValidator
@@ -476,7 +476,7 @@ impl core::fmt::Debug for koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::TransactionAction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for koru_lambda_agents::validator::TransactionAction
 impl koru_lambda_core::primitives::Canonicalizable for koru_lambda_agents::validator::TransactionAction
-pub fn koru_lambda_agents::validator::TransactionAction::to_canonical_structure(self, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::validator::TransactionAction::to_canonical_structure(&self, &koru_lambda_core::primitives::ByteFold, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
 impl serde_core::ser::Serialize for koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::TransactionAction::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
 impl<'de> serde_core::de::Deserialize<'de> for koru_lambda_agents::validator::TransactionAction
@@ -513,17 +513,17 @@ impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::validator::Tra
 pub trait koru_lambda_agents::LocalCausalAgent
 pub type koru_lambda_agents::LocalCausalAgent::ActionData: koru_lambda_core::primitives::Canonicalizable
 pub fn koru_lambda_agents::LocalCausalAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::LocalCausalAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::LocalCausalAgent::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::LocalCausalAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::commitment::CommitmentAgent
 pub type koru_lambda_agents::commitment::CommitmentAgent::ActionData = koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::commitment::CommitmentAgent::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::commitment::CommitmentAgent::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::commitment::CommitmentAgent::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::validator::ConsensusValidator
 pub type koru_lambda_agents::validator::ConsensusValidator::ActionData = koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::ConsensusValidator::get_current_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::validator::ConsensusValidator::synthesize_action(&mut self, Self::ActionData, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::validator::ConsensusValidator::synthesize_action(&mut self, Self::ActionData, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_agents::validator::ConsensusValidator::update_local_root(&mut self, koru_lambda_core::engine::Distinction)
 pub fn koru_lambda_agents::build_children_index(&[(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)]) -> std::collections::hash::map::HashMap<koru_lambda_core::engine::Distinction, alloc::vec::Vec<koru_lambda_core::engine::Distinction>>
-pub fn koru_lambda_agents::synthesize_causal_action<A: koru_lambda_core::primitives::Canonicalizable>(koru_lambda_core::engine::Distinction, A, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::synthesize_causal_action<A: koru_lambda_core::primitives::Canonicalizable>(koru_lambda_core::engine::Distinction, A, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> koru_lambda_core::engine::Distinction

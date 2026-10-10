@@ -140,7 +140,7 @@ hop counts rather than per-node re-compute.
 **Ceiling probe at 50 M+ scale.** Not shipped. Whether the single- and
 multi-thread numbers hold past L3 cache (~8–32 MB), DashMap shard
 collision rate under sustained load, allocator paging near memory
-ceiling, and IdentityHasher bucket distribution at large N are all
+ceiling, and the engine hasher's bucket distribution at large N are all
 untested at 50 M+. A ceiling probe belongs on the scale-probe backlog; until
 it lands, throughput at ceiling is an open question and no number in
 this document extrapolates past the range each cited file exercises.

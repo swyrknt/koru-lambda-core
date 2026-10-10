@@ -1,5 +1,5 @@
-//! Substrate engine — [`Distinction`] type, [`IdentityHasher`], and
-//! [`DistinctionEngine`] with the entry-gated synthesize hot path.
+//! Substrate engine — the [`Distinction`] type and [`DistinctionEngine`]
+//! with the entry-gated synthesize hot path.
 //!
 //! This is the heart of the crate. See `THEORY.md` for the axioms it
 //! enforces and `ARCHITECTURE.md` for the engine state layout (a single
@@ -133,7 +133,7 @@ impl Distinction {
 /// the type. Any 16-byte pattern is a valid `RawDistinctionId`; the
 /// all-zero case happens to also be `d0`'s identity.
 ///
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct RawDistinctionId(pub(crate) [u8; 16]);
 
@@ -181,9 +181,13 @@ impl RawDistinctionId {
 /// `debug_assert!`; in release a non-16-byte slice still produces *a*
 /// valid `u64`, just not the expected one.
 ///
+/// Crate-private. A hashing optimisation carries no axiom and appears in
+/// no public signature; publishing it only froze an internal choice into
+/// the stable surface.
+///
 /// [`DashMap`]: dashmap::DashMap
 #[derive(Default)]
-pub struct IdentityHasher {
+pub(crate) struct IdentityHasher {
     state: u64,
 }
 
@@ -250,8 +254,11 @@ impl Hasher for IdentityHasher {
 /// `BuildHasher` flavor of [`IdentityHasher`], used as the hash builder
 /// for the engine's [`DashMap`]s.
 ///
+/// Crate-private with [`IdentityHasher`], and inseparable from it: the
+/// alias names the struct, so publishing one publishes both.
+///
 /// [`DashMap`]: dashmap::DashMap
-pub type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>;
+pub(crate) type IdentityBuildHasher = BuildHasherDefault<IdentityHasher>;
 
 /// Derive a child identity from an ordered parent pair.
 ///
@@ -464,24 +471,6 @@ impl SynthesisOutcome {
     #[must_use]
     pub const fn is_novel(&self) -> bool {
         matches!(self, Self::Novel(_))
-    }
-
-    /// Consume the outcome and return the inner [`Distinction`].
-    ///
-    /// One-liner ergonomic wrapper for callers that don't need the
-    /// novelty bit — e.g. bridging into a codepath whose signature
-    /// took a bare [`Distinction`] before adopting `synthesize_novel`.
-    ///
-    /// Discards the novelty bit. Prefer this over
-    /// [`distinction`](Self::distinction) at the point in your control
-    /// flow where the [`Novel`](Self::Novel)/[`Existing`](Self::Existing)
-    /// distinction is no longer relevant — the ownership move makes the
-    /// discard grammatical.
-    #[must_use]
-    pub const fn into_distinction(self) -> Distinction {
-        match self {
-            Self::Novel(d) | Self::Existing(d) => d,
-        }
     }
 }
 
@@ -919,36 +908,6 @@ impl DistinctionEngine {
         self.nodes.get(&d.0).and_then(|entry| entry.value().parents)
     }
 
-    /// Does `candidate` advance forward from `previous`?
-    ///
-    /// True when `previous` is one of `candidate`'s parents. This is the one
-    /// structural fact behind the local-causal-agent pattern: an advance that
-    /// does not descend from the root it replaces is not a causal step, it is
-    /// an unrelated assignment.
-    ///
-    /// # Why this is a substrate read and the agent contract is not
-    ///
-    /// The contract that *chooses* to advance is a consumer's — the theory is
-    /// explicit that the pattern is a pattern and not an axiom, and it names
-    /// legal consumers that do not follow it. But whether a given advance was
-    /// forward is a question about the graph, answered by one `parents_of`
-    /// lookup, and reads belong here.
-    ///
-    /// Put differently: every non-primordial distinction *is* an advance of
-    /// each of its parents, so agent-ness is a reading of the structure rather
-    /// than a type some values have. This method is that reading. The trait
-    /// that wrapped it lives with the consumers who choose to use it.
-    ///
-    /// Returns `false` if `candidate` is unregistered or primordial — neither
-    /// has parents, so neither advances from anything.
-    #[must_use]
-    pub fn advances_from(&self, candidate: Distinction, previous: Distinction) -> bool {
-        match self.parents_of(candidate) {
-            Some((a, b)) => a == previous || b == previous,
-            None => false,
-        }
-    }
-
     /// Compute the degree of a distinction (Law 12, Coding Law).
     ///
     /// Formula:
@@ -1329,16 +1288,14 @@ mod compile_time_assertions {
     //
     // The casts belong on `RawDistinctionId`, where the result is honestly
     // unverified — asserted immediately below.
+    // Neither identifier type is `Pod` or `Zeroable`. For `Distinction` that
+    // closes the trust boundary: a zero-copy cast would produce one the
+    // engine never saw. For `RawDistinctionId` it is simply unused — the
+    // derives existed for a zero-copy path over `&[Distinction]` that
+    // stopped being possible when `Distinction` lost its own, and they were
+    // the only reason `bytemuck` was a non-optional dependency.
     assert_not_impl_any!(Distinction: bytemuck::Pod, bytemuck::Zeroable);
-
-    // `RawDistinctionId` is the unverified peer of `Distinction`. Its
-    // layout must match `[u8; 16]` and it must be `Pod + Zeroable` so
-    // zero-copy wire-deserialization patterns (bytemuck cast, direct
-    // slice reinterpretation) apply identically to both types.
-    assert_eq_size!(RawDistinctionId, [u8; 16]);
-    assert_eq_align!(RawDistinctionId, [u8; 16]);
-    assert_impl_all!(RawDistinctionId: Copy, Send, Sync);
-    assert_impl_all!(RawDistinctionId: bytemuck::Pod, bytemuck::Zeroable);
+    assert_not_impl_any!(RawDistinctionId: bytemuck::Pod, bytemuck::Zeroable);
 
     // Cond F — no new engine fields. Field-relative assertion (rather
     // than a hard-coded byte size) so DashMap version bumps don't
@@ -1765,60 +1722,6 @@ mod engine_tests {
         assert!(p1.as_bytes() <= p2.as_bytes());
         // The actual parents are d0 and d1 in some order.
         assert!((p1 == e.d0() && p2 == e.d1()) || (p1 == e.d1() && p2 == e.d0()));
-    }
-
-    // ----- advances_from — the forward-advance read ----------------------
-    //
-    // These cover the read that replaced the agent contract. The contract
-    // chose to advance; this answers whether an advance was forward, which is
-    // a question about the graph.
-
-    #[test]
-    fn advances_from_holds_for_both_parents() {
-        let e = DistinctionEngine::new();
-        let child = e.synthesize(e.d0(), e.d1());
-        // Every non-primordial is an advance of *each* of its parents — the
-        // reading is available from either side, and nothing privileges one.
-        assert!(e.advances_from(child, e.d0()));
-        assert!(e.advances_from(child, e.d1()));
-    }
-
-    #[test]
-    fn advances_from_rejects_a_root_it_does_not_descend_from() {
-        let e = DistinctionEngine::new();
-        let first = e.synthesize(e.d0(), e.d1());
-        let second = e.synthesize(first, e.d0());
-        let sibling = e.synthesize(first, e.d1());
-        assert!(e.advances_from(second, first), "second descends from first");
-        assert!(
-            !e.advances_from(second, sibling),
-            "a sibling is not an ancestor; this is the case that catches an \
-             assignment masquerading as a causal step"
-        );
-    }
-
-    #[test]
-    fn advances_from_is_false_for_a_chain_skipping_a_step() {
-        let e = DistinctionEngine::new();
-        let a = e.synthesize(e.d0(), e.d1());
-        let b = e.synthesize(a, e.d0());
-        let c = e.synthesize(b, e.d1());
-        // Monotonicity is one step, not reachability: `c` descends from `b`,
-        // and `a` is its grandparent, not its parent.
-        assert!(e.advances_from(c, b));
-        assert!(!e.advances_from(c, a), "advances_from is immediate parentage, not ancestry");
-    }
-
-    #[test]
-    fn advances_from_is_false_for_primordials_and_strangers() {
-        let e = DistinctionEngine::new();
-        let child = e.synthesize(e.d0(), e.d1());
-        // Primordials have no parents, so they advance from nothing.
-        assert!(!e.advances_from(e.d0(), e.d1()));
-        // An unregistered distinction has no parentage here to read.
-        let stranger = unwitnessed_elsewhere(&e);
-        assert!(!e.advances_from(stranger, child));
-        assert!(!e.advances_from(child, stranger));
     }
 
     // ----- Law 6 — r = 2d − 3 -------------------------------------------
@@ -2709,25 +2612,6 @@ mod engine_tests {
         assert_eq!(child_b.as_bytes(), child.as_bytes());
         let verified = e_b.verify(raw).expect("post-replay bytes verify (invariant)");
         assert_eq!(verified.as_bytes(), child.as_bytes());
-    }
-
-    #[test]
-    fn raw_distinction_id_bytemuck_roundtrip() {
-        // The `Pod + Zeroable` derive must let `RawDistinctionId` cast
-        // to `&[u8]` and back losslessly — this test is the falsifier for
-        // that layout contract.
-        let bytes = [
-            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54,
-            0x32, 0x10,
-        ];
-        let raw = RawDistinctionId::from_bytes(bytes);
-
-        // Cast to `&[u8]`, then back to a `RawDistinctionId`.
-        let as_slice: &[u8] = bytemuck::bytes_of(&raw);
-        assert_eq!(as_slice, &bytes);
-        let round_trip: RawDistinctionId = *bytemuck::from_bytes::<RawDistinctionId>(as_slice);
-        assert_eq!(round_trip, raw);
-        assert_eq!(round_trip.as_bytes(), &bytes);
     }
 
     #[test]

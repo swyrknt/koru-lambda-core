@@ -11,8 +11,8 @@
 //! two engines yields byte-identical output (Cond D, live-verified in
 //! tier 4).
 
-use koru_lambda_core::projection::Direction;
-use koru_lambda_core::{Adjacency, Degree, DistinctionEngine, HopDistance};
+use koru_lambda_core::projection::{Adjacency, Degree, Direction, HopDistance};
+use koru_lambda_core::DistinctionEngine;
 
 fn main() {
     let engine = DistinctionEngine::new();

@@ -21,8 +21,8 @@
 //! `materialize()`:
 //!
 //! ```
-//! use koru_lambda_core::{Adjacency, DistinctionEngine};
-//! use koru_lambda_core::projection::Direction;
+//! use koru_lambda_core::projection::{Adjacency, Direction};
+//! use koru_lambda_core::DistinctionEngine;
 //! let engine = DistinctionEngine::new();
 //! let child = engine.synthesize(engine.d0(), engine.d1());
 //! let proj = engine.project(child).direction(Direction::Upstream).hops(2)
@@ -35,18 +35,19 @@
 //!
 //! ## Trust boundaries
 //!
-//! [`Distinction`] values reach an engine via three paths:
+//! A [`Distinction`] comes into existence by exactly two paths:
 //!
-//! 1. [`DistinctionEngine::synthesize`] — proven by construction.
-//! 2. [`DistinctionEngine::verify`] on a [`RawDistinctionId`] — proven
-//!    by engine witness. **This is the recommended path** for external
-//!    bytes crossing into the engine (wire deserialization, hex parse,
-//!    checkpoint restore).
+//! 1. [`DistinctionEngine::synthesize`] — witnessed by construction.
+//! 2. [`DistinctionEngine::verify`] on a [`RawDistinctionId`] — witnessed
+//!    by lookup. Every byte arriving from outside takes this path: wire
+//!    deserialization, hex parse, and checkpoint restore all funnel
+//!    through it rather than around it.
 //!
-//! There is no third way. `Distinction::from_hex`, `FromStr`, `Pod` and
-//! `Zeroable` all existed and all produced one without an engine; all four
-//! are gone, and `tests/trybuild/` holds each as a compile failure.
-//!
+//! There is no third. `Distinction::from_hex`, `FromStr`, `Pod` and
+//! `Zeroable` each used to be one, and each produced a distinction with no
+//! engine involved; all four are gone, and
+//! `tests/trybuild/distinction_has_no_hatches.rs` holds each as a compile
+//! failure so that none can return quietly.
 //!
 //! The two-type discipline: consumers write their public wire types in
 //! terms of [`RawDistinctionId`] and call [`verify`](DistinctionEngine::verify)
@@ -68,8 +69,8 @@
 //! impl From<VerifyError> for MyError {
 //!     fn from(_: VerifyError) -> Self { MyError("foreign bytes") }
 //! }
-//! impl From<koru_lambda_core::ParseError> for MyError {
-//!     fn from(_: koru_lambda_core::ParseError) -> Self { MyError("bad hex") }
+//! impl From<koru_lambda_core::distinction_hex::ParseError> for MyError {
+//!     fn from(_: koru_lambda_core::distinction_hex::ParseError) -> Self { MyError("bad hex") }
 //! }
 //!
 //! let engine = DistinctionEngine::new();
@@ -149,21 +150,19 @@ pub mod projection;
 pub mod replay;
 pub mod vectors;
 
-pub use distinction_hex::ParseError;
+// The crate root re-exports exactly the two constitutive acts: **witnessing**
+// a distinction and **lifting** bytes into one. Nothing else. Reading is
+// `projection::`, replay is `replay::`, hex is `distinction_hex::`, and the
+// published fixture values are `vectors::`.
+//
+// The rule is what matters, not the list. Before it, the root held a list
+// described in this file as "Option B — approved", citing an approval that
+// appears in no file in the repository, and "the remaining 12" when it was
+// 16. A partial root is the worst shape available: a consumer cannot predict
+// whether a name is at the root, so every import is a guess. A rule can be
+// stated in a sentence, and every item it admits has exactly one path.
 pub use engine::{
-    Distinction, DistinctionEngine, IdentityBuildHasher, IdentityHasher, InvariantError,
-    ParentPair, RawDistinctionId, SynthesisOutcome, VerifyError,
+    Distinction, DistinctionEngine, InvariantError, ParentPair, RawDistinctionId, SynthesisOutcome,
+    VerifyError,
 };
 pub use primitives::{domain_anchor, ByteFold, ByteMapping, Canonicalizable, DomainLabel};
-// Curated re-exports at the crate root. The other 16 projection items live
-// under `koru_lambda_core::projection::*`.
-//
-// This said "Option B — approved" and cited an approval that appears in no
-// file in the repository, and "the remaining 12" when it is 16. Eleven of
-// these root re-exports have no root-path consumer anywhere in the repo, four
-// of them because consumers reach the module path instead; trimming them is
-// tracked.
-pub use projection::{
-    Adjacency, CoreSignal, Degree, HopDistance, Projection, ProjectionId, ProjectionSpec, Signal,
-};
-pub use replay::{replay_topological, ReplayError};
