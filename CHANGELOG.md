@@ -1,8 +1,7 @@
 # Changelog
 
 Budget-gate amendments and substrate changes land under `## Unreleased`
-so consumer teams (ALIS, koru-protocol) see the ratchet before they
-migrate. The v2.0.0 section below is the coherent entry described in
+so consumers see the ratchet before they migrate. The v2.0.0 section below is the coherent entry described in
 `DESIGN.md § "Path to v2.0.0"`; `## Unreleased` below it retains the
 pre-2.0.0 substrate close for provenance.
 
@@ -74,9 +73,8 @@ without extra state.
 ### Migration
 
 A dedicated consumer migration guide is planned for v2.1. That guide
-will ship the "delete your wrapper" playbook for ALIS, koru-protocol,
-and other consumers with hand-rolled projection / novelty / verify
-shims. Until then: v2.0.0 is API-additive; nothing in the substrate's
+will ship the "delete your wrapper" playbook for consumers carrying
+hand-rolled projection / novelty / verify shims. Until then: v2.0.0 is API-additive; nothing in the substrate's
 shipped surface (`synthesize`, `parents_of`, `degree`, `has`,
 `distinction_count`, hex round-trip) changed in a signature-breaking
 way. Novel consumers pick up the new APIs directly; existing consumers

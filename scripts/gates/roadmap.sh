@@ -12,6 +12,15 @@
 # vectors it does not publish, a gate whose allowlist outlived its types).
 # So the roadmap assigns checklist *sections* to phases and nothing more, and
 # this gate proves the assignment is total, exclusive, and honest.
+#
+# Two scopes, at two granularities, and both are honoured here. The
+# `# Not blocking 2.0.0` line divides whole SECTIONS; an inline
+# `*(not blocking)*` marker on an individual item excuses that ITEM inside an
+# otherwise-blocking section. Those are not duplicate mechanisms — a section
+# below the line ships on another timeline, while a marked item is this
+# release's work that was judged optional. The gate used to read the line and
+# ignore the markers, so thirteen items counted as blocking against their own
+# text, and "P1 has 26 open" overstated the release by ten.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -85,7 +94,7 @@ while IFS= read -r line; do
         [ -z "$sec" ] && continue
         n=$(printf '%s\n' "$blocking" \
             | awk -v s="$sec" '$0 ~ "^## "s" " {inside=1; next} /^## /{inside=0} inside' \
-            | grep -cE '^- \[ \] ' || true)
+            | grep -E '^- \[ \] ' | grep -cvF '*(not blocking' || true)
         open_total=$((open_total + n))
     done <<< "$secs"
     if [ "$open_total" -ne 0 ]; then
@@ -108,13 +117,19 @@ while IFS= read -r line; do
     name=$(printf '%s\n' "$line" | sed -nE 's/^[0-9]+:- \[[ x]\] P[0-9]+ (.*) — sections:.*/\1/p')
     secs=$(printf '%s\n' "$line" | sed -nE 's/.*sections:[[:space:]]*(.*)$/\1/p' \
            | tr ',' '\n' | tr -d ' ' | grep -vx 'none' | grep -v '^$' || true)
-    open=0; done_count=0
+    open=0; done_count=0; optional=0
     while IFS= read -r sec; do
         [ -z "$sec" ] && continue
         body=$(printf '%s\n' "$blocking" \
             | awk -v s="$sec" '$0 ~ "^## "s" " {inside=1; next} /^## /{inside=0} inside')
-        open=$((open + $(printf '%s\n' "$body" | grep -cE '^- \[ \] ' || true)))
+        open=$((open + $(printf '%s\n' "$body" | grep -E '^- \[ \] ' | grep -cvF '*(not blocking' || true)))
+        optional=$((optional + $(printf '%s\n' "$body" | grep -E '^- \[ \] ' | grep -cF '*(not blocking' || true)))
         done_count=$((done_count + $(printf '%s\n' "$body" | grep -cE '^- \[x\] ' || true)))
     done <<< "$secs"
-    printf '  %-4s %-26s %3d open  %3d done\n' "$phase" "$name" "$open" "$done_count"
+    if [ "$optional" -ne 0 ]; then
+        printf '  %-4s %-26s %3d open  %3d done  (+%d marked not blocking)\n' \
+            "$phase" "$name" "$open" "$done_count" "$optional"
+    else
+        printf '  %-4s %-26s %3d open  %3d done\n' "$phase" "$name" "$open" "$done_count"
+    fi
 done <<< "$phase_lines"

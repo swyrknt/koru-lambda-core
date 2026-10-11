@@ -18,9 +18,12 @@
 #
 # Exemptions, and why:
 #   CHECKLIST.md   tracks the work, including the work of removing these.
-#   CHANGELOG.md   a historical record. Rewriting history to satisfy a gate is
-#                  worse than the gate not covering it.
-#   scripts/gates/ this file has to name them to find them.
+#   (CHANGELOG.md was exempt here and should not have been. It is NOT in
+#   Cargo.toml's `exclude` list, so it ships inside the published crate — a
+#   file naming downstream projects would have gone to crates.io with 2.0.0.
+#   The exemption reasoned that rewriting history to satisfy a gate is worse
+#   than the names, which is true of a record nobody distributes and false of
+#   one that ships. Both names are gone and the exemption with them.)
 #   docs/MIGRATION_JS.md  addressed TO a consumer; naming its audience is the
 #                  document's purpose.
 set -euo pipefail
@@ -36,7 +39,6 @@ NAMES='\balis-ai\b|\bALIS\b|\bkoru-protocol\b|\bkoru-engine\b|\bkoru-spatial\b|\
 
 files=$(git ls-files '*.md' '*.rs' '*.toml' \
     | grep -v '^CHECKLIST.md$' \
-    | grep -v '^CHANGELOG.md$' \
     | grep -v '^scripts/gates/' \
     | grep -v '^docs/MIGRATION_JS.md$' || true)
 [ -z "$files" ] && { echo "no_consumer_names: no files"; exit 0; }
