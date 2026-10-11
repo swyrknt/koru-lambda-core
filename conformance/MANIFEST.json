@@ -100,7 +100,6 @@
     "engine::SynthesisOutcome::distinction": "Projects out the value /operator/cases already pins.",
     "projection::ProjectionId::as_bytes": "Same: a borrow of the identity /projections/cases pins.",
     "projection::ProjectionId::clone": "Returns its receiver unchanged; there is no second value for a vector to pin.",
-    "projection::ReadOnlyEngine::snapshot_distinctions": "The read-only view of a method already exempt on the engine, for the same reason: in-memory Rust with no wire form and no specified order.",
     "projection::ReadOnlyEngine::snapshot_parentage": "The read-only view of a method already exempt on the engine, for the same reason: in-memory Rust with no wire form and no specified order.",
     "replay::replay_topological": "Reconstructs an engine from a Rust snapshot. The theorem it proves (parentage suffices) is pinned by /projections/cases via Adjacency; the function signature is Rust-specific and has no wire form to agree on."
   }

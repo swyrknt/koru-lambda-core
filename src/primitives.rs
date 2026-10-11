@@ -429,7 +429,13 @@ impl ByteMapping {
     /// needs folding in: every byte produces a chain of the same depth
     /// and only the bit values distinguish them.
     ///
-    /// Per-byte cost: 8 synthesize calls, one per bit.
+    /// Per-byte cost: 9 synthesize calls — the anchoring
+    /// `synthesize(d₀, d₁)`, then one per bit. Eight of the nine are
+    /// bit-steps, which is why this was documented as 8 while
+    /// `benches/substrate.rs` measured 9; the anchor is the same value for
+    /// every byte and saturates after the first, but the call still
+    /// happens. Counting calls is the convention everywhere now, because
+    /// it is what an implementation pays and what the bench reports.
     ///
     /// # Why not two calls per bit
     ///

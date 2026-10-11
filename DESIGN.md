@@ -652,8 +652,9 @@ Enumerated. No hedging.
    `replay_topological` are the persistence surface, unchanged.
 6. **~~No byte-fold / Fold Law changes.~~** Withdrawn 2026-09-30. The
    byte fold changed: it is now the anchored sequence fold instantiated
-   on the two-letter alphabet `{d₀, d₁}`, 8 synthesize calls per byte
-   rather than 17. Measurement drove it: both shapes produce 256 distinct
+   on the two-letter alphabet `{d₀, d₁}`, 9 synthesize calls per byte
+   rather than 17 — one anchoring call plus one per bit, where it used to
+   be one plus two per bit. Measurement drove it: both shapes produce 256 distinct
    tips, so the extra calls bought no injectivity while doubling the
    graph. See Law 11 on what that does to the quoted magnitudes.
 

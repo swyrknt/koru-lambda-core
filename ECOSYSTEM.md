@@ -26,7 +26,7 @@ What the substrate guarantees, precisely:
   commutativity, idempotence and content addressing leave no freedom here.)*
 - **Lift-level identity is pinned per major version**, not forever, *because
   the lift is the substrate's one free parameter.* It moved in this release:
-  the byte lift went from seventeen synthesize calls per byte to eight, so
+  the byte lift went from seventeen synthesize calls per byte to nine, so
   every lifted identifier changed between 1.x and 2.0.0. *(Chosen.)*
 
 Those two sentences are the whole promise, and the second is the honest one.

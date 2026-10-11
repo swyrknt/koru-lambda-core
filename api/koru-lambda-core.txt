@@ -165,15 +165,14 @@ pub fn koru_lambda_core::engine::DistinctionEngine::default() -> Self
 impl core::fmt::Debug for koru_lambda_core::engine::DistinctionEngine
 pub fn koru_lambda_core::engine::DistinctionEngine::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl koru_lambda_core::projection::ReadOnlyEngine for koru_lambda_core::engine::DistinctionEngine
-pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
 pub fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::DistinctionEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
 pub fn koru_lambda_core::engine::DistinctionEngine::distinction_count(&self) -> usize
 pub fn koru_lambda_core::engine::DistinctionEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
 pub fn koru_lambda_core::engine::DistinctionEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_core::engine::DistinctionEngine::project(&self, koru_lambda_core::engine::Distinction) -> koru_lambda_core::projection::ProjectionBuilder<'_, koru_lambda_core::projection::NeedsDirection> where Self: core::marker::Sized
 pub fn koru_lambda_core::engine::DistinctionEngine::relationship_count(&self) -> usize
-pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
 pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
 impl core::marker::Freeze for koru_lambda_core::engine::DistinctionEngine
 impl core::marker::Send for koru_lambda_core::engine::DistinctionEngine
@@ -575,27 +574,25 @@ pub trait koru_lambda_core::projection::CoreSignal: koru_lambda_core::projection
 impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Adjacency
 impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Degree
 impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::HopDistance
-pub trait koru_lambda_core::projection::ReadOnlyEngine: koru_lambda_core::projection::private::Sealed + core::marker::Send + core::marker::Sync
-pub fn koru_lambda_core::projection::ReadOnlyEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
+pub trait koru_lambda_core::projection::ReadOnlyEngine: core::marker::Send + core::marker::Sync
 pub fn koru_lambda_core::projection::ReadOnlyEngine::d0(&self) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::projection::ReadOnlyEngine::d1(&self) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::projection::ReadOnlyEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
 pub fn koru_lambda_core::projection::ReadOnlyEngine::distinction_count(&self) -> usize
 pub fn koru_lambda_core::projection::ReadOnlyEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
 pub fn koru_lambda_core::projection::ReadOnlyEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_core::projection::ReadOnlyEngine::project(&self, koru_lambda_core::engine::Distinction) -> koru_lambda_core::projection::ProjectionBuilder<'_, koru_lambda_core::projection::NeedsDirection> where Self: core::marker::Sized
 pub fn koru_lambda_core::projection::ReadOnlyEngine::relationship_count(&self) -> usize
-pub fn koru_lambda_core::projection::ReadOnlyEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
 pub fn koru_lambda_core::projection::ReadOnlyEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
 impl koru_lambda_core::projection::ReadOnlyEngine for koru_lambda_core::engine::DistinctionEngine
-pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
 pub fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::DistinctionEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
 pub fn koru_lambda_core::engine::DistinctionEngine::distinction_count(&self) -> usize
 pub fn koru_lambda_core::engine::DistinctionEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
 pub fn koru_lambda_core::engine::DistinctionEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_core::engine::DistinctionEngine::project(&self, koru_lambda_core::engine::Distinction) -> koru_lambda_core::projection::ProjectionBuilder<'_, koru_lambda_core::projection::NeedsDirection> where Self: core::marker::Sized
 pub fn koru_lambda_core::engine::DistinctionEngine::relationship_count(&self) -> usize
-pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
 pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
 pub trait koru_lambda_core::projection::Signal: core::clone::Clone + core::marker::Send + core::marker::Sync + 'static
 pub type koru_lambda_core::projection::Signal::Output: core::marker::Send + core::marker::Sync + koru_lambda_core::projection::CanonicalBytes + 'static
@@ -812,15 +809,14 @@ pub fn koru_lambda_core::engine::DistinctionEngine::default() -> Self
 impl core::fmt::Debug for koru_lambda_core::engine::DistinctionEngine
 pub fn koru_lambda_core::engine::DistinctionEngine::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl koru_lambda_core::projection::ReadOnlyEngine for koru_lambda_core::engine::DistinctionEngine
-pub fn koru_lambda_core::engine::DistinctionEngine::check_structural_invariant(&self) -> core::result::Result<(), koru_lambda_core::engine::InvariantError>
 pub fn koru_lambda_core::engine::DistinctionEngine::d0(&self) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::DistinctionEngine::d1(&self) -> koru_lambda_core::engine::Distinction
 pub fn koru_lambda_core::engine::DistinctionEngine::degree(&self, koru_lambda_core::engine::Distinction) -> usize
 pub fn koru_lambda_core::engine::DistinctionEngine::distinction_count(&self) -> usize
 pub fn koru_lambda_core::engine::DistinctionEngine::has(&self, koru_lambda_core::engine::Distinction) -> bool
 pub fn koru_lambda_core::engine::DistinctionEngine::parents_of(&self, koru_lambda_core::engine::Distinction) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_core::engine::DistinctionEngine::project(&self, koru_lambda_core::engine::Distinction) -> koru_lambda_core::projection::ProjectionBuilder<'_, koru_lambda_core::projection::NeedsDirection> where Self: core::marker::Sized
 pub fn koru_lambda_core::engine::DistinctionEngine::relationship_count(&self) -> usize
-pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_distinctions(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
 pub fn koru_lambda_core::engine::DistinctionEngine::snapshot_parentage(&self) -> alloc::vec::Vec<(koru_lambda_core::engine::Distinction, koru_lambda_core::engine::ParentPair)>
 impl core::marker::Freeze for koru_lambda_core::engine::DistinctionEngine
 impl core::marker::Send for koru_lambda_core::engine::DistinctionEngine

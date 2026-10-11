@@ -37,13 +37,13 @@
 //!   canonical (`Distinction::Ord`).
 //! - **Cond D (cross-engine byte-equivalence):** all wire-shape
 //!   integers use explicit `to_le_bytes()` encoding.
-//! - **Cond E (read-only):** [`ReadOnlyEngine`] is sealed and lists no
-//!   mutating method.
+//! - **Cond E (read-only):** [`ReadOnlyEngine`] lists no mutating method.
+//!   The inventory is the mechanism; the trait is not sealed (DEC-10).
 //! - **Cond F (no new engine fields):** the projection state lives on
 //!   `Projection<'e, S>`; the engine gains no field.
 
 use crate::engine::{RawDistinctionId, VerifyError};
-use crate::{Distinction, DistinctionEngine, InvariantError, ParentPair};
+use crate::{Distinction, DistinctionEngine, ParentPair};
 use sha2::{Digest, Sha256};
 use std::any::TypeId;
 use std::collections::{BTreeMap, HashSet, VecDeque};
@@ -373,16 +373,38 @@ impl Signal for Degree {
 impl Signal for HopDistance {
     type Output = usize;
 
-    fn compute(&self, _ctx: &SignalContext<'_>, _node: Distinction) -> Self::Output {
-        // `HopDistance` is `CoreSignal`-only. Every materialize path
-        // in the substrate dispatches through
-        // [`CoreSignal::__materialize_special`] before reaching a
-        // per-node `compute` loop, so this arm is unreachable by
-        // construction. If it fires, the dispatch in
-        // [`ReadyBuilder::materialize`] regressed.
-        unreachable!(
-            "HopDistance is CoreSignal-only; dispatched via __materialize_special, not compute"
-        )
+    /// Hops from `ctx.root` to `node`, or `usize::MAX` if `node` is not
+    /// in the cone `ctx` describes.
+    ///
+    /// # This used to be `unreachable!()`, and that was reachable
+    ///
+    /// Materializing a projection never calls this: every path dispatches
+    /// through [`CoreSignal::__materialize_special`] first, which threads
+    /// the hop counts `traverse_cone` already computed. So the arm was
+    /// documented as unreachable by construction — but construction is not
+    /// the only caller. A consumer cannot build a [`SignalContext`]
+    /// (`#[non_exhaustive]`), yet it is *handed* one inside its own
+    /// `Signal::compute`, and delegating to a shipped signal from there is
+    /// an obvious thing to try:
+    ///
+    /// ```ignore
+    /// fn compute(&self, ctx: &SignalContext<'_>, node: Distinction) -> usize {
+    ///     HopDistance.compute(ctx, node) // panicked
+    /// }
+    /// ```
+    ///
+    /// A panic in a public trait method that a consumer can reach from safe
+    /// code is a defect, not an invariant. So this answers instead. It is
+    /// the same traversal the fast path uses, which makes it O(cone) per
+    /// call where the dispatched form is O(cone) per *projection* — that
+    /// asymmetry is why the dispatch exists, and why a consumer wanting
+    /// every node's hop count should project `HopDistance` rather than
+    /// call this in a loop.
+    fn compute(&self, ctx: &SignalContext<'_>, node: Distinction) -> Self::Output {
+        traverse_cone(ctx)
+            .into_iter()
+            .find_map(|(d, hops)| (d == node).then_some(hops))
+            .unwrap_or(usize::MAX)
     }
 
     fn canonical_bytes(&self) -> &[u8] {
@@ -550,19 +572,61 @@ pub struct SignalContext<'e> {
 // ReadOnlyEngine trait
 // -------------------------------------------------------------------------
 
-/// Read-only projection engine surface. Sealed — external crates
-/// cannot implement it. Extends `Send + Sync` so trait-objects cross
-/// `.await` without per-use-site bounds.
+/// What a projection reads an engine through. **Not sealed:** an external
+/// crate can implement this, so an alternative engine — a fixture, a lazy
+/// loader, a remote view — can be projected over. Extends `Send + Sync` so
+/// trait objects cross `.await` without per-use-site bounds.
 ///
-/// Method inventory intentionally excludes `synthesize`,
-/// `synthesize_novel`, and any other mutating access (Cond E closed
-/// by construction).
+/// # Cond E, and what closes it
+///
+/// Cond E (read-only) is closed by the **method inventory**: there is no
+/// `synthesize`, no `synthesize_novel`, no mutating access of any kind. It
+/// was described as closed by sealing, which was never the mechanism —
+/// sealing controlled who could implement the trait, not what the trait
+/// could do. Unsealing therefore costs Cond E nothing.
+///
+/// # The method set is frozen here
+///
+/// Once an external crate can implement this, every method is permanent:
+/// adding one without a default body breaks every implementor. So the set
+/// was reviewed against what projections and consumer signals actually
+/// read, and two methods were removed before the freeze:
+///
+/// - `snapshot_distinctions` — no projection called it, and it is derivable
+///   from `snapshot_parentage` plus the two primordials. A redundant method
+///   that every external engine would have had to implement.
+/// - `check_structural_invariant` — an audit of `r = 2d − 3`, which is a
+///   claim about the substrate's own shape rather than a read a projection
+///   performs. It also dragged `InvariantError` into this trait's permanent
+///   surface. It stays an inherent method on
+///   [`crate::DistinctionEngine`].
+///
+/// `distinction_count` and `relationship_count` stayed although no
+/// projection calls them, because a consumer signal computing a node's
+/// *share* of something needs the denominator, and degree share being
+/// zero-sum is a documented property of the structure (see `THEORY.md`,
+/// Law 6). A signal reaches them through
+/// [`SignalContext::engine`](SignalContext::engine).
+///
+/// The set is therefore eight reads, plus one provided
+/// [`project`](Self::project) that every implementor gets for free.
+/// Anything added later must carry a default body.
+///
+/// # A consumer engine owns its own correctness
+///
+/// The substrate's guarantees about projection identity and cross-engine
+/// byte-equality (Cond B and Cond D) hold for engines the substrate
+/// provides. They cannot hold for an implementation it has never seen: an
+/// engine whose `parents_of` is inconsistent with its `degree`, or which
+/// answers differently on two calls, produces a projection whose bytes
+/// mean nothing — and no signature here can prevent that. An implementor
+/// inherits the obligation to be a faithful read of an append-only graph.
 ///
 /// `impl ReadOnlyEngine for DistinctionEngine` is additive: existing
 /// `fn foo(engine: &DistinctionEngine)` consumer signatures compile
 /// unchanged because inherent methods on `DistinctionEngine` win over
 /// trait-method resolution.
-pub trait ReadOnlyEngine: private::Sealed + Send + Sync {
+pub trait ReadOnlyEngine: Send + Sync {
     /// First primordial.
     fn d0(&self) -> Distinction;
     /// Second primordial.
@@ -577,20 +641,36 @@ pub trait ReadOnlyEngine: private::Sealed + Send + Sync {
     fn degree(&self, d: Distinction) -> usize;
     /// Membership check.
     fn has(&self, d: Distinction) -> bool;
-    /// Owned snapshot of every registered distinction. Order
-    /// unspecified — sort for determinism.
-    fn snapshot_distinctions(&self) -> Vec<Distinction>;
     /// Owned snapshot of every parent-child relationship. Enables
     /// O(N) reverse-index construction for downstream/undirected
     /// traversal.
     fn snapshot_parentage(&self) -> Vec<(Distinction, ParentPair)>;
-    /// Verify structural law `r = 2d − 3` holds.
+
+    /// Start a projection anchored at `root`, reading through `self`.
     ///
-    /// # Errors
+    /// Provided, so an implementor writes the eight reads above and gets
+    /// this for free. It is also what makes the unsealing worth anything:
+    /// both other entry points are inherent methods on
+    /// [`crate::DistinctionEngine`], so before this an
+    /// external crate could implement the trait and then had no way to
+    /// project over its own engine. That gap was found by writing the test
+    /// DEC-10 asked for rather than by reading the decision.
     ///
-    /// Returns [`InvariantError::BinaryParentageMismatch`] if the
-    /// per-node parent-population count doesn't match the total.
-    fn check_structural_invariant(&self) -> Result<(), InvariantError>;
+    /// `DistinctionEngine::project` is an inherent method and wins name
+    /// resolution, so nothing about calling `engine.project(root)` on the
+    /// substrate's engine changes, with or without this trait in scope.
+    fn project(&self, root: Distinction) -> ProjectionBuilder<'_, NeedsDirection>
+    where
+        Self: Sized,
+    {
+        ProjectionBuilder {
+            engine: self,
+            root,
+            direction: None,
+            boundary: None,
+            _state: PhantomData,
+        }
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -652,9 +732,20 @@ impl<'e, S: Signal> Projection<'e, S> {
     ///
     /// Cheap: SHA-256 over the fixed-shape spec header. Does NOT depend
     /// on cone contents — same across engines that produce the same
-    /// spec. Order matches `docs/SPEC.md` §8 verbatim; the inline
-    /// `projection_id_is_deterministic_across_engines` test is the
-    /// drift guard.
+    /// spec. Order matches `docs/SPEC.md` §8 verbatim.
+    ///
+    /// The inline `projection_id_is_deterministic_across_engines` test was
+    /// described here as the drift guard, and it cannot be one: it builds
+    /// two engines in the same binary, so a change to this function moves
+    /// both and they still agree. What it proves is cross-engine
+    /// *agreement*, which is worth proving and is not the same claim.
+    ///
+    /// The drift guard is `conformance/vectors.json`, where all eighteen
+    /// projection identifiers are pinned as constants outside this crate,
+    /// with the digest pinned again in `conformance/VECTORS.sha256`. A
+    /// change to the field order or the domain separator fails
+    /// `tests/conformance_fixture.rs` against a value no code in this
+    /// repository computes.
     pub fn projection_id(&self) -> ProjectionId {
         let mut h = Sha256::new();
         h.update(b"koru:projection_id:v1");

@@ -181,7 +181,10 @@ tip_of_byte(v):
     return acc
 ```
 
-Eight synthesize calls per byte, and 256 distinct tips.
+Nine synthesize calls per byte and 256 distinct tips: the anchoring
+`synthesize(d₀, d₁)`, then one step per bit. The anchor is the same value
+for every byte, so it is novel once and saturates thereafter — count it
+anyway, because an implementation has to make the call.
 
 ### 4.4 Composite values
 

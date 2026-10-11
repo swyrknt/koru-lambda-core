@@ -1225,8 +1225,6 @@ impl std::fmt::Debug for DistinctionEngine {
 // contains no mutating method.
 // ---------------------------------------------------------------------------
 
-impl crate::projection::private::Sealed for DistinctionEngine {}
-
 impl crate::projection::ReadOnlyEngine for DistinctionEngine {
     fn d0(&self) -> Distinction {
         Self::d0(self)
@@ -1249,14 +1247,8 @@ impl crate::projection::ReadOnlyEngine for DistinctionEngine {
     fn has(&self, d: Distinction) -> bool {
         Self::has(self, d)
     }
-    fn snapshot_distinctions(&self) -> Vec<Distinction> {
-        Self::snapshot_distinctions(self)
-    }
     fn snapshot_parentage(&self) -> Vec<(Distinction, ParentPair)> {
         Self::snapshot_parentage(self)
-    }
-    fn check_structural_invariant(&self) -> Result<(), InvariantError> {
-        Self::check_structural_invariant(self)
     }
 }
 
