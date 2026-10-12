@@ -18,11 +18,20 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-git ls-files '*.md' | python3 -c '
+# Two lists on stdin, separated by a blank line: the markdown documents whose
+# links are checked, then every tracked path a link may legitimately point at.
+# The second list used to be absent — `tracked` was built from the markdown
+# files alone and the existence check used `Path.exists()`, i.e. "is on this
+# disk" rather than "is in this repository". The header says tracked, and a
+# link to an untracked local file would have passed while being broken for
+# everyone who clones.
+{ git ls-files '*.md'; echo; git ls-files; } | python3 -c '
 import os, re, sys, pathlib
 
-docs = [l.strip() for l in sys.stdin if l.strip()]
-tracked = set(docs)
+raw = sys.stdin.read().split("\n\n", 1)
+docs = [l.strip() for l in raw[0].splitlines() if l.strip()]
+tracked = {l.strip() for l in raw[1].splitlines() if l.strip()} if len(raw) > 1 else set(docs)
+doc_set = set(docs)
 
 def slug(heading):
     s = heading.strip().lower()
@@ -76,14 +85,19 @@ for d in docs:
             # non-existent targets that all existed.
             resolved = os.path.normpath(os.path.join(str(base), path))
             real = resolved
-            if not pathlib.Path(resolved).exists():
-                failures.append(f"{d}:{n}: link target does not exist: {path}")
+            if resolved not in tracked:
+                if pathlib.Path(resolved).exists():
+                    failures.append(
+                        f"{d}:{n}: link target exists locally but is not tracked: {path}"
+                    )
+                else:
+                    failures.append(f"{d}:{n}: link target does not exist: {path}")
                 continue
             if frag:
                 if real in slugs:
                     if frag not in slugs[real]:
                         failures.append(f"{d}:{n}: #{frag} is not a heading in {real}")
-                elif resolved.endswith(".md"):
+                elif resolved.endswith(".md") and resolved not in doc_set:
                     failures.append(f"{d}:{n}: {path} is not a tracked document, cannot check #{frag}")
 
 if failures:

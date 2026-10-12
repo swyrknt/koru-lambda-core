@@ -15,6 +15,7 @@ step() { printf '\n=== %s\n' "$1"; }
 step "repository gates"
 ./scripts/gates/no_suppression.sh
 ./scripts/gates/crate_boundary.sh
+./scripts/gates/dep_pins.sh
 ./scripts/gates/no_process_leaks.sh
 ./scripts/gates/checklist_evidence.sh
 ./scripts/gates/doc_anchors.sh

@@ -19,6 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./scripts/gates/no_suppression.sh
       - run: ./scripts/gates/crate_boundary.sh
+      - run: ./scripts/gates/dep_pins.sh
       - run: ./scripts/gates/no_process_leaks.sh
       - run: ./scripts/gates/checklist_evidence.sh
       - run: ./scripts/gates/doc_anchors.sh

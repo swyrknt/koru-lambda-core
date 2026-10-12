@@ -14,7 +14,11 @@ name = "gen_exp18_corpus"
 path = "src/bin/gen_exp18_corpus.rs"
 
 [dependencies]
-koru-lambda-core = { path = "../.." }
+# `version` alongside `path` even though this crate is never published: a
+# path-only dependency is `req = "*"` to cargo, which resolves to whatever a
+# registry offers the moment anything builds this outside the workspace.
+# `scripts/gates/dep_pins.sh` is what noticed.
+koru-lambda-core = { path = "../..", version = "=2.0.0" }
 # `rand` is pinned at the workspace level (see root Cargo.toml's
 # [workspace.dependencies]) so the root crate and this runner cannot
 # carry different versions. Per DESIGN.md gate language: corpus files

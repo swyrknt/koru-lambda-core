@@ -60,6 +60,20 @@ while IFS= read -r sec; do
     fi
 done <<< "$roadmap_sections"
 
+# 2a. No two checklist sections may share a prefix. The prefix is the key
+#     this gate assigns phases by, so two `## PKG — …` headings made every
+#     per-section count ambiguous to a reader — and `sort -u` below hid it.
+#     The counts happened to be right (both fed one assignment), which is
+#     exactly why it needed a check rather than a reader noticing. PROC-25
+#     credited this gate with the check before it had one.
+dup_sections=$(printf '%s\n' "$blocking" | sed -nE 's/^## ([A-Z]+) .*/\1/p' | sort | uniq -d || true)
+if [ -n "$dup_sections" ]; then
+    echo "roadmap: two or more checklist sections share a prefix:"
+    printf '%s\n' "$dup_sections" | sed 's/^/  /'
+    echo "  (a prefix is this gate's section key; merge them or rename one)"
+    fail=1
+fi
+
 # 2. No section may be assigned twice. Two phases owning one section is how a
 #    phase silently becomes someone else's problem.
 dupes=$(printf '%s\n' "$roadmap_sections" | uniq -d || true)
