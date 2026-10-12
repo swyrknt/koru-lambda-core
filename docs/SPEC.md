@@ -350,61 +350,109 @@ the same operations.
 
 ## 10. Golden vectors
 
-These are the canonical test values. They are published in code as
+These are the canonical test values. They are mirrored in code as
 `koru_lambda_core::vectors`, and both the native and WebAssembly test
 suites assert against them. An independent implementation should
-reproduce every value below from this document alone.
+reproduce every value below from this document alone — that is this
+section's contract, and §10.2 is the part of it that used to be missing.
 
-History:
+<!-- BEGIN GENERATED: scripts/gen_spec_vectors.py -->
 
-```
-engine  = new()
-c       = synthesize(d₀, d₁)
-d       = synthesize(c, d₀)
-e       = synthesize(d, d₁)
-```
+*Generated from `conformance/vectors.json` by `scripts/gen_spec_vectors.py`; `scripts/gates/spec_vectors.sh` fails
+if this block and the fixture disagree. Edit the fixture, not this section.*
 
-| Value | Expected (hex) |
+### 10.1 Identity
+
+The two primordials, which exist by assertion:
+
+| Value | Hex |
 |---|---|
-| `c` | `6cc4f0e930b34481d03a4134331852ea` |
-| `d` | `3309377e376d6ca3c2e3bf9885900260` |
-| `e` | `5f02c8386c05dc7311e0c73a011e18be` |
+| `d₀` | `00000000000000000000000000000000` |
+| `d₁` | `01000000000000000000000000000000` |
 
-Then, with `root = c`, `direction = Upstream`, `boundary = Hops(2)`,
-`signal = Adjacency`, the canonical bytes of §7 are:
+Then, applying §2 in order against a fresh engine:
 
 ```
-4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d256
-2fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000
-001000000000100000000000000000000000000000001000000006cc4f0e930b34481d0
-3a4134331852ea21000000010000000000000000000000000000000001000000000000
-000000000000000000
+c       = synthesize(d0, d1)
+d       = synthesize(c, d0)
+e       = synthesize(d, d1)
 ```
 
-(The line breaks are presentational; the value is one continuous byte
-string.)
+| Value | Derivation | Hex |
+|---|---|---|
+| `c` | `synthesize(d0, d1)` | `6cc4f0e930b34481d03a4134331852ea` |
+| `d` | `synthesize(c, d0)` | `3309377e376d6ca3c2e3bf9885900260` |
+| `e` | `synthesize(d, d1)` | `5f02c8386c05dc7311e0c73a011e18be` |
 
-Reading the first bytes against §7: `4b 50 52 4a` is `KPRJ`, `02` is the
-version, and the next 16 bytes are `c`.
+### 10.2 The lift
 
-The complete set — byte tips, the sequence fold, the four domain anchors,
-the three output encodings of §6, the composite folds of §4.4, all
-eighteen projections with their identifiers, and the inputs an
-implementation must **refuse** — is `conformance/vectors.json`, with
-`conformance/README.md` naming which level each belongs to. This section
-is the subset a reader can check by hand; that file is the one to certify
-against.
+Byte tips (§4.3), each 8 synthesize steps over `{d₀, d₁}` after the anchoring call:
 
-Two of those deserve naming here, because an implementation can satisfy
-everything else and still fail them:
+| Byte | Tip |
+|---|---|
+| `0x00` | `1c1a627159dcf9523304bd261346e876` |
+| `0x01` | `d1da7982b838811998a709d6b93c4af8` |
+| `0x41` | `f734ffd02c46262fbaa9c5c9d5726538` |
+| `0xff` | `214032b0fd17b607a0ed4076a36f16ed` |
 
-- The §4.4 composite cases include a nested fold and its flattened
-  counterpart. They carry the same parts in the same order and differ
-  only in grouping, so an implementation that flattens structure
-  reproduces every other value in the file and disagrees with these.
-- Only four of the eighteen projections are invariant under appending to
-  the engine. The other fourteen are reproducible only against the
-  history the fixture declares.
+The fixture carries four of the 256; an implementation that reproduces these four by the §4.3 rule reproduces all of them, and `conformance/vectors.json` is the place to check the rest.
+
+The anchored sequence fold (§4.2):
+
+- **`fold_hi_anchored_at_d`** — anchor `3309377e376d6ca3c2e3bf9885900260`,
+  elements `[0x68, 0x69]`, length folded first.
+  Result: `c92ea05207b80ce6bb3ef6995a203c3e`
+
+Domain anchors (§4.2), which are how two consumers folding identical
+bytes avoid colliding:
+
+| Label | Anchor |
+|---|---|
+| `0x01` | `93927b780fa715ffa381b28cee016d0c` |
+| `0x02` | `7f557565133618eac3d47991ed1fcda4` |
+| `0x7f` | `d9777980de7d16296c3e99c0111663dd` |
+| `0xff` | `747f49abc60bafa407beae2089934331` |
+
+Composites (§4.4), folded over their parts' own tips. The last two
+carry the same parts in the same order and differ only in grouping:
+
+| Case | Parts | Result |
+|---|---|---|
+| `flat_1_2_3` | tip(0x01), tip(0x02), tip(0x03) — anchored at `d` | `c9211c7822ef0549b38ae9eed84a0f73` |
+| `inner_1_2` | tip(0x01), tip(0x02) — anchored at `d` | `e5602c8da1b26ebdc71b3154778af74d` |
+| `nested_1_2_then_3` | `inner_1_2`, tip(0x03) — anchored at `d` | `30abdef870bea83aea4efa221a68b506` |
+| `flat_1_2_3_under_domain_01` | tip(0x01), tip(0x02), tip(0x03) — anchored at domain 0x01 | `c5f853eea7642741e32204b59d637a16` |
+
+### 10.3 A worked projection
+
+With `root = 6cc4f0e9…`, `direction = Upstream`, `boundary = Hops(2)`,
+`signal = Adjacency`, the §7 canonical bytes are:
+
+```
+4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2
+562fdb2c3f3fa4b8a3258b7781030000000000000000000000000000000000000000
+00000001000000000100000000000000000000000000000001000000006cc4f0e930
+b34481d03a4134331852ea2100000001000000000000000000000000000000000100
+0000000000000000000000000000
+```
+
+(The line breaks are presentational; the value is one continuous
+byte string.) Reading the first bytes against §7: `4b 50 52 4a` is
+`KPRJ`, `02` is the version, and the next 16 bytes are the root.
+
+Its §8 identity is `347d60094a92c906880c8af79f51066b775eafba250709ccd4d8090c24b82f0c`.
+
+### 10.4 What this section does not carry
+
+`conformance/vectors.json` carries all 18 projections with their identifiers, the 7 output encodings of §6, the remaining byte tips, and 8 inputs an implementation must **refuse**. `conformance/README.md` names which conformance level each belongs to.
+
+Two of those deserve naming here, because an implementation can
+satisfy everything above and still fail them:
+
+- The rejection cases. Reproduction is not conformance: an implementation that accepts a well-formed forgery reproduces every value in this section perfectly.
+- Only four of the 18 projections are invariant under appending to the engine. The other fourteen are reproducible only against the history §10.1 declares.
+
+<!-- END GENERATED: scripts/gen_spec_vectors.py -->
 
 ## 11. Limits
 

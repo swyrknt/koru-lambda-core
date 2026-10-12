@@ -11,8 +11,33 @@
 #
 #   - a commit SHA        -> must exist in this repository
 #   - a repo-relative path -> must exist on disk
-#   - a test path::name   -> checked by scripts/gates/checklist_tests.sh
-#                            (separate gate; needs a compiled test list)
+#
+# Test names are NOT checked, and this header used to say they were — "checked
+# by scripts/gates/checklist_tests.sh (separate gate)", naming a file that has
+# never existed. The token regex below also omits ':', so a `module::test_name`
+# reference was not even captured. Every evidence line citing a test went
+# unverified while the gate reported a resolved-reference count.
+#
+# Building it was attempted and the obstacle is real: evidence lines cite
+# backticked snake_case tokens that are not tests and must not be flagged.
+# Classifying all 56 in this file gave 48 that resolve to a definition in
+# tracked Rust and 22 that do not, of which every single one is legitimate —
+# Rust keywords (`const`, `self`), crate-type values (`rlib`, `cdylib`),
+# dependency names (`sha2`, `dashmap`), fixture keys (`frozen_for_major`,
+# `reject`), struct fields (`child`, `actual`), a criterion bench id
+# (`map_byte_warm_engine`), a commit SHA, and five deliberate references to
+# things that no longer exist, in evidence that exists to explain their
+# removal (`advances_from`, `canonicalize_with`,
+# `type_id_constants_match_runtime_sha`), to a synthetic probe that never
+# existed (`future_thing`), and to a test in the published 1.2.0 tarball that
+# never compiled (`test_falsify_wasm_axiom_violations`).
+#
+# A gate flagging those would be 22 exemptions and no catches, which teaches
+# contributors to add exemptions. Closing it properly needs a citation
+# convention the evidence lines do not have — a parseable `tests: a, b` clause
+# would make test references checkable without guessing which tokens are
+# tests. That is a process change for the owner to accept, not something to
+# impose retroactively, so it is written down here rather than half-built.
 #
 # Prose in the evidence line is fine — it is the references that are checked.
 set -euo pipefail

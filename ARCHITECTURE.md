@@ -59,7 +59,8 @@ src/
   primitives.rs       Canonicalizable, ByteMapping, ByteFold,
                       DomainLabel, domain_anchor — the lift
   distinction_hex.rs  to_hex / from_hex / Display / Debug / serde
-  replay.rs           snapshot_parentage / replay_topological
+  replay.rs           replay_topological (snapshot_parentage is an
+                      engine method, in engine.rs)
   vectors.rs          the published vectors, mirroring
                       conformance/vectors.json
 ```
@@ -112,7 +113,7 @@ pub struct DistinctionEngine {
 |---|---|---|
 | Saturation check | `nodes.contains_key(id)` | Axiom-equivalent: repeats add nothing. O(1) existence check in the synthesize hot path. |
 | Parent lookup | `nodes.get(id).parents` | Binary parentage (Law 5). Canonical child→parents projection used by replay, invariant checks, and parent walks. |
-| Degree query | `nodes.get(id).degree.load(Acquire)` + addend | Coding Law (Law 12) and Fold Law (Law 11) — both stated as degree properties. The theory's central observability claim. |
+| Degree query | `nodes.get(id).degree.load(Acquire)` + addend | Coding Law (Law 12), and the Fold Law corollary that `THEORY.md` withdrew from independent-law status — both stated as degree properties. The theory's central observability claim. |
 
 Identity-IS-process: each distinction is one `EngineNode`. The
 `children_of` enumeration is *not* in the engine — `node.degree`
@@ -334,8 +335,10 @@ parentage is *sufficient* to reconstruct an engine, which is what makes Law 9
 checkable. The other two determine no byte and reconstruct nothing.
 
 `snapshot_parentage` dumps the parent map; `replay_topological` rebuilds a
-fresh engine by repeatedly synthesizing entries whose parents are already
-registered, until quiescent. It returns `Result<_, ReplayError>` with three
+fresh engine by Kahn's algorithm over the parentage DAG — an entry becomes
+ready when the engine holds both its parents, and resolving it wakes exactly
+the entries waiting on the child it produces. It was the repeated-sweep form
+this sentence used to describe, which is O(N²) on a chain. It returns `Result<_, ReplayError>` with three
 variants — `Unreachable`, `Mismatch`, `MissingPrimordial` — so a caller
 handles corrupted parentage in release builds rather than discovering it as a
 silent divergence.

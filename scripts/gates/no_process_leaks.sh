@@ -14,13 +14,29 @@ cd "$(dirname "$0")/../.."
 fail=0
 # The gate scripts name the patterns they hunt for, so they exclude
 # themselves; CHECKLIST.md is the working tracker, not a published artifact.
-files=$(git ls-files '*.rs' '*.toml' '*.md' '*.sh' '*.yml' \
-    | grep -v '^CHECKLIST.md$' | grep -v '^scripts/gates/' \
-    | grep -v '^BUDGET_LOG.md$' || true)
-# BUDGET_LOG.md is an internal review record, excluded from the published
-# package (see Cargo.toml `exclude`). Rewriting a historical log to satisfy a
-# gate would be worse than not publishing it, so it is exempt here and
-# withheld there.
+# Scope is exactly what `cargo package` will ship, asked of cargo rather than
+# approximated here. It used to be an extension list — '*.rs' '*.toml' '*.md'
+# '*.sh' '*.yml' — with three hand-maintained exemptions, and that was wrong
+# in both directions. It could not match a file with no extension, so
+# `.gitignore` (tracked, shipped, and naming local tooling directories on
+# three lines) was invisible; and it scanned files the package excludes, so
+# the exemptions existed to undo that.
+#
+# Asking cargo collapses both: the gate's header says "files we publish", and
+# now that is literally the file list. It also means widening Cargo.toml's
+# `exclude` is the way to exempt something, which is the honest mechanism —
+# a file is exempt because readers do not receive it, not because a gate was
+# told to look away.
+if ! files=$(cargo package --list --allow-dirty -p koru-lambda-core 2>/dev/null); then
+    echo "no_process_leaks: cargo package --list failed; cannot determine what ships" >&2
+    exit 1
+fi
+# Drop cargo's synthesised entries, keep text only.
+files=$(printf '%s\n' "$files" \
+    | grep -vE '^(Cargo\.toml\.orig|\.cargo_vcs_info\.json)$' \
+    | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done \
+    | tr '\n' '\0' | xargs -0 grep -Il '' 2>/dev/null || true)
+
 [ -z "$files" ] && { echo "no_process_leaks: no files"; exit 0; }
 
 check() {

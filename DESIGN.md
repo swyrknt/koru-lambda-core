@@ -274,9 +274,10 @@ needs. None extends engine state; consumers wanting none of them pay nothing.
 - **`snapshot_parentage` + `replay_topological`**
   `[SHIPPED @ replay::replay_topological]` — engine persistence + round-trip
   reconstruction. `snapshot_parentage(engine)` dumps the parent map;
-  `replay_topological(snapshot)` rebuilds a fresh engine by repeatedly
-  calling `synthesize` on entries whose parents are already
-  registered, until quiescent. Returns `Result<_, ReplayError>` with
+  `replay_topological(snapshot)` rebuilds a fresh engine by Kahn's
+  algorithm over the parentage DAG, in O(N) for every input shape. The
+  repeated-sweep form this used to describe was O(N²) on a chain, which is
+  the shape an agent advancing its local root produces. Returns `Result<_, ReplayError>` with
   release-safe content-address mismatch detection: the release build
   checks that each `synthesize` result matches the recorded child
   bytes and returns `ReplayError::Mismatch` on tampered parentage,

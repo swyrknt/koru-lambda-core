@@ -22,6 +22,7 @@ step "repository gates"
 ./scripts/gates/vectors_frozen.sh
 ./scripts/gates/fixture_coverage.sh
 ./scripts/gates/no_drop_impls.sh
+./scripts/gates/spec_vectors.sh
 ./scripts/gates/no_consumer_names.sh
 ./scripts/gates/doc_links.sh
 

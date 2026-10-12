@@ -45,9 +45,13 @@ fn r_equals_2d_minus_3_at_5m_synths() {
         expected_d,
         "distinction_count after 5M chain syntheses must equal N+2"
     );
-    assert_eq!(
-        engine.relationship_count(),
-        expected_r,
-        "relationship_count after 5M chain syntheses must equal 2N+1"
-    );
+    // `relationship_count()` is arithmetic over `distinction_count()`
+    // (`(d - 2) * 2 + 1`), so asserting it equals `2N + 1` is implied by the
+    // assertion above and cannot fail independently. The measured ledger is
+    // what carries content at this scale: every node's stored degree
+    // recounted from its recorded parentage.
+    let _ = expected_r;
+    engine
+        .check_structural_invariant()
+        .expect("5M nodes of recorded parentage agree with their degrees (invariant)");
 }

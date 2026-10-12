@@ -31,10 +31,29 @@ categories = ["algorithms", "wasm"]
 # (01_hello_synth, 02_novelty_and_chain, 03_projection_composition,
 # 04_wire_format_roundtrip) ship in the tarball by default — cargo
 # convention.
+# What a consumer gets: the source, the normative specification, the
+# conformance fixture they certify against, and the documents README links to.
+# Everything below is this repository's own machinery, and `cargo package
+# --list` was shipping 92 files of which 32 were internal — the entire gate
+# suite (six of which read the excluded CHECKLIST.md, so they could not run
+# from an installed crate), the API review snapshots including the record of
+# 1,352 items removed since 1.2.0, proptest failure seeds, the internal
+# onboarding docs (one of which still prints v1.2's five-axiom set, and one of
+# which preserves deleted marketing prose verbatim), and a .gitignore naming
+# local tooling directories.
 exclude = [
     "examples/wasm-demos/*",
     "/CHECKLIST.md",
     "/BUDGET_LOG.md",
+    "/ROADMAP.md",
+    "/CORPUS_PROVENANCE.md",
+    "/.gitignore",
+    ".github/*",
+    "api/*",
+    "docs/development/*",
+    "proptest-regressions/*",
+    "scripts/*",
+    "experiments/*",
 ]
 
 [package.metadata.docs.rs]

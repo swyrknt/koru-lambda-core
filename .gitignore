@@ -5,14 +5,12 @@
 **/target/
 **/*.rs.bk
 
-# Claude Code agent definitions (local, not part of the project)
-.claude/agents/
-
-# Warroom (5-agent review team) — local operational config, tracked in nested git
-.claude/warroom/
-
-# Local Claude Code settings (permissions, additional directories)
-.claude/settings.local.json
+# Local tooling state — editor and assistant configuration, not project
+# content. Ignored wholesale rather than entry by entry: this file is tracked
+# AND ships inside the published crate (it is not in Cargo.toml's `exclude`),
+# so each named subdirectory was a local process detail published to
+# crates.io. One line leaks nothing and ignores strictly more.
+.claude/
 
 # Cargo.lock IS committed, deliberately. The old guidance this comment used to
 # cite — ignore it for libraries — predates the current advice, and ignoring it

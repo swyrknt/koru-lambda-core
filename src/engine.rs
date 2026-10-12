@@ -38,21 +38,27 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// The field is `pub(crate)`: external code cannot mint a `Distinction`
 /// from nothing, and as of 2026-10-07 nothing in the public surface does.
 ///
-/// `#[repr(transparent)]`: layout-compatible with `[u8; 16]`, enabling
-/// zero-copy FFI/WASM transit (`*const Distinction` ↔ `*const [u8; 16]`).
+/// `#[repr(transparent)]`: layout-compatible with `[u8; 16]`, so a pointer
+/// can cross an FFI boundary without a conversion. That is a layout
+/// guarantee and not a licence to cast a value in.
 ///
-/// # Safety justification for `bytemuck::Pod` and `bytemuck::Zeroable`
+/// # Why this is not `bytemuck::Pod` or `Zeroable`
 ///
-/// `Pod` requires the type to have no padding bytes and all bit patterns
-/// to be valid. `[u8; 16]` has no padding (it's just 16 bytes), all 2^128
-/// bit patterns are valid (any byte sequence is a syntactically valid
-/// Distinction identity — the engine is what decides which ones are
-/// "registered"), and `#[repr(transparent)]` preserves the inner array's
-/// layout guarantees. Both invariants hold.
+/// It was both, under a section here that argued the safety requirements
+/// were met — and they are, which is exactly why the derives were the
+/// problem. `Pod` would let any sixteen bytes become a `Distinction` by
+/// `bytemuck::cast`, and `Zeroable` hands out an all-zero one that collides
+/// with `d₀` without `d₀` ever having been witnessed. Both produced a
+/// distinction with no engine involved, while the README claimed
+/// foreign-byte injection was closed at the type level.
 ///
-/// `Zeroable` requires that the all-zero bit pattern is a valid value of
-/// the type. `[0u8; 16]` is the primordial `d0`'s identity — a valid
-/// distinction by definition.
+/// The requirements being satisfiable is not the question. Identity here is
+/// engine-witnessed, not byte-inherent, so a safe transmute from bytes is a
+/// hole in the trust boundary however sound the layout argument is.
+/// `assert_not_impl_any!` below pins the absence, and
+/// `tests/trybuild/distinction_has_no_hatches.rs` holds each removed path as
+/// a compile failure. Bytes reach this type through
+/// [`RawDistinctionId`] and [`DistinctionEngine::verify`], or not at all.
 ///
 /// [`DistinctionEngine`]: crate::DistinctionEngine
 /// [`RawDistinctionId`]: crate::RawDistinctionId
@@ -120,18 +126,16 @@ impl Distinction {
 /// path is the same: `RawDistinctionId → verify → Distinction`. Bytes
 /// that have not crossed it are not a distinction, whatever their type.
 ///
-/// # Safety justification for `bytemuck::Pod` and `bytemuck::Zeroable`
+/// # Why this is not `bytemuck::Pod` or `Zeroable` either
 ///
-/// `Pod` requires the type to have no padding bytes and all bit patterns
-/// to be valid. `[u8; 16]` has no padding (it's just 16 bytes), all 2^128
-/// bit patterns are valid (any byte sequence is a syntactically valid
-/// unverified identity — engine registration decides which ones actually
-/// name a [`Distinction`]), and `#[repr(transparent)]` preserves the
-/// inner array's layout guarantees. Both invariants hold.
-///
-/// `Zeroable` requires that the all-zero bit pattern is a valid value of
-/// the type. Any 16-byte pattern is a valid `RawDistinctionId`; the
-/// all-zero case happens to also be `d0`'s identity.
+/// Unlike [`Distinction`], the safety argument for this type is not the
+/// point: any sixteen bytes *are* a valid `RawDistinctionId`, which is what
+/// the type means. The derives existed to support a zero-copy path over
+/// `&[Distinction]`, and that path stopped being possible when
+/// `Distinction` gave its own up. A dependency carried for a capability
+/// nothing uses is not free — `bytemuck` was a mandatory dependency of
+/// every consumer — so it moved to `[dev-dependencies]`, kept only so the
+/// static assertions can name the traits whose absence they assert.
 ///
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]

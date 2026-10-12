@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn log_replay_invariant_byte_identical_state() {
-        // Theory gate 10 in DESIGN.md Part 10: rebuilding the engine
+        // Law 8 and Law 9, per `DESIGN.md`: rebuilding the engine
         // from parents_of must produce byte-identical state. Catches
         // the case where a future contributor adds a hidden state
         // field that isn't a pure function of the synthesis log.

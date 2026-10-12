@@ -163,9 +163,20 @@ fn every_triangle_is_a_mediated_self_reference() {
     let all = triangles(&adj);
     assert!(all.len() > 50, "only {} triangles — corpus too sparse to be evidence", all.len());
 
-    // `r = 2d - 3` must hold, or the edge set is not what this census assumes.
+    // The edge set must be parentage, or this census is counting something
+    // else. Asserted through the *measured* ledger, which recounts each
+    // node's degree from its recorded parent pair.
+    //
+    // This was `assert_eq!(engine.relationship_count(), 2 * d - 3)`, under
+    // the message "Law 6 broken; edge set is not parentage" — and it could
+    // not fail. `relationship_count()` is `(distinction_count() - 2) * 2 + 1`
+    // by construction, so the assertion reduced to `2d - 3 == 2d - 3`: the
+    // formula compared with itself, asserting nothing about the edges while
+    // reading as the load-bearing precondition of everything below it.
+    engine
+        .check_structural_invariant()
+        .expect("the edge set is recorded parentage, measured per node (invariant)");
     let d = engine.distinction_count();
-    assert_eq!(engine.relationship_count(), 2 * d - 3, "Law 6 broken; edge set is not parentage");
 
     let mut via_parentage = 0usize;
     let mut via_genesis = 0usize;
