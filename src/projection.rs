@@ -447,7 +447,7 @@ pub fn signal_identity<S: Signal>(signal: &S) -> [u8; 16] {
 /// breaking Law 9. It ships only if the substrate ever gains an
 /// order-bearing extension.
 #[non_exhaustive]
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Boundary {
     /// Traverse up to N hops from `root`. `N == 0` returns just `root`.
     Hops(usize),
@@ -457,7 +457,7 @@ pub enum Boundary {
 
 /// Traversal direction relative to `root`.
 #[non_exhaustive]
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Direction {
     /// Walk parent edges (ancestors). Backed by `parents_of`.
     Upstream,

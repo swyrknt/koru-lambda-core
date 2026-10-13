@@ -231,6 +231,13 @@ impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::primitives::Byte
 pub struct koru_lambda_core::primitives::ByteMapping
 impl koru_lambda_core::primitives::ByteMapping
 pub fn koru_lambda_core::primitives::ByteMapping::map_byte_to_distinction(u8, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl core::clone::Clone for koru_lambda_core::primitives::ByteMapping
+pub fn koru_lambda_core::primitives::ByteMapping::clone(&self) -> koru_lambda_core::primitives::ByteMapping
+impl core::default::Default for koru_lambda_core::primitives::ByteMapping
+pub fn koru_lambda_core::primitives::ByteMapping::default() -> koru_lambda_core::primitives::ByteMapping
+impl core::fmt::Debug for koru_lambda_core::primitives::ByteMapping
+pub fn koru_lambda_core::primitives::ByteMapping::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::primitives::ByteMapping
 impl core::marker::Freeze for koru_lambda_core::primitives::ByteMapping
 impl core::marker::Send for koru_lambda_core::primitives::ByteMapping
 impl core::marker::Sync for koru_lambda_core::primitives::ByteMapping
@@ -274,6 +281,8 @@ impl core::cmp::PartialEq for koru_lambda_core::projection::Boundary
 pub fn koru_lambda_core::projection::Boundary::eq(&self, &koru_lambda_core::projection::Boundary) -> bool
 impl core::fmt::Debug for koru_lambda_core::projection::Boundary
 pub fn koru_lambda_core::projection::Boundary::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for koru_lambda_core::projection::Boundary
+pub fn koru_lambda_core::projection::Boundary::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for koru_lambda_core::projection::Boundary
 impl core::marker::StructuralPartialEq for koru_lambda_core::projection::Boundary
 impl core::marker::Freeze for koru_lambda_core::projection::Boundary
@@ -294,6 +303,8 @@ impl core::cmp::PartialEq for koru_lambda_core::projection::Direction
 pub fn koru_lambda_core::projection::Direction::eq(&self, &koru_lambda_core::projection::Direction) -> bool
 impl core::fmt::Debug for koru_lambda_core::projection::Direction
 pub fn koru_lambda_core::projection::Direction::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for koru_lambda_core::projection::Direction
+pub fn koru_lambda_core::projection::Direction::hash<__H: core::hash::Hasher>(&self, &mut __H)
 impl core::marker::Copy for koru_lambda_core::projection::Direction
 impl core::marker::StructuralPartialEq for koru_lambda_core::projection::Direction
 impl core::marker::Freeze for koru_lambda_core::projection::Direction
@@ -748,6 +759,13 @@ impl core::panic::unwind_safe::UnwindSafe for koru_lambda_core::primitives::Byte
 pub struct koru_lambda_core::ByteMapping
 impl koru_lambda_core::primitives::ByteMapping
 pub fn koru_lambda_core::primitives::ByteMapping::map_byte_to_distinction(u8, &koru_lambda_core::engine::DistinctionEngine) -> koru_lambda_core::engine::Distinction
+impl core::clone::Clone for koru_lambda_core::primitives::ByteMapping
+pub fn koru_lambda_core::primitives::ByteMapping::clone(&self) -> koru_lambda_core::primitives::ByteMapping
+impl core::default::Default for koru_lambda_core::primitives::ByteMapping
+pub fn koru_lambda_core::primitives::ByteMapping::default() -> koru_lambda_core::primitives::ByteMapping
+impl core::fmt::Debug for koru_lambda_core::primitives::ByteMapping
+pub fn koru_lambda_core::primitives::ByteMapping::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for koru_lambda_core::primitives::ByteMapping
 impl core::marker::Freeze for koru_lambda_core::primitives::ByteMapping
 impl core::marker::Send for koru_lambda_core::primitives::ByteMapping
 impl core::marker::Sync for koru_lambda_core::primitives::ByteMapping

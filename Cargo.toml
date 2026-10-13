@@ -75,8 +75,13 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lib]
 crate-type = ["rlib"]
 
-[profile.release]
-panic = "abort"
+# No `panic = "abort"` here, deliberately. The engine's contract is a panic
+# that changes nothing and can be caught (see `DistinctionEngine::synthesize`),
+# and a release profile that aborts contradicts it while testing a shape no
+# consumer necessarily builds. A profile in a library manifest does not
+# propagate to a dependent in any case, so this only ever governed builds of
+# this repository — making its own release binaries the one place the
+# documented contract did not hold.
 
 [lints.rust]
 # `cfg(loom)` is a workflow-specific build flag set via

@@ -177,6 +177,7 @@ pub trait Canonicalizable {
 /// anchor-varying pairs. An anchor touched only at a fold's first step is
 /// ceilinged at the alphabet size however much is folded.
 ///
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ByteMapping;
 
 /// An ordered sequence of bytes, folded into one distinction.

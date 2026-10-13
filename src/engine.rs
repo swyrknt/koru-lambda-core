@@ -748,6 +748,28 @@ impl DistinctionEngine {
     /// profile and completes before any state change, so the engine is
     /// unchanged when it fires.
     ///
+    /// # Catching it
+    ///
+    /// A consumer that wants to recover must wrap the call in
+    /// [`AssertUnwindSafe`](std::panic::AssertUnwindSafe), because
+    /// `&DistinctionEngine` is not `RefUnwindSafe`: `DashMap` holds an
+    /// `UnsafeCell`, so the type system treats a shared borrow as carrying
+    /// interior mutability across the boundary.
+    ///
+    /// That assertion is honest here, and the zero-state-change guarantee
+    /// above is what makes it so — there is no half-finished write for the
+    /// unwind to expose.
+    /// `tests/public_surface.rs::a_consumers_catch_unwind_needs_assert_unwind_safe`
+    /// demonstrates it from outside the crate, comparing the engine's
+    /// counts and a node's degree across the caught panic.
+    ///
+    /// One case where none of this holds: a consumer who builds with
+    /// `panic = "abort"` gets no unwinding at all, so the panic ends the
+    /// process. That is their profile's decision and the substrate cannot
+    /// soften it — which is why the guarantee is stated as *zero state
+    /// change* rather than as recoverability. Nothing in this crate's own
+    /// profiles imposes it.
+    ///
     /// [`replay_topological`]: crate::replay::replay_topological
     pub fn synthesize_novel(&self, a: Distinction, b: Distinction) -> SynthesisOutcome {
         match self.synthesize_inner(a, b) {
