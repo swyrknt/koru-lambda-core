@@ -148,6 +148,37 @@ pub(crate) type SignalOutputs<S> = BTreeMap<Distinction, <S as Signal>::Output>;
 /// exist in the substrate. The `tests/trybuild/dyn_signal_unsafe.rs`
 /// compile-fail probe proves this.
 ///
+/// # Read-only: enforced on one side, a contract on the other
+///
+/// Cond E says a projection does not change the engine, and that holds in
+/// two different ways which are worth separating.
+///
+/// **Enforced** for the three shipped signals, and for the handle every
+/// signal is given: [`SignalContext::engine`] is a
+/// `&dyn ReadOnlyEngine`, whose method inventory contains no `synthesize`
+/// and no other mutating access. A signal cannot write through what it is
+/// handed. `tests/read_only.rs::no_core_projection_changes_the_engine`
+/// measures it for all three signals across every direction and both
+/// boundary kinds — comparing the whole parentage map and every node's
+/// degree, not two counts.
+///
+/// **A contract** for a consumer's own signal, because a `Signal` is an
+/// arbitrary type and nothing in this signature stops it holding an
+/// `Arc<DistinctionEngine>` of its own and synthesizing through that inside
+/// `compute`. No bound can forbid it.
+/// `tests/read_only.rs::a_consumer_signal_can_break_the_read_only_contract`
+/// demonstrates it, and the engine is still well-formed afterwards — it was
+/// a legal write, just one the contract forbids, which is what makes it a
+/// contract rather than a bug.
+///
+/// A consumer can check their own signal in five lines of public API:
+/// snapshot the parentage and the degrees, project, snapshot again, compare.
+/// `the_self_test_recipe_catches_a_mutating_signal` is that recipe, shown
+/// passing for the shipped signals and catching one that writes. It is a
+/// recipe rather than an exported helper because a helper would have to be
+/// generic over the builder's typestate to say anything a consumer cannot
+/// say more plainly themselves.
+///
 /// # `canonical_bytes()` purity — consumer contract
 ///
 /// Consumer-implemented signals whose `canonical_bytes()` is non-pure

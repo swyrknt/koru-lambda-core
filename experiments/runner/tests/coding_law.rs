@@ -128,8 +128,19 @@ fn exp18_rho_clears_gate() {
     println!("exp18 Spearman ρ = {rho:.6} (gate ≥ {RHO_GATE})");
     assert!(
         rho >= RHO_GATE,
-        "Coding Law ρ gate FAILED: got {rho:.6}, need ≥ {RHO_GATE}. \
-         Substrate may be losing degree signal — investigate before relaxing."
+        "Coding Law ρ gate FAILED: got {rho:.6}, need ≥ {RHO_GATE}.\n\
+         \n\
+         Before relaxing this, check the saturation rate — the threshold is \
+         only valid in a band. `THEORY.md` records that a *correct* substrate \
+         yields ρ = 0.9752 at 72% saturation and 0.9292 at 97%, with \
+         ρ(saturation, ρ) = −1.0000: the shortfall below 1.0 is saturation, \
+         not lost signal. So {RHO_GATE} encodes the pinned corpus's 36% \
+         saturation rate. It is clearable below roughly 45% saturation and \
+         NOT above — a run on a more saturated corpus can fail this gate \
+         while the substrate is behaving exactly as the theory predicts.\n\
+         \n\
+         If the corpus changed, re-derive the threshold from its saturation \
+         rate. If it did not, the substrate is losing degree signal."
     );
 }
 
