@@ -162,7 +162,27 @@ parties, the length prefix may be omitted; §4.3 is that case.
 
 The anchor is a **parameter**. Two consumers folding identical bytes
 from different anchors obtain different distinctions, which is how
-domains separate. That separation lives in synthesized structure and
+domains separate.
+
+A consumer with no natural anchor of its own derives one from a one-byte
+**domain label**:
+
+```
+domain_anchor(label):
+    base = synthesize(d₀, d₁)
+    return synthesize(base, tip_of_byte(label))
+```
+
+That is a legal anchor by construction — it is a two-step synthesis, so it
+is not a byte tip. §10.2 publishes four of these. The rule was missing
+from this document entirely: §10.2 listed the values and no section said
+how a label became an anchor, which is not recoverable from the values
+without searching candidate constructions.
+
+Nothing reserves a label. Two consumers may choose the same one and
+collide in a shared engine, and the substrate cannot prevent it: a
+registry would be a naming authority, which is what content addressing
+replaces. Consumers sharing an engine agree on labels out of band. That separation lives in synthesized structure and
 deliberately not in the hash: a domain tag mixed into §2 would be a
 naming layer above content addressing, and would end the property that
 two engines performing the same operations agree.
@@ -191,7 +211,8 @@ anyway, because an implementation has to make the call.
 A value with named parts is lifted by lifting each part to a distinction
 and folding those, in declared part order, by §4.2 — the alphabet being
 the parts' own tips. Length is folded in first, as always, over the byte
-alphabet.
+alphabet, and it is the **number of parts** — not the byte length of
+anything they contain.
 
 Nesting needs no further rule. A composite's fold is a distinction, and a
 distinction is an element one level up, so a part that is itself a
@@ -216,6 +237,17 @@ Two constraints are not negotiable at this level:
    fixed alphabet this is the collision bound of §11; with
    caller-supplied distinctions it is reachable, and an implementation
    must refuse it rather than silently produce a shorter fold.
+
+Every step of a lift goes **through the engine**, so each intermediate is
+a witnessed distinction: the 256 byte tips, every bit-step accumulator,
+and every stage of a sequence or composite fold. A lift therefore grows
+the engine, and the nodes it adds appear in later projections and change
+later `Degree` and `Saturated` reads.
+
+This is not an incidental property. An implementation that computes tips
+against a throwaway engine and hands the identifiers to the caller's
+produces values whose distinctions that engine never witnessed —
+identifiers that `verify` must reject while appearing in parentage.
 
 So the substrate has one lift rule applied at three levels: bits fold
 over the primordials, bytes fold over the bit tips, composites fold over
@@ -252,9 +284,52 @@ Three signals ship, each with a domain-separated tag:
 
 | Signal | Per-node output | Tag |
 |---|---|---|
-| `Adjacency` | the node's parent pair, or nothing for a primordial | `koru:signal:v1:adjacency` |
-| `Degree` | the node's degree | `koru:signal:v1:degree` |
-| `HopDistance` | hops from the root | `koru:signal:v1:hop_distance` |
+| `Adjacency` | the node's parent pair in canonical order, or nothing for a primordial | `koru:signal:v1:adjacency` |
+| `Degree` | edges incident to the node, per §6.1 | `koru:signal:v1:degree` |
+| `HopDistance` | **shortest** hop count from the root within the cone | `koru:signal:v1:hop_distance` |
+
+`Adjacency` emits the pair in the canonical order of §2 — the smaller
+identifier first, compared bytewise — and **not** the order the caller
+passed to `synthesize`. The two coincide only when the caller already
+passed them in order, so an implementation that emits caller order agrees
+on some published projections and not others.
+
+`HopDistance` is the shortest path, not first-visit order. The two differ
+for any node reachable by more than one route, which `Undirected` makes
+possible on every graph and `Downstream` makes possible on any diamond.
+
+### 6.1 Degree
+
+The degree of a node is the number of **edges incident to it**. The edge
+set of an engine is:
+
+- two edges for every non-primordial, one to each of its parents; plus
+- one **genesis edge** between `d₀` and `d₁`.
+
+The genesis edge is what makes the primordials' mutual existence an
+edge rather than a special case, and it is the `+1` in `r = 2d − 3`: the
+edge set has exactly `2(d − 2) + 1` members, which is §9's relationship
+count. Summed over all nodes, degree is twice that, because every edge
+has two endpoints.
+
+Worked against §10.1's history, where `c = synthesize(d₀, d₁)`,
+`d = synthesize(c, d₀)` and `e = synthesize(d, d₁)`:
+
+| Node | Incident edges | Degree |
+|---|---|---|
+| `d₀` | `c–d₀`, `d–d₀`, genesis | 3 |
+| `d₁` | `c–d₁`, `e–d₁`, genesis | 3 |
+| `c` | `c–d₀`, `c–d₁`, `d–c` | 3 |
+| `d` | `d–c`, `d–d₀`, `e–d` | 3 |
+| `e` | `e–d`, `e–d₁` | 2 |
+
+Five nodes, nine endpoints over seven edges, and `2 × 5 − 3 = 7`.
+
+A distinction the engine has not witnessed has degree 0; it is not in the
+edge set at all. This definition was previously absent — §6 said only
+"the node's degree" — and the omission is not recoverable from the
+published vectors, because more than one rule reproduces them on a chain
+and they diverge on a branching graph.
 
 Output encodings, which the wire format depends on:
 
@@ -262,7 +337,10 @@ Output encodings, which the wire format depends on:
   32-bit and a 64-bit target agree.
 - `bool` encodes as one byte, `0` or `1`.
 - An optional parent pair encodes as `0x00` alone when absent, or
-  `0x01` followed by the two 16-byte parents in the order stored.
+  `0x01` followed by the two 16-byte parents in the **canonical order of
+  §2**: the bytewise-smaller identifier first. This said "in the order
+  stored", which named an implementation detail rather than a rule and
+  left the wire form undetermined.
 
 Signals are resolved statically. The signal type is a parameter of the
 projection, not a trait object: a projection's output type is determined
@@ -308,6 +386,18 @@ re-materialises the projection from its own state and compares the
 result byte for byte. Bytes that do not match what this engine would
 have produced are rejected, so a well-formed forgery fails as surely as
 a malformed one.
+
+The **caller supplies the signal**; the receiver does not recover it from
+the wire. The header's signal identity is `SHA-256(tag)[0..16]`, which is
+truncated and one-way, so it can confirm an expectation and cannot name a
+signal. A restore therefore takes the signal as an argument, computes its
+identity, and refuses the bytes if the header disagrees.
+
+That is why no signal registry exists, and why a consumer-defined signal
+(§6) is restorable: by whoever holds the type. Two parties exchanging a
+projection must already agree on which read it is — which they do, since
+they agreed on a `{root, direction, boundary, signal}` specification in
+order to ask for it.
 
 ## 8. Projection identity
 
