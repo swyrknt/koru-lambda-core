@@ -185,7 +185,20 @@ fn a_live_engine_reproduces_the_fixture() {
 
     let cases =
         f.pointer("/projections/cases").and_then(Value::as_array).expect("projection cases");
-    assert_eq!(cases.len(), 18, "the fixture should pin the full cross product");
+    // The cross product is 3 signals × 3 directions × 2 boundary kinds, all
+    // rooted at `c`. Asserted by shape rather than as a total, because the
+    // total now includes a case that is deliberately outside it: one rooted
+    // at a primordial, which exists because eighteen cases sharing one root
+    // could not discriminate whether §6.1's genesis edge is traversable.
+    let at_c = cases
+        .iter()
+        .filter(|c| c["root"].as_str() == Some("6cc4f0e930b34481d03a4134331852ea"))
+        .count();
+    assert_eq!(at_c, 18, "the full cross product, all rooted at c");
+    assert!(
+        cases.len() > at_c,
+        "at least one case must be rooted elsewhere, or the root axis is pinned and never varied"
+    );
     for proj_case in cases {
         let name = proj_case["name"].as_str().expect("name");
         let root = e

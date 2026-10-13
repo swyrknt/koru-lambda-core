@@ -108,8 +108,15 @@ Check against `projections.cases`, `lift.canonical_bytes.cases` and
 Stated plainly, because a suite that implies completeness is worse than one
 that admits its gaps:
 
-- ~~One projection wire form of eighteen.~~ **Closed.** All eighteen are
-  pinned, each with its `projection_id`. Note the requirement that came with
+- ~~One projection wire form of eighteen.~~ **Closed.** The full cross
+  product is pinned — 3 signals × 3 directions × 2 boundary kinds, each with
+  its `projection_id` — plus a nineteenth rooted at a **primordial**. That
+  one exists because the eighteen all share the root `c`, and an
+  implementation written from `docs/SPEC.md` alone showed what that
+  uniformity hid: §6.1's genesis edge made it ambiguous whether traversal
+  walks it, and a reading that does returns four entries there while
+  reproducing every other value in this file under the same projection
+  identity. Note the requirement that came with
   them: only four are invariant under appending (`Upstream` × `{Adjacency,
   HopDistance}`), because ancestry is fixed at creation while degree grows and
   the downstream and undirected node sets grow. The other fourteen are

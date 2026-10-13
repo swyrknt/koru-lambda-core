@@ -267,7 +267,7 @@ the hash is the part nearly every consumer wants.
 2. **The vectors are the conformance suite** — *Target.* Published as
    constants today; the language-neutral fixtures that would let an
    implementation certify itself without our participation are not extracted
-   yet, and the current vector set covers one of eighteen projection wire
+   yet, and the current vector set covers one of nineteen projection wire
    forms and no projection identity at all.
 3. **Reference implementations should be thin and independent**, each
    asserting the same vectors, none wrapping another — *Target.* None ships

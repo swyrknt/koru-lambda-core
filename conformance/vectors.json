@@ -456,6 +456,20 @@
         },
         "projection_id": "c3762ff2a6d2cf6ada8d0733939edf2d635475ded68b32477cb97d0f8026fafd",
         "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea01000000000000000002ef620945309fc353e2d8f8cbb1d39076050000000000000000000000000000000000000000000000080000000100000000000000010000000000000000000000000000000800000001000000000000003309377e376d6ca3c2e3bf98859002600800000001000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000000000000000000"
+      },
+      {
+        "$comment": "Rooted at a primordial, which the other eighteen are not \u2014 they all root at `c`. That uniformity hid a question the specification could not answer: \u00a76.1 defines degree over an edge set that includes a genesis edge between d0 and d1, and \u00a75 did not say whether traversal walks it. An implementation that walks it returns four entries here and still reproduces every other value in this file, with the same projection identity, because \u00a78 hashes the specification and not the output. Three entries is the answer: the genesis edge is not a parent or child edge. Found by an implementation written from the specification alone.",
+        "name": "adjacency_undirected_hops1_from_d0",
+        "root": "00000000000000000000000000000000",
+        "signal": "Adjacency",
+        "direction": "Undirected",
+        "boundary": {
+          "kind": "Hops",
+          "value": 1
+        },
+        "entry_count": 3,
+        "projection_id": "5c0c51dbef35a8a0fa75e6e536e7b3d13eb1a27126a19d8e2d04a06bb6dbf80c",
+        "canonical_bytes": "4b50524a020000000000000000000000000000000000010000000000000002d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000003309377e376d6ca3c2e3bf98859002602100000001000000000000000000000000000000006cc4f0e930b34481d03a4134331852ea6cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000"
       }
     ],
     "history": {

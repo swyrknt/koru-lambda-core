@@ -240,7 +240,17 @@ Two constraints are not negotiable at this level:
 
 Every step of a lift goes **through the engine**, so each intermediate is
 a witnessed distinction: the 256 byte tips, every bit-step accumulator,
-and every stage of a sequence or composite fold. A lift therefore grows
+and every stage of a sequence or composite fold.
+
+**Constructing the alphabet witnesses all of it**, and the cost is paid
+once. §4.2's precondition `anchor ∉ tip(Σ)` requires the tips to exist, so
+an implementation that means to fold bytes materialises all 256 — which is
+**513 distinctions** on a fresh engine, and leaves `degree(d₀) = 257`. An
+implementation that instead computes tips privately and uses only the
+results agrees on every value in §10, because no projection there follows a
+lift, and disagrees on engine state by an order of magnitude: 41
+distinctions against 513 after one two-byte fold, with every later `Degree`
+and `Saturated` read different. The first reading is normative. A lift therefore grows
 the engine, and the nodes it adds appear in later projections and change
 later `Degree` and `Saturated` reads.
 
@@ -271,6 +281,14 @@ axes, and those four axes alone determine its identity:
 `Upstream` walks parent edges, `Downstream` walks child edges,
 `Undirected` walks both. `Hops(0)` yields the root alone. `Saturated`
 walks until the frontier stops growing.
+
+The **genesis edge** of §6.1 is not a parent or child edge and is not
+traversed. It exists so that degree is an edge count rather than a count
+with a special case, and a cone never reaches `d₁` from `d₀` by way of it.
+This matters only for a projection rooted at a primordial, which is why it
+went unstated: every projection in §10 is rooted at `c`. `Undirected`,
+`Hops(1)` from `d₀` over §10.1's history yields three entries — `d₀`, `c`
+and `d` — and not four.
 
 Output is ordered by the bytewise ordering of §2 — the same ordering the
 operator uses — which is what makes the wire form canonical.
@@ -534,13 +552,13 @@ Its §8 identity is `347d60094a92c906880c8af79f51066b775eafba250709ccd4d8090c24b
 
 ### 10.4 What this section does not carry
 
-`conformance/vectors.json` carries all 18 projections with their identifiers, the 7 output encodings of §6, the remaining byte tips, and 8 inputs an implementation must **refuse**. `conformance/README.md` names which conformance level each belongs to.
+`conformance/vectors.json` carries all 19 projections with their identifiers, the 7 output encodings of §6, the remaining byte tips, and 8 inputs an implementation must **refuse**. `conformance/README.md` names which conformance level each belongs to.
 
 Two of those deserve naming here, because an implementation can
 satisfy everything above and still fail them:
 
 - The rejection cases. Reproduction is not conformance: an implementation that accepts a well-formed forgery reproduces every value in this section perfectly.
-- Only four of the 18 projections are invariant under appending to the engine. The other fourteen are reproducible only against the history §10.1 declares.
+- Only four of the 19 projections are invariant under appending to the engine. The other fourteen are reproducible only against the history §10.1 declares.
 
 <!-- END GENERATED: scripts/gen_spec_vectors.py -->
 
