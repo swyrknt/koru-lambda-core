@@ -1775,11 +1775,12 @@ mod engine_tests {
 
     #[test]
     fn concurrent_synth_byte_equivalent_state() {
-        // 8 threads independently synthesize the same logical chain.
-        // The final state should be byte-identical to single-threaded
-        // execution. AND sum(node.degree) == 2 * non_primordial_count
-        // (the round-2 unambiguous "expected participation count"
-        // invariant).
+        // 8 threads independently synthesize the same logical chain, and
+        // the resulting state must be byte-identical to a single-threaded
+        // run — the whole parentage map, not its size. Plus the
+        // participation count: sum(node.degree) == 2 * non_primordial_count,
+        // since every novel synthesis contributes exactly two fetch_add(1)
+        // calls, one per parent.
         let e_concurrent = Arc::new(DistinctionEngine::new());
         let n_threads = 8;
         let mut handles = Vec::with_capacity(n_threads);
@@ -1809,8 +1810,19 @@ mod engine_tests {
             cur = next;
         }
 
-        assert_eq!(e_concurrent.distinction_count(), e_single.distinction_count());
-        assert_eq!(e_concurrent.relationship_count(), e_single.relationship_count());
+        // Compare the *state*, not two counts. This asserted
+        // `distinction_count` and `relationship_count` equality and called
+        // itself byte-equivalent — but `relationship_count()` is arithmetic
+        // over `distinction_count()`, so the second assertion was implied by
+        // the first, and neither looked at which distinctions exist or how
+        // they are parented. Two engines holding different graphs of the same
+        // size passed. `state_fingerprint` compares sorted parentage, which
+        // is what "byte-identical state" means here.
+        assert_eq!(
+            state_fingerprint(&e_concurrent),
+            state_fingerprint(&e_single),
+            "8 threads and one thread must leave byte-identical state (Law 8)"
+        );
 
         // The round-2 invariant: sum of node.degree == 2 * non_primordial_count.
         // Every novel synthesis contributes exactly two fetch_add(1) calls

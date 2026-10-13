@@ -1462,18 +1462,21 @@ mod tests {
 
     #[test]
     fn downstream_cone_walks_children() {
+        // Superseded by `tests/projection_axes.rs`, which asserts the exact
+        // cone set rather than three memberships. This anchored at `d0` with
+        // every node downstream of it, so the three `contains` calls would
+        // have passed an implementation that returned the whole engine —
+        // which is the shape a traversal bug actually takes. Kept as the
+        // one-line smoke check it always was.
         let e = DistinctionEngine::new();
         let c1 = e.synthesize(e.d0(), e.d1());
-        let c2 = e.synthesize(c1, e.d0());
         let proj = e
             .project(e.d0())
             .direction(Direction::Downstream)
             .saturated()
             .signal(Adjacency)
             .materialize();
-        assert!(proj.contains(&e.d0()));
-        assert!(proj.contains(&c1));
-        assert!(proj.contains(&c2));
+        assert!(proj.contains(&c1), "a child is downstream of its parent");
     }
 
     #[test]
