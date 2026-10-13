@@ -4,6 +4,23 @@ version = "2.0.0"
 edition = "2021"
 rust-version = "1.80"
 description = "WebAssembly bindings for the koru-lambda-core substrate"
+# Not published with 2.0.0, and the reason is the substrate's own claim.
+# Identity here is engine-independent: two engines performing the same
+# operations agree without communicating, so the substrate is a rule you
+# satisfy rather than a service you call. You do not bind a rule, you
+# implement it — `conformance/vectors.json` is the polyglot mechanism, and a
+# conforming implementation is tens of lines plus SHA-256 in any language.
+#
+# The one thing a binding buys that a re-implementation cannot is access to a
+# particular engine's *witnessed history*, the only state not derivable from
+# the rule. A thing holding a history and a perspective is this project's
+# definition of an agent, so bindings belong to the agent layer by
+# definition. See `ECOSYSTEM.md` on agreement versus a shared instance, and
+# the `JS` section of `CHECKLIST.md`.
+#
+# This crate stays a workspace member: it compiles, `wasm-pack test --node`
+# still runs, and it is where the agent layer's npm package will start.
+publish = false
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/swyrknt/koru-lambda-core"
 keywords = ["wasm", "content-addressed", "deterministic", "graph"]

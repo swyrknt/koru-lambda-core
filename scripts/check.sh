@@ -61,6 +61,10 @@ if [ "$fast" -eq 1 ]; then
 fi
 
 step "clippy (wasm32)"
+# The core, not the bindings. The 32-bit codegen coverage is a property of
+# the target; routing it through the bindings crate only made it look as
+# though the bindings were what provided it.
+cargo clippy -p koru-lambda-core --target wasm32-unknown-unknown --all-features -- -D warnings
 cargo clippy -p koru-lambda-wasm --target wasm32-unknown-unknown --all-features -- -D warnings
 
 step "loom model check"

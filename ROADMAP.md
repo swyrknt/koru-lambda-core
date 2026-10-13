@@ -23,7 +23,7 @@ disagree, the build fails rather than the reader guessing.
 - [ ] P1 Theory and freeze — sections: THY, PRB, FRZ, CONF
 - [ ] P2 Derived documents — sections: DOC, ENC, TST, ANA
 - [ ] P3 Public surface — sections: API, PRJ, SEAL, ENG, TRIM, REP
-- [ ] P4 Product — sections: JS, LAND, DEMO, HYG, PKG
+- [ ] P4 Product — sections: LAND, DEMO, HYG, PKG
 - [ ] P5 Close — sections: DEC, REV, REL
 
 Exit criterion, identical for every phase: **`./scripts/gates/release_ready.sh`

@@ -43,7 +43,7 @@ something new, the answer is a new agent, not a new substrate feature.
 | Layer | Artifact | What it is | Changes |
 |---|---|---|---|
 | Substrate | `koru-lambda-core` (crate) | The operator; the projection read and its wire form; the lift; the trust boundary | Rarely, and never silently |
-| Bindings | `koru-lambda-wasm` (crate) → npm | The same engine with no Rust toolchain | With the substrate |
+| Bindings | `koru-lambda-wasm` (crate) | A second compilation target. **Not published at 2.0.0** — see below | With the agent that needs them |
 | Agents | `koru-lambda-agents` (repo) | Worked consumers of one pattern, each advancing its own root | Freely |
 
 Of those four substrate pieces, only the operator is **Forced**. The axioms
@@ -271,12 +271,25 @@ the hash is the part nearly every consumer wants.
 3. **Reference implementations should be thin and independent**, each
    asserting the same vectors, none wrapping another — *Target.* None ships
    today.
-4. **Bindings exist where they earn their keep.** The wasm crate exists
-   because a browser cannot run a Rust toolchain. It also gives a second
-   compilation target, which establishes 32-bit pointer width and an
-   independent codegen backend — worth having, but two compilations of one
-   source are not two independent witnesses, and the cross-target suite does
-   not currently cover the lift.
+4. **Bindings are an agent-layer construct, not a substrate one.** This
+   document already contains the rule that settles it, under *Agreement
+   versus a shared instance*, and an earlier draft did not apply it to wasm.
+   Agreement needs no binding: the specification and the vectors give it in
+   any language, and a conforming implementation is tens of lines plus
+   SHA-256. A binding buys exactly one thing a re-implementation cannot —
+   access to a particular engine's **witnessed history**, the only state not
+   derivable from the rule. A thing holding a history and a perspective is
+   this document's definition of an agent. So the binding belongs where the
+   shared witness is.
+
+   The wasm crate therefore stops being published at 2.0.0 and keeps its
+   other job: a second compilation target, which establishes 32-bit pointer
+   width and an independent codegen backend. That coverage is a property of
+   the *target*, not of the bindings — `cargo clippy -p koru-lambda-core
+   --target wasm32-unknown-unknown` has it on its own — and two compilations
+   of one source were never two independent witnesses. The published surface
+   also could not reach the lift, so it exposed only the forced part of the
+   substrate and withheld its one free parameter.
 
 A conformance suite also needs what a vector set cannot express: the trust
 boundary is *rejection* semantics, so "conforming" must include refusing

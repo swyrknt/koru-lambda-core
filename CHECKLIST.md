@@ -96,7 +96,8 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
 - [x] PROC-12 Public API snapshot committed and diffed in CI, so a public signature cannot change without changing a committed file a reviewer reads. The snapshots are also the source the changelog and migration guides get derived from, rather than recollection.
   - evidence: `api/koru-lambda-core.txt`, `api/koru-lambda-agents.txt`, `api/koru-lambda-wasm.txt`; gate `scripts/gates/api_snapshot.sh` (verified to fail on an added public const); `.github/workflows/ci.yml` api-surface job
 - [ ] PROC-13b Both existing publish scripts are deleted, not repaired. `build_universal.sh` runs `wasm-pack` against the rlib-only root crate with a `--features wasm` flag that no longer exists, so it cannot succeed; `publish_npm.sh` publishes `../pkg`, which resolves outside the repository entirely. Keeping scripts that cannot work is worse than having none: someone will run them.
-- [ ] PROC-21 CI asserts the packed npm tarball's `name` and `version` match the intended package. Nothing checks either today, and the name silently changed from what 1.2.0 shipped.
+- [ ] PROC-21 CI asserts the packed npm tarball's `name` and `version` match the intended package. Nothing checks either today, and the name silently changed from what 1.2.0 shipped. *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: Nothing to pack: the npm tarball is not built at 2.0.0.
 - [ ] PROC-13 One release script replaces `publish_crates.sh` / `publish_npm.sh`: it runs the full gate, checks this file, builds `pkg/` with `--features wasm`, dry-runs both registries, and asks for confirmation before each real publish
 - [x] PROC-14 Feature-matrix builds: `--no-default-features`, each feature alone, `--all-features`, and `wasm32` (making `serde` optional creates combinations nothing builds today)
   - evidence: `.github/workflows/ci.yml` features job @ 699a872 — 4 combinations, `--all-targets` so tests compile too
@@ -171,9 +172,11 @@ heading no longer asserts one.*
 - [x] PKG-3 `core` carries crate-level `#![forbid(unsafe_code)]` (unforgeable, not a per-module gate), `crate-type = ["rlib"]`, 5 direct dependencies, and `serde` as an optional feature. `lru` (or its replacement) lives only in `consensus`; `cdylib` only in `wasm` and `ffi`; `staticlib` only in `ffi`.
   - evidence: `Cargo.toml` + `src/lib.rs` @ 57d892f — 5 direct deps, `rlib`, optional serde, crate-level `forbid(unsafe_code)`
 - [ ] PKG-4 Each crate has its own description, keywords, categories and README; only `consensus` may use the word "consensus" in its metadata
-- [ ] PKG-5 npm ships **one** package with two entry points (core, and consensus), so the wasm binary is not shipped twice; the consensus entry point's size cost is stated
+- [ ] PKG-5 npm ships **one** package with two entry points (core, and consensus), so the wasm binary is not shipped twice; the consensus entry point's size cost is stated *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: There is no npm package at 2.0.0, so there are no entry points to arrange.
 - [ ] PKG-6 Every SUB-*, FFI-*, FFIJS-* item is satisfied inside `consensus` or `ffi`, at the same mutation, coverage and error-variant bar as `core`
-- [ ] PKG-8 The published **npm** package is still named `koru-lambda-core`. `wasm-pack` derives the package name from the crate (`koru-lambda-wasm`), so the release script rewrites it and CI asserts the packed tarball's name — otherwise the refactor silently renames the package every JS consumer depends on.
+- [ ] PKG-8 The published **npm** package is still named `koru-lambda-core`. `wasm-pack` derives the package name from the crate (`koru-lambda-wasm`), so the release script rewrites it and CI asserts the packed tarball's name — otherwise the refactor silently renames the package every JS consumer depends on. *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: The npm package name stops being a 2.0.0 question. It returns with the agent-layer package, which will choose its own.
 - [ ] PKG-7 `ARCHITECTURE.md`'s three-layer diagram becomes normative: the crate layout matches it, and `lib.rs` re-export order reflects it
 
 ## SEAL — Extensibility (DEC-10)
@@ -347,21 +350,6 @@ check — and the first one that sits under a published guarantee.
   - evidence: `src/replay.rs` — `MissingPrimordial` carries nothing, `Unreachable(usize)` carries the unresolved count for diagnostics, and `Mismatch` carries `child` and `actual`. The redundant field was `Mismatch::expected`, documented in-source as "Same as `child` (the input's claim)" and in fact always equal to it by construction; it is removed, and the error message now reads "`{child}` re-derived as `{actual}`" rather than printing one value twice under two names.
 - [ ] REP-4 `SynthesisRecorder` → replay round-trip is tested; the docs state that the log holds children only
 
-## JS — wasm / TypeScript surface
-
-- [ ] JS-1 Counts and degrees are `number` everywhere (not `bigint`); the 2^53 bound is documented; `docs/MIGRATION_JS.md` is corrected in the same change (it currently documents `bigint` as the 2.0 shape)
-- [ ] JS-2 Every thrown error has a stable, documented `name` / `code`; tests assert them
-- [ ] JS-3 A hex helper for 32-byte ids (projection ids)
-- [ ] JS-4 `snapshotParentage`, `WasmEngine.replay`, `checkStructuralInvariant` and the sequence fold are exposed and tested
-- [ ] JS-5 Every rejection path is tested from JS (invalid direction, each `restoreProjection*` failure, verify, hex parse)
-- [ ] JS-6 Projection wrappers don't clone their full contents on every getter call
-- [ ] JS-7 The generated `.d.ts` is reviewed; the demos typecheck against it under `strict`
-- [ ] JS-11 `examples/wasm-demos/package.json` depends on `"koru-lambda-core": "file:./pkg-node"`, but `pkg-node/package.json` is `"name": "koru-lambda-wasm"` — the repo's own demo scaffold names a package that does not exist at the path it points to. The npm package name needs a decision in both places, and PROC-21 is what would have caught the mismatch. *(Renumbered from a second JS-10 on 2026-10-10; two items shared that id, so every reference to "JS-10" was ambiguous and the tallies double-counted the section. Also de-named: this item used to identify an external npm consumer and its pinned version, which this repo does not track.)*
-- [ ] JS-8 The published wasm target is a deliberate, documented decision and is verified against a real consumer. v1.2 shipped `--target web` (default `init` export); 2.0.0 currently ships `--target bundler` (no such export), which silently breaks any consumer calling `await initWasm({module_or_path})` — the shape `--target web` publishes. Whatever is chosen — single target or multiple entry points — a test consumes the packed tarball the way a consumer would. See DEC-7.
-- [x] JS-10 The bindings handle `#[non_exhaustive]` substrate enums across the crate boundary: an unknown `SynthesisOutcome` variant surfaces to the caller instead of failing to compile against a future substrate release.
-  - evidence: `crates/koru-lambda-wasm/src/lib.rs` @ 57d892f — wildcard arm returns a JS error
-- [ ] JS-9 The lift layer is reachable from JS: the fold, `Canonicalizable`-style byte/string lifting, and an agent advance are exposed and tested. Today a JS consumer cannot get domain data into the engine at all.
-
 ## TST — Test suite
 
 - [ ] TST-12 The ρ gate's failure message states the saturation band. `experiments/runner/tests/coding_law.rs` currently reads "Substrate may be losing degree signal — investigate before relaxing", which would send someone running a legitimately saturation-heavy workload to investigate a non-problem, or to relax a gate that was never wrong. THY-21 fixed the document; the message is the half a contributor actually reads.
@@ -488,10 +476,12 @@ one.
 - [ ] CONF-9 `docs/SPEC.md` §10 is generated from `conformance/vectors.json`, and the CONF-2 gate covers all three edges. Otherwise §10 is a third source of truth: CONF-3 tells an implementer to work from SPEC while CONF-5 certifies them against the JSON, so when those drift the suite says "conforming" about a document that no longer describes the implementation.
 - [ ] CONF-10 ENC-11 and ENC-12 land **before** CONF-1 freezes, and `vectors.json` carries a non-`u8` alphabet case plus a composite with a length-prefixed field. `docs/SPEC.md` §4.2 specifies the fold over an arbitrary alphabet, but only the `Σ = {d₀,d₁}` byte case ships with vectors, and composite framing is unspecified — so two implementations that pass every vector will disagree on the first variable-length composite either one lifts. That is the collision class `ByteFold` closed, relocated one level up and out of reach of the suite.
 - [ ] CONF-11 `domain_anchor()` has a vector per reserved label, and `conformance/README.md` carries the reservation table. DEC-4 makes domain separation an anchor parameter, so anchor derivation is identity-bearing; `DomainLabel` is a bare `u8` alias (ENC-10), so two implementations can agree on every vector and still derive the same anchor for different domains.
-- [ ] CONF-12 The conformance suite covers the npm/wasm surface, which is the artifact most readers will actually run. CONF-1..5 as written reach only the Rust crate, and the lift is not reachable from JS at all (JS-9).
+- [ ] CONF-12 The conformance suite covers the npm/wasm surface, which is the artifact most readers will actually run. CONF-1..5 as written reach only the Rust crate, and the lift is not reachable from JS at all (JS-9). *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: The npm/wasm surface is not an artifact at 2.0.0, so the suite has nothing there to cover. CONF-4 is what reaches a non-Rust reader.
 - [ ] CONF-5 CI runs CONF-4 against `vectors.json` on every push. An implementation nobody runs is a claim, not a check.
 - [ ] CONF-6 `docs/SPEC.md` §10 publishes the byte tips and the anchored sequence fold. §4.3 already tells the reader that §10 "include[s] byte tips and a sequence fold" and §10 contains neither — only `c`, `d`, `e` and the adjacency bytes. The constants exist in `src/vectors.rs` (`TIP_*`, `FOLD_HI_ANCHORED_AT_D_HEX`) but were never published, so an independent implementer cannot verify the lift "from this document alone", which is §10's stated contract.
-- [ ] CONF-7 The cross-target check (Cond D′) covers the lift. `crates/koru-lambda-wasm/tests/cond_d_prime_wasm.rs` asserts only `C_HEX`, `D_HEX`, `E_HEX` and the adjacency bytes, and the wasm surface exports no tip or fold entry point — so the substrate's **one free parameter** is the one thing byte-equality is not checked on. `docs/SPEC.md` §9's D′ row claims verification "against §10", which is narrower than its wording implies. Requires JS-9 (a JS consumer can lift its own data) to be reachable.
+- [ ] CONF-7 The cross-target check (Cond D′) covers the lift. `crates/koru-lambda-wasm/tests/cond_d_prime_wasm.rs` asserts only `C_HEX`, `D_HEX`, `E_HEX` and the adjacency bytes, and the wasm surface exports no tip or fold entry point — so the substrate's **one free parameter** is the one thing byte-equality is not checked on. `docs/SPEC.md` §9's D′ row claims verification "against §10", which is narrower than its wording implies. Requires JS-9 (a JS consumer can lift its own data) to be reachable. *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: The cross-target check was the weakest instance of the agreement claim — one source compiled twice. What replaces it is CONF-4, a second *implementation* reading `vectors.json`. The 32-bit codegen coverage is kept as a compile check on the core.
 
 ## DOC — Documentation
 
@@ -553,12 +543,15 @@ one.
 - [ ] LAND-12 *(superseded by LAND-11)* A "Built on this" section names the downstream projects — spatial, cognitive, physical — with links. It shows the substrate's reach without shipping any of their weight, which is the whole argument for the minimal core.
 
 - [ ] LAND-1 README first screen, in order: the ≤25-word claim (LAND-4), a runnable example with its printed output, then the cross-runtime byte-equality claim in one sentence. Theory is linked below the fold, not led with.
-- [ ] LAND-2 DEMO-1 and DEMO-4 run against the **published** npm tarball and crates.io package in CI, with no `wasm-pack` step. Today every demo requires a Rust toolchain and a local build, so no demo is runnable by someone who installs the package.
-- [ ] LAND-3 The npm landing page (`pkg/README.md`) is JS-first, not the Rust README
+- [ ] LAND-2 DEMO-1 and DEMO-4 run against the **published** npm tarball and crates.io package in CI, with no `wasm-pack` step. Today every demo requires a Rust toolchain and a local build, so no demo is runnable by someone who installs the package. *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: No published npm tarball to run demos against.
+- [ ] LAND-3 The npm landing page (`pkg/README.md`) is JS-first, not the Rust README *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: No npm landing page at 2.0.0.
 - [ ] LAND-4 One claim, ≤ 25 words, naming content-addressed folding and cross-runtime byte-equality, identical in README, crate description, npm description, npm landing page and crate rustdoc; a gate diffs all five
 - [ ] LAND-5 "What this is not": grow-only set rather than a general CRDT; Merkle determinism rather than consensus; 128-bit ids; and not a consensus protocol — the consensus agents are reference consumers, named and linked as such
 - [ ] LAND-6 A 60-second quickstart, timed by someone who has not seen the repo
-- [ ] LAND-7 npm keywords, description and rendering verified on the real package page before publish
+- [ ] LAND-7 npm keywords, description and rendering verified on the real package page before publish *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: No npm package page to verify.
 - [ ] LAND-8 Crate description, keywords and categories name the capability, not the theory and not a protocol category. Today the description is "a minimal axiomatic system for distributed computation" and the keywords include "consensus", which files the substrate in the wrong aisle and invites comparison to protocols it is not.
 - [ ] LAND-9 The hook runs with no toolchain: a reader reproduces a child id against their own SHA-256 in under 60 seconds from a browser or a single command, without installing Rust
 - [ ] LAND-10 Neither "distinction theory" nor "axiom" appears above the first runnable example in the README, the npm landing page or the crate-level rustdoc
@@ -582,7 +575,8 @@ one.
 ## DEC — Owner decisions
 
 - [ ] DEC-1 **C FFI. Decided (owner, 2026-09-21): restore to the full standard.** Nothing is dropped, regardless of current consumer count. Implemented by FFI-1..9. Ticks when the reasoning is recorded per DOC-13.
-- [ ] DEC-2 **JS bindings for the subsystems. Decided (owner, 2026-09-21): build them to the full standard.** Implemented by FFIJS-1..5 and DOC-14. Ticks when the reasoning is recorded per DOC-13.
+- [ ] DEC-2 **JS bindings for the subsystems. Decided (owner, 2026-09-21): build them to the full standard.** Implemented by FFIJS-1..5 and DOC-14. Ticks when the reasoning is recorded per DOC-13. *(not blocking: deferred with the bindings.)*
+  - deferred: The decision stands; its implementation is FFIJS-1..5, which is below the line. Nothing at 2.0.0 depends on it.
 - [ ] DEC-3 **Demo scope. Decided (owner, 2026-09-21): keep all four; nothing folded.** DEMO-4 is the flagship and DEMO-1 the hook, but DEMO-3 stays a separate demo.
 - [ ] DEC-4 **Domain separation.** The hash-tag branch is **closed on theory grounds** (theory veto, 2026-09-21): a domain tag in the hash is exactly the separate naming layer Axiom 4 excludes. Domain separation is an anchor parameter of the fold. ANA-1 documents the consequences; it does not reopen the choice.
   - requires: ANA-1
@@ -590,7 +584,8 @@ one.
   - requires: ANA-2
 - [ ] DEC-6 **Unbounded growth.** The eviction branch is foreclosed by ENG-3 (evicting an interior node fails the engine's own auditor), so the real question is whether a peer can drive an engine out of memory. Decide: accepted and documented with measured costs and the recommended consumer pattern, or hostile-input memory bounds become their own items.
   - requires: ANA-3
-- [ ] DEC-7 **Published wasm target.** *(Framing settled 2026-09-30: the wasm crate ships to npm as a product, so this is decided on technical merit — which target best serves a reader with no toolchain — and not by what v1.2 consumers used. Verify a packed tarball before publishing; npm's unpublish window is 72 hours.)* v1.2 shipped `--target web`; 2.0.0 ships `--target bundler`, which breaks the only npm consumer. Decide the target strategy (single target, or multiple entry points) — see JS-8.
+- [ ] DEC-7 **Published wasm target.** *(Framing settled 2026-09-30: the wasm crate ships to npm as a product, so this is decided on technical merit — which target best serves a reader with no toolchain — and not by what v1.2 consumers used. Verify a packed tarball before publishing; npm's unpublish window is 72 hours.)* v1.2 shipped `--target web`; 2.0.0 ships `--target bundler`, which breaks the only npm consumer. Decide the target strategy (single target, or multiple entry points) — see JS-8. *(not blocking: deferred with the bindings.)*
+  - deferred: Moot at 2.0.0: no wasm artifact is published, so there is no published target to choose. It returns with the agent-layer package. Note it was framed as settled on technical grounds *because* "the wasm crate ships to npm as a product" — the premise that just changed.
 - [ ] DEC-8 **`BatchSynthesizer` (SUB-10). Decided (owner, 2026-09-21): port it to the full standard.** No consumer today; shipped anyway. Ticks when the reasoning is recorded per DOC-13.
 - [ ] DEC-9 **Crate boundary. Decided (owner, 2026-09-21): four crates**, one workspace, one release, same bar — `koru-lambda-core` (engine, projection, replay, lift), `koru-lambda-agents` (validator, commitment, network, classifier, batch), `koru-lambda-wasm` (JS/TS bindings; extracted 2026-09-22 because `wasm-pack` requires `cdylib`), `koru-lambda-ffi` (C ABI). Nothing is dropped. Implemented by PKG-1..7. Viability was measured first: the classifier and batch paths both compile against the public API from an external crate, with no internal access. Ticks when the reasoning is recorded per DOC-13.
   - requires: ANA-4 (records the measured basis: 7→5 direct deps, `lru` and mandatory `serde` leave the substrate, ~37 KB of wasm no longer paid by browser users who don't use consensus, and a consumer-layer bug stops forcing a substrate major)
@@ -633,9 +628,11 @@ one.
 
 ## REL — Release (each step needs explicit owner approval)
 
-- [ ] REL-1 `pkg/` rebuilt with `--features wasm`; version and exports verified
+- [ ] REL-1 `pkg/` rebuilt with `--features wasm`; version and exports verified *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: No `pkg/` build in the release sequence.
 - [ ] REL-2 `cargo publish`
-- [ ] REL-3 `npm login` (owner) and `npm publish`
+- [ ] REL-3 `npm login` (owner) and `npm publish` *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
+  - deferred: No `npm publish` in the release sequence.
 - [ ] REL-4 Annotated tag `v2.0.0` created and pushed
 - [ ] REL-5 Yank criteria agreed in writing before publish: what would justify yanking 2.0.0 and who decides
 
@@ -743,6 +740,63 @@ v1.2 shipped `src/ffi.rs`: 22 `extern "C"` functions over the engine and the net
 - [ ] FFI-7 The FFI surface is rebuilt on the 2.0.0 API (two-type boundary, verified ids), not on the v1.2 string-id API
 - [ ] FFI-8 The FFI is covered by the same mutation, coverage and error-variant bars as the core
 - [ ] FFI-9 `docs/MIGRATION_RUST.md` (or a C-specific note) documents the FFI surface, its ownership rules and its threading guarantees
+
+## JS — wasm / TypeScript surface *(deferred with the bindings; see the note below)*
+
+*Moved below the line on 2026-10-12, with the wasm bindings they describe.
+The reasoning is the substrate's own, and `ECOSYSTEM.md` already contained
+it under "Agreement versus a shared instance" without applying it here:*
+
+- *The substrate's claim is that identity is **engine-independent**. Two
+  engines performing the same operations agree without communicating,
+  because content addressing leaves no freedom. So the substrate is a rule
+  you satisfy, not a service you call — and you do not bind a rule, you
+  implement it. `conformance/vectors.json` is the polyglot mechanism.*
+- *A binding buys exactly one thing a re-implementation cannot: access to a
+  particular engine's **witnessed history**, which is the only state not
+  derivable from the rule. A thing holding a history and a perspective is
+  this project's definition of an **agent**. So bindings are an agent-layer
+  construct by definition, not by scheduling — which is where `FFIJS` below
+  already places them.*
+- *The published surface could not lift a byte (JS-9): no `ByteFold`, no
+  `Canonicalizable`, no `domain_anchor`. It exposed only the **forced** part
+  of the substrate and withheld the one free parameter, which is the part a
+  consumer has a decision to make about.*
+- *The cross-target argument does not survive either. Two compilations of one
+  source are the weakest instance of a claim about independent
+  implementations; `ECOSYSTEM.md` says as much. The 32-bit codegen coverage
+  comes from the **target**, not the bindings — `cargo clippy -p
+  koru-lambda-core --target wasm32-unknown-unknown --all-features` exits 0
+  on its own in under six seconds, and `scripts/check.sh` now runs exactly
+  that.*
+
+*What the wasm crate keeps: it stays a workspace member and still compiles,
+so `wasm-pack test --node` remains available. It carries `publish = false`,
+like `koru-lambda-agents`. The npm story returns at the agent layer, where a
+shared witness actually exists and where the lift will be reachable because
+an agent needs one. None of this work is discarded; it is the starting point
+for `FFIJS`.*
+
+*The one real loss, stated plainly: `wasm-pack test --node` proves the engine
+runs through a real ABI at 32-bit width with genuine marshalling, which is a
+stronger statement than a compile check. It is traded for the compile check
+plus the encoding widths pinned directly in `conformance/vectors.json`
+(`usize` at 2³² as eight bytes little-endian, asserted against the live
+impl).*
+
+- [ ] JS-1 Counts and degrees are `number` everywhere (not `bigint`); the 2^53 bound is documented; `docs/MIGRATION_JS.md` is corrected in the same change (it currently documents `bigint` as the 2.0 shape)
+- [ ] JS-2 Every thrown error has a stable, documented `name` / `code`; tests assert them
+- [ ] JS-3 A hex helper for 32-byte ids (projection ids)
+- [ ] JS-4 `snapshotParentage`, `WasmEngine.replay`, `checkStructuralInvariant` and the sequence fold are exposed and tested
+- [ ] JS-5 Every rejection path is tested from JS (invalid direction, each `restoreProjection*` failure, verify, hex parse)
+- [ ] JS-6 Projection wrappers don't clone their full contents on every getter call
+- [ ] JS-7 The generated `.d.ts` is reviewed; the demos typecheck against it under `strict`
+- [ ] JS-11 `examples/wasm-demos/package.json` depends on `"koru-lambda-core": "file:./pkg-node"`, but `pkg-node/package.json` is `"name": "koru-lambda-wasm"` — the repo's own demo scaffold names a package that does not exist at the path it points to. The npm package name needs a decision in both places, and PROC-21 is what would have caught the mismatch. *(Renumbered from a second JS-10 on 2026-10-10; two items shared that id, so every reference to "JS-10" was ambiguous and the tallies double-counted the section. Also de-named: this item used to identify an external npm consumer and its pinned version, which this repo does not track.)*
+- [ ] JS-8 The published wasm target is a deliberate, documented decision and is verified against a real consumer. v1.2 shipped `--target web` (default `init` export); 2.0.0 currently ships `--target bundler` (no such export), which silently breaks any consumer calling `await initWasm({module_or_path})` — the shape `--target web` publishes. Whatever is chosen — single target or multiple entry points — a test consumes the packed tarball the way a consumer would. See DEC-7.
+- [x] JS-10 The bindings handle `#[non_exhaustive]` substrate enums across the crate boundary: an unknown `SynthesisOutcome` variant surfaces to the caller instead of failing to compile against a future substrate release.
+  - evidence: `crates/koru-lambda-wasm/src/lib.rs` @ 57d892f — wildcard arm returns a JS error
+- [ ] JS-9 The lift layer is reachable from JS: the fold, `Canonicalizable`-style byte/string lifting, and an agent advance are exposed and tested. Today a JS consumer cannot get domain data into the engine at all.
+
 
 ## FFIJS — JS bindings for the consensus consumers (ships in `koru-lambda-agents`; restored by owner decision 2026-09-21)
 

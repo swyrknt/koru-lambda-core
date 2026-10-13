@@ -50,6 +50,8 @@ jobs:
           - name: native
             args: --workspace --all-targets --all-features
           - name: wasm32
+            args: -p koru-lambda-core --target wasm32-unknown-unknown --all-features
+          - name: wasm32-bindings
             args: -p koru-lambda-wasm --target wasm32-unknown-unknown --all-features
     steps:
       - uses: actions/checkout@v4
