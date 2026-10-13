@@ -831,9 +831,7 @@ impl<'e, S: Signal> Projection<'e, S> {
         for (d, v) in &self.output.inner {
             out.extend_from_slice(d.as_bytes());
             let vbytes = v.canonical_bytes();
-            let output_len = u32::try_from(vbytes.len()).map_err(|_| {
-                SerializeError::EntryTooLarge { distinction: *d, output_len: vbytes.len() }
-            })?;
+            let output_len = narrow_output_len(*d, vbytes.len())?;
             out.extend_from_slice(&output_len.to_le_bytes());
             out.extend_from_slice(&vbytes);
         }
@@ -875,9 +873,23 @@ pub enum RestoreError {
         reason: &'static str,
     },
 
-    /// One or more entry distinctions are not registered in this
-    /// engine. Restore is only defined against engines that have
-    /// synthesized the same history.
+    /// The bytes are not what this engine would have produced. Three
+    /// different causes reach this one variant, and the doc here used to
+    /// describe only the third:
+    ///
+    /// 1. The **root** is not registered — `self.verify(raw)?` fails and
+    ///    `impl From<VerifyError>` maps it here.
+    /// 2. The re-materialised bytes **differ** anywhere, for any reason: a
+    ///    tampered entry value, a tampered length, a cone this engine would
+    ///    compute differently.
+    /// 3. An **entry distinction** is not registered, which is a special
+    ///    case of (2) — a cone that omits it re-materialises differently.
+    ///
+    /// Carrying one variant for all three is deliberate: a restore either
+    /// reproduces or it does not, and telling a caller *which* way the
+    /// forgery failed tells a forger the same thing. `docs/SPEC.md` §11
+    /// fixes offsets only for the malformed cases, where the input is not a
+    /// projection at all.
     #[error("distinction bytes not registered in restore engine (foreign entry)")]
     ForeignEngine,
 
@@ -1171,6 +1183,31 @@ impl<'e, S: Signal> ReadyBuilder<'e, S> {
     /// BFS, and hop counts flow through to `__materialize_special`
     /// rather than triggering a second traversal.
     ///
+    /// # What the index build actually costs
+    ///
+    /// That O(N) is in the engine's size, not the cone's, and it dominates
+    /// whenever the cone is small and the engine is not. Measured on a
+    /// 10,000-node engine, three hops from a mid-chain root, same signal:
+    ///
+    /// ```text
+    ///   Upstream     (no index)     603 ns
+    ///   Downstream   (index)       1.357 ms
+    ///   Undirected   (index)       1.355 ms
+    /// ```
+    ///
+    /// About 2,250×. The read is a handful of nodes; the index is ten
+    /// thousand. This was documented as "an O(N) index build exactly once
+    /// per materialize", which is accurate and reads like a footnote —
+    /// every benchmark in `benches/perspective.rs` was `Upstream`, so
+    /// nothing measured it until PRJ-7.
+    ///
+    /// The ratio is a property of the shape, not a constant: a saturated
+    /// downstream cone over most of the engine amortises the index, and a
+    /// consumer taking many small downstream reads of one engine pays it
+    /// every time. There is no cache, deliberately — a cached index is
+    /// engine state that a read would have to invalidate, and Cond F keeps
+    /// projection state on the projection.
+    ///
     /// # Dispatch order
     ///
     /// 1. Compute the cone via `traverse_cone`, yielding
@@ -1216,6 +1253,17 @@ impl<'e, S: Signal> ReadyBuilder<'e, S> {
             output: ProjectionOutput { inner },
         }
     }
+}
+
+/// The wire's per-entry `output_len` is a `u32`; narrow a `usize` into it.
+///
+/// Extracted so the guard is reachable from a test. Inline, it needed a
+/// per-node output above `u32::MAX` — four gibibytes — to fire, so
+/// `SerializeError::EntryTooLarge` was a public error variant no test could
+/// construct. `narrow_output_len_refuses_above_u32_max` calls it directly.
+fn narrow_output_len(d: Distinction, len: usize) -> Result<u32, SerializeError> {
+    u32::try_from(len)
+        .map_err(|_| SerializeError::EntryTooLarge { distinction: d, output_len: len })
 }
 
 /// Dispatch to [`CoreSignal::__materialize_special`] for the one
@@ -1307,6 +1355,31 @@ impl DistinctionEngine {
     ///   differs from `signal_identity(&signal)`.
     /// - [`RestoreError::IntegerOverflow`] — a `u64` wire field
     ///   exceeds `usize::MAX` on this target.
+    /// # What a successful restore does and does not establish
+    ///
+    /// It establishes that these bytes are what **this** engine produces for
+    /// the specification the header claims. It does **not** establish that
+    /// the claimed specification is the one the sender meant.
+    ///
+    /// The wire form is not injective over specifications: when two specs
+    /// yield the same cone, their bytes differ only in the header fields
+    /// that name them. Over `docs/SPEC.md` §10.1's history, a projection
+    /// rooted at `c` has diameter 2, so `Hops(2)` and `Hops(3)` produce the
+    /// same entries — and flipping the boundary payload from one to the
+    /// other yields bytes this engine *would* have produced, so the restore
+    /// succeeds. The sender and the receiver then hold projections whose
+    /// §8 identities differ, because §8 hashes the specification rather than
+    /// the output.
+    ///
+    /// That is not a hole in the guarantee above; it is the guarantee being
+    /// narrower than it reads. If agreeing on *which read this is* matters,
+    /// compare the [`ProjectionId`] out of band — that is what a
+    /// specification's fingerprint is for.
+    /// `tests/projection_wire_tamper.rs::a_boundary_that_does_not_change_the_cone_is_undetectable`
+    /// pins the behaviour so a future stricter restore is a visible change.
+    ///
+    /// # Errors
+    ///
     /// - [`RestoreError::ForeignEngine`] — the root isn't registered,
     ///   or re-materialization produces bytes that differ from `bytes`.
     pub fn restore_projection<S: Signal>(
@@ -1537,6 +1610,41 @@ mod tests {
         assert_eq!(&bytes[5..21], c.as_bytes());
         assert_eq!(bytes[21], 0x01); // Boundary::Saturated
         assert_eq!(bytes[30], 0x01); // Direction::Downstream
+    }
+
+    /// `SerializeError::EntryTooLarge`, which no test could construct.
+    ///
+    /// TST-4. Inline, the guard was `u32::try_from(vbytes.len())` inside the
+    /// entry loop, so reaching it needed a per-node output above `u32::MAX`
+    /// — four gibibytes — and the variant was public, documented, and
+    /// unreachable. Extracting `narrow_output_len` makes it a direct call.
+    #[test]
+    fn narrow_output_len_refuses_above_u32_max() {
+        let e = DistinctionEngine::new();
+        let d = e.synthesize(e.d0(), e.d1());
+
+        assert_eq!(narrow_output_len(d, 0).expect("zero fits"), 0);
+        assert_eq!(
+            narrow_output_len(d, u32::MAX as usize).expect("u32::MAX fits exactly"),
+            u32::MAX
+        );
+
+        let err = narrow_output_len(d, u32::MAX as usize + 1)
+            .expect_err("one past the wire field's width must refuse");
+        // One variant, so this destructure is exhaustive in-crate;
+        // `#[non_exhaustive]` only constrains other crates.
+        let SerializeError::EntryTooLarge { distinction, output_len } = err;
+        assert_eq!(distinction, d);
+        assert_eq!(output_len, u32::MAX as usize + 1);
+        assert!(
+            err_display(&SerializeError::EntryTooLarge { distinction: d, output_len: 1 })
+                .contains("exceeds u32::MAX"),
+            "the message names the limit"
+        );
+    }
+
+    fn err_display(e: &SerializeError) -> String {
+        e.to_string()
     }
 
     #[test]

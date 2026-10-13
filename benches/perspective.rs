@@ -190,6 +190,48 @@ fn bench_projection_materialize(c: &mut Criterion) {
         });
     });
 
+    // PRJ-7: the O(N) reverse-parent index build. `src/projection.rs`
+    // documented that downstream and undirected traversal build it once per
+    // materialize, and nothing measured it — every bench above is
+    // `Upstream`, which never builds one. These three are the same root and
+    // hop count, so the difference between the first and the others is the
+    // index, on a 10,000-node engine.
+    group.bench_function("adjacency_hops_3_upstream_no_index", |b| {
+        b.iter(|| {
+            let proj = engine
+                .project(black_box(root))
+                .direction(Direction::Upstream)
+                .hops(3)
+                .signal(Adjacency)
+                .materialize();
+            black_box(proj)
+        });
+    });
+
+    group.bench_function("adjacency_hops_3_downstream_builds_index", |b| {
+        b.iter(|| {
+            let proj = engine
+                .project(black_box(root))
+                .direction(Direction::Downstream)
+                .hops(3)
+                .signal(Adjacency)
+                .materialize();
+            black_box(proj)
+        });
+    });
+
+    group.bench_function("adjacency_hops_3_undirected_builds_index", |b| {
+        b.iter(|| {
+            let proj = engine
+                .project(black_box(root))
+                .direction(Direction::Undirected)
+                .hops(3)
+                .signal(Adjacency)
+                .materialize();
+            black_box(proj)
+        });
+    });
+
     group.bench_function("degree_hops_3", |b| {
         b.iter(|| {
             let proj = engine

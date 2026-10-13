@@ -137,6 +137,17 @@ path without adding overhead. The `HopDistance` fast-path is slightly
 ahead of `Degree` at 3 hops, consistent with reusing the BFS-carried
 hop counts rather than per-node re-compute.
 
+**The reverse-parent index dominates a small downstream read.** Measured on
+a 10,000-node engine, three hops from a mid-chain root, `Adjacency`:
+`Upstream` 603 ns with no index, `Downstream` 1.357 ms and `Undirected`
+1.355 ms with one — about 2,250×. The index is O(N) in the *engine*, the
+read is O(cone), so the ratio is a property of the shape rather than a
+constant: a saturated downstream cone amortises it, and many small
+downstream reads of one engine pay it each time. Benchmarks
+`materialize/adjacency_hops_3_{upstream_no_index,downstream_builds_index,undirected_builds_index}`
+in `benches/perspective.rs`, which exist because every other projection
+bench was `Upstream` and nothing measured this.
+
 **Ceiling probe at 50 M+ scale.** Not shipped. Whether the single- and
 multi-thread numbers hold past L3 cache (~8–32 MB), DashMap shard
 collision rate under sustained load, allocator paging near memory

@@ -652,6 +652,24 @@
         "expect": {
           "kind": "any_rejection"
         }
+      },
+      {
+        "$comment": "The entry array's own length field, which nothing probed. The valid adjacency_upstream_hops2 form with the first entry's u32 output_len incremented. \u00a77's per-entry framing is length-prefixed, so a wrong length shifts every byte after it and the re-materialised comparison fails.",
+        "name": "tampered_entry_output_len",
+        "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000010000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
+        "why": "an entry's declared output length must match the output that follows it",
+        "expect": {
+          "kind": "any_rejection"
+        }
+      },
+      {
+        "$comment": "An entry's output payload, which nothing probed either. The last byte of the valid form inverted \u2014 a well-formed wire shape whose per-node value is wrong. This is the case that shows restore is re-derivation rather than parsing: nothing about the framing is invalid, and it is refused because this engine would not have produced that value.",
+        "name": "tampered_entry_payload",
+        "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea210000000100000000000000000000000000000000010000000000000000000000000000ff",
+        "why": "a per-node output that this engine would not produce must be refused",
+        "expect": {
+          "kind": "ForeignEngine"
+        }
       }
     ]
   }

@@ -558,7 +558,7 @@ Its §8 identity is `347d60094a92c906880c8af79f51066b775eafba250709ccd4d8090c24b
 
 ### 10.4 What this section does not carry
 
-`conformance/vectors.json` carries all 20 projections with their identifiers, the 7 output encodings of §6, the remaining byte tips, and 8 inputs an implementation must **refuse**. `conformance/README.md` names which conformance level each belongs to.
+`conformance/vectors.json` carries all 20 projections with their identifiers, the 7 output encodings of §6, the remaining byte tips, and 10 inputs an implementation must **refuse**. `conformance/README.md` names which conformance level each belongs to.
 
 Two of those deserve naming here, because an implementation can
 satisfy everything above and still fail them:
