@@ -464,3 +464,35 @@ fn the_composite_fold_is_what_a_live_engine_produces() {
     let nested = by_name["nested_1_2_then_3"];
     assert_ne!(flat, nested, "grouping must be part of the value, or nesting carries nothing");
 }
+
+/// What constructing the byte alphabet does to an engine.
+///
+/// §4.3 says every step of a lift is witnessed. No projection case can check
+/// it, because none of them follows a lift — so two implementations can
+/// agree on every other value in this file and differ here by an order of
+/// magnitude. An implementation written from the specification alone took
+/// the other reading, computing its tips privately, and reached 41
+/// distinctions where this reaches 513. Both reproduced all 88 published
+/// values.
+#[test]
+fn building_the_alphabet_witnesses_it() {
+    let f = fixture();
+    let at = |k: &str| {
+        f.pointer(&format!("/lift/engine_state/after_byte_alphabet/{k}"))
+            .and_then(Value::as_u64)
+            .unwrap_or_else(|| panic!("fixture has no engine_state/{k}")) as usize
+    };
+
+    let e = DistinctionEngine::new();
+    assert_eq!(e.distinction_count(), 2, "a fresh engine holds the two primordials");
+
+    let _fold = ByteFold::new(&e);
+
+    assert_eq!(
+        e.distinction_count(),
+        at("distinction_count"),
+        "the 256 byte tips and their intermediates must all be witnessed"
+    );
+    assert_eq!(e.degree(e.d0()), at("degree_d0"), "d0's degree after the alphabet");
+    assert_eq!(e.degree(e.d1()), at("degree_d1"), "d1's degree after the alphabet");
+}

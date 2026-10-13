@@ -110,18 +110,33 @@ that admits its gaps:
 
 - ~~One projection wire form of eighteen.~~ **Closed.** The full cross
   product is pinned — 3 signals × 3 directions × 2 boundary kinds, each with
-  its `projection_id` — plus a nineteenth rooted at a **primordial**. That
-  one exists because the eighteen all share the root `c`, and an
+  its `projection_id` — plus two cases outside it. Both exist because the
+  eighteen all share the root `c`, and an
   implementation written from `docs/SPEC.md` alone showed what that
   uniformity hid: §6.1's genesis edge made it ambiguous whether traversal
   walks it, and a reading that does returns four entries there while
   reproducing every other value in this file under the same projection
-  identity. Note the requirement that came with
-  them: only four are invariant under appending (`Upstream` × `{Adjacency,
-  HopDistance}`), because ancestry is fixed at creation while degree grows and
-  the downstream and undirected node sets grow. The other fourteen are
+  identity.
+
+  The second is `hop_distance_undirected_hops3_from_d0`, which pins
+  `HopDistance` as the **shortest** path rather than first-visit order. From
+  `d₀`, the node `d₁` sits at distance 2 via `c` and also on a longer route
+  of length 3; rooted at `c`, no node is reachable at two different
+  distances, so none of the eighteen can tell the rules apart.
+
+  Note the requirement that came with the cross product: only four of the
+  eighteen are invariant under appending (`Upstream` × `{Adjacency,
+  HopDistance}`), because ancestry is fixed at creation while degree grows
+  and the downstream and undirected node sets grow. The other fourteen are
   reproducible only against the engine history the fixture declares — build
   anything else first and you will disagree with them while being correct.
+- ~~The lift's effect on engine state is unobservable.~~ **Closed**, in
+  `lift.engine_state`. §4.3 says every lift step is witnessed, and no
+  projection case can check it because none follows a lift. Two
+  implementations reproduced all 88 other values while disagreeing here by
+  an order of magnitude — 513 distinctions against 41 — so the count and the
+  primordials' degree after building the byte alphabet are published
+  directly.
 - ~~No rejection cases.~~ **Closed.** `reject.cases` carries eight: bad magic,
   unsupported version, unknown boundary tag, unknown direction tag, truncated
   header, truncated entry array, inflated entry count, and — the one that
