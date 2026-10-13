@@ -5,6 +5,7 @@
 //! reruns the exact same code at scale instead of reimplementing it.
 //! Same constants, same chain builder, same Zipf, same seed.
 
+#![forbid(unsafe_code)]
 #![warn(clippy::unwrap_used)]
 #![warn(clippy::must_use_candidate)]
 #![warn(missing_docs)]

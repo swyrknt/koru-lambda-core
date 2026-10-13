@@ -315,8 +315,16 @@ pub mod raw_serde_adapter {
     where
         D: Deserializer<'de>,
     {
-        let s = <&str>::deserialize(deserializer)?;
-        RawDistinctionId::from_hex(s).map_err(serde::de::Error::custom)
+        // `Cow`, not `&str`. A borrowed `&str` only deserialises when the
+        // format can hand out a slice of its own input, so `<&str>` worked
+        // for `serde_json::from_str` on an unescaped string and failed with
+        // "expected a borrowed string" for `from_reader` and `from_value` —
+        // the first of which is the normal path for identifiers arriving off
+        // a socket or out of a file. `Cow` borrows when the format can and
+        // owns when it cannot, so every input shape works and the zero-copy
+        // case stays zero-copy.
+        let s = <std::borrow::Cow<'_, str>>::deserialize(deserializer)?;
+        RawDistinctionId::from_hex(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -523,6 +531,56 @@ mod tests {
 
         let restored: Envelope = serde_json::from_str(&json).expect("round-trips (invariant)");
         assert_eq!(original, restored);
+    }
+
+    /// Every input shape a consumer can hand serde, not just `from_str`.
+    ///
+    /// The adapter read `<&str>::deserialize`, which only works when the
+    /// format can hand out a slice of its own input. So the round-trip test
+    /// above passed — it uses `from_str` on an unescaped string — while
+    /// `from_reader` and `from_value` both failed with "expected a borrowed
+    /// string". `from_reader` is the normal path for an identifier arriving
+    /// off a socket or out of a file, so the recommended trust-boundary
+    /// shape did not work for the commonest way of reaching it.
+    ///
+    /// `Cow` borrows when the format can and owns when it cannot. This test
+    /// is the four shapes, so the regression cannot come back quietly.
+    #[test]
+    #[cfg(feature = "serde")]
+    fn raw_serde_deserialises_from_every_input_shape() {
+        use serde::Deserialize;
+
+        #[derive(Deserialize, PartialEq, Debug)]
+        struct Envelope {
+            #[serde(with = "super::raw_serde_adapter")]
+            claimed_root: RawDistinctionId,
+        }
+
+        let hex = "6cc4f0e930b34481d03a4134331852ea";
+        let expected = RawDistinctionId::from_hex(hex).expect("valid hex (invariant)");
+        let json = format!(r#"{{"claimed_root":"{hex}"}}"#);
+
+        // Borrowed: the format can slice its own input.
+        let from_str: Envelope = serde_json::from_str(&json).expect("from_str (invariant)");
+        assert_eq!(from_str.claimed_root, expected);
+
+        // Owned: a reader cannot hand out a borrow of a buffer it is
+        // streaming. This failed before the adapter took `Cow`.
+        let from_reader: Envelope =
+            serde_json::from_reader(json.as_bytes()).expect("from_reader (invariant)");
+        assert_eq!(from_reader.claimed_root, expected);
+
+        // Owned: a `Value::String` owns its contents.
+        let value: serde_json::Value =
+            serde_json::from_str(&json).expect("parses to a Value (invariant)");
+        let from_value: Envelope = serde_json::from_value(value).expect("from_value (invariant)");
+        assert_eq!(from_value.claimed_root, expected);
+
+        // Escaped: `\u0036` is '6', so this is a different identifier
+        // written in a form that needs unescaping before it is hex at all.
+        let escaped = r#"{"claimed_root":"\u00366cc4f0e930b34481d03a4134331852e"}"#;
+        let from_escaped: Envelope = serde_json::from_str(escaped).expect("escaped (invariant)");
+        assert_eq!(from_escaped.claimed_root.to_hex(), "66cc4f0e930b34481d03a4134331852e");
     }
 
     #[test]
