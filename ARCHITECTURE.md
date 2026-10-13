@@ -6,7 +6,8 @@ needed to actually use it. This document describes the v2.0 architecture:
 what's in each module, why it's there, and how the layers compose.
 
 For *how the codebase got to this shape* — the design decisions, review
-rounds, and step-by-step plan — see `DESIGN.md`.
+rounds, and step-by-step plan — see `DESIGN.md` in the repository, which is
+a planning document and not part of the published crate.
 
 ---
 

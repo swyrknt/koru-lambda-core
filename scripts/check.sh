@@ -26,6 +26,7 @@ step "repository gates"
 ./scripts/gates/spec_vectors.sh
 ./scripts/gates/no_consumer_names.sh
 ./scripts/gates/doc_links.sh
+./scripts/gates/package_links.sh
 
 step "api snapshot"
 if command -v cargo-public-api >/dev/null 2>&1; then

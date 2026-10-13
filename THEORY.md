@@ -31,7 +31,7 @@ A claim with no status is a mistake in this document.
 
 ## Downstream discipline
 
-This document is upstream of `DESIGN.md`, `ARCHITECTURE.md`, `ECOSYSTEM.md`,
+This document is upstream of `ARCHITECTURE.md`, `ECOSYSTEM.md`,
 `README.md`, and `docs/**`. Every paraphrase is where drift lives.
 
 Downstream references to concept-terms here (`synthesize`, `commutativity`,

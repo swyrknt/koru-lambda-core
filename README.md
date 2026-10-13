@@ -77,7 +77,7 @@ console.log("child:", idToHex(verified));
 ```
 
 Migrating from `koru-lambda-core@1.2.0` on npm? See
-[docs/MIGRATION_JS.md](docs/MIGRATION_JS.md).
+the JS migration notes in the repository (https://github.com/swyrknt/koru-lambda-core/blob/main/docs/MIGRATION_JS.md).
 
 ## Demos
 
@@ -115,7 +115,7 @@ npm run demo:4
 npm run demo:all
 ```
 
-See [`examples/wasm-demos/README.md`](./examples/wasm-demos/README.md)
+See [`examples/wasm-demos/README.md`](https://github.com/swyrknt/koru-lambda-core/blob/main/examples/wasm-demos/README.md)
 for details.
 
 ## What's inside
@@ -148,7 +148,8 @@ for details.
   primordials, eight structural laws. Authoritative for the theory.
 - [docs/SPEC.md](docs/SPEC.md) — the normative byte-level
   specification: what a conforming implementation must reproduce.
-- [DESIGN.md](DESIGN.md) — shipping story: what the substrate ships
+- [DESIGN.md](https://github.com/swyrknt/koru-lambda-core/blob/main/DESIGN.md) — the v2.0 plan. Repository only: it is a
+  planning document for this release, so it is not in the published crate
   today, what the epics change, and what v2.0.0 does *not* ship.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — code structure, module
   layout, and how the merged-map substrate is organized.
@@ -157,7 +158,8 @@ for details.
 - [CHANGELOG.md](CHANGELOG.md) — release history.
 - [docs/BENCHMARKS.md](docs/BENCHMARKS.md) — capacity and
   throughput measurements; every number cites an in-crate anchor.
-- [docs/MIGRATION_JS.md](docs/MIGRATION_JS.md) — JS/TS migration
+- [docs/MIGRATION_JS.md](https://github.com/swyrknt/koru-lambda-core/blob/main/docs/MIGRATION_JS.md) — JS/TS migration.
+  Repository only, and it describes an npm package 2.0.0 does not publish
   guide for consumers upgrading from `koru-lambda-core@1.2.0` on npm.
 
 Auto-generated API docs live at

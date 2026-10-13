@@ -89,7 +89,7 @@ replacement; `WasmEngine`'s method signatures move from string-typed to
 bytes-canonical; and `d0Id()` / `d1Id()` return different bytes than
 they did in 1.2 (16-byte primordials, not UTF-8 of `"0"` / `"1"`) — the
 one silent break in this release. See
-[docs/MIGRATION_JS.md](docs/MIGRATION_JS.md) for the full recipe list
+[docs/MIGRATION_JS.md](https://github.com/swyrknt/koru-lambda-core/blob/main/docs/MIGRATION_JS.md) for the full recipe list
 and migration checklist.
 
 ## Unreleased

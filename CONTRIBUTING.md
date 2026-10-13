@@ -219,7 +219,7 @@ cargo flamegraph --bench performance
 
 ### Design Questions
 - Reference [THEORY.md](THEORY.md) for the axioms and structural laws
-- Reference [DESIGN.md](DESIGN.md) for the shipping story
+- Reference [DESIGN.md](https://github.com/swyrknt/koru-lambda-core/blob/main/DESIGN.md) for the v2.0 plan (repository only)
 - Discuss architectural changes before implementing
 - Preserve the axioms at all costs
 

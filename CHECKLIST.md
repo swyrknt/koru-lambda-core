@@ -507,7 +507,8 @@ one.
 - [ ] DOC-22 `ECOSYSTEM.md` stops overstating what two compilation targets prove. It says a second target "is what makes cross-target agreement checkable"; DOC-19 and DEMO-5 exist to narrow exactly that — two compilations of one source are not two witnesses, and what the wasm suite establishes is 32-bit pointer width plus an independent codegen backend. Same for "on every target": CI covers one native target and wasm32, with no big-endian and no 32-bit native, so byte-order independence rests on the little-endian encoding being specified, not on being tested.
 - [ ] DOC-16 `docs/SPEC.md` covers the Fold Law and the Coding Law. It currently mentions neither — two of the twelve laws are absent from the document shipped as the theory instrument.
 - [ ] DOC-17 The 23 stale claims found by the claims inventory are corrected. The dangerous one: `DESIGN.md:141` and `ARCHITECTURE.md:112,121` still describe the foreign-byte guard as a debug-only `debug_assert!`, so a reader would conclude release builds accept foreign parents — the opposite of what ships.
-- [ ] DOC-18 Six of eight `[SHIPPED @ src/…:NNN]` anchors in DESIGN are off by 70–110 lines, and nine code comments cite design gates that no longer exist. Symbol anchors replace line anchors (see DOC-2).
+- [ ] DOC-18 Six of eight `[SHIPPED @ src/…:NNN]` anchors in DESIGN are off by 70–110 lines, and nine code comments cite design gates that no longer exist. Symbol anchors replace line anchors (see DOC-2). *(not blocking: scaffolding, not the published artifact.)*
+  - reclassified: `DESIGN.md` is a planning document for this release and no longer ships (see `Cargo.toml` `exclude`). Its line anchors drifting harms no reader. The genuinely dangerous half of this item — source comments citing gates and sections that do not exist — is real and stays; it is `src/replay.rs`-class drift, now fixed there, and PROC-9 owns the rest.
 - [ ] DOC-19 The cross-target claim states only what it falsifies. Two compilations of one source are not two witnesses: what the wasm suite actually establishes is 32-bit pointer width and an independent codegen backend, continuously. Byte-order independence rests on explicit little-endian encoding, not on a big-endian target.
 
 - [x] DOC-1 `docs/SPEC.md`:
@@ -520,10 +521,13 @@ one.
   - golden vectors
 
   Every spec reference in source, tests and Cargo.toml points to it.
-- [ ] DOC-2 `DESIGN.md` uses symbol anchors only; the type-level trust-boundary claim is true; the subsystem sections match the code; nothing is marked for a later version; and its non-goals do not contradict shipped items (non-goal 6 "no byte-fold changes" contradicts ENC-1; non-goal 8 "no networking stack" contradicts SUB-8)
+- [ ] DOC-2 `DESIGN.md` uses symbol anchors only; the type-level trust-boundary claim is true; the subsystem sections match the code; nothing is marked for a later version; and its non-goals do not contradict shipped items (non-goal 6 "no byte-fold changes" contradicts ENC-1; non-goal 8 "no networking stack" contradicts SUB-8) *(not blocking: scaffolding, not the published artifact.)*
+  - reclassified: Same: `DESIGN.md` no longer ships. Its subsystem sections describe work that moved to a crate 2.0.0 does not publish, and its `[TARGET @ v2.1]` markers are a plan's job. The clause worth keeping is that the type-level trust-boundary claim is true, which ENG-4 and `tests/trybuild/distinction_has_no_hatches.rs` already establish.
 - [ ] DOC-3 `README.md` claims match `docs/CLAIMS.md`; the trust-boundary wording is exact
-- [ ] DOC-4 `docs/MIGRATION_JS.md` is correct for the shipped target (no stale `init` / `initSync` guidance), covers every JS change, and does not contradict the shipped surface
-- [ ] DOC-5 `docs/MIGRATION_RUST.md`: v1.x → 2.0.0 for Rust consumers, including the subsystem API mapping, the raw/verified type split, and the commitment-hash change with before/after vectors
+- [ ] DOC-4 `docs/MIGRATION_JS.md` is correct for the shipped target (no stale `init` / `initSync` guidance), covers every JS change, and does not contradict the shipped surface *(not blocking: scaffolding, not the published artifact.)*
+  - reclassified: `docs/MIGRATION_JS.md` no longer ships and describes the npm package deferred to the agent layer. Its stale `init`/`initSync` guidance cannot mislead a consumer who receives neither the document nor the package. It returns with the agent-layer package, rewritten against whatever that publishes.
+- [ ] DOC-5 `docs/MIGRATION_RUST.md`: v1.x → 2.0.0 for Rust consumers, including the subsystem API mapping, the raw/verified type split, and the commitment-hash change with before/after vectors *(not blocking: scaffolding, not the published artifact.)*
+  - reclassified: `docs/MIGRATION_RUST.md` does not exist and would be a migration guide for an API whose shape is still open (API-1/3/4/5/7/8, PRJ-1). Writing it before the surface settles guarantees rewriting it. It belongs after the API items close, which is where the release sequence puts it.
 - [ ] DOC-6 `CHANGELOG.md` lists every breaking change, derived from `api/DELTA-from-1.2.0.txt` rather than from recollection
 - [ ] DOC-7 rustdoc: no broken links; `# Errors` / `# Panics` on every public function; no stale comments
 - [ ] DOC-8 `ARCHITECTURE.md` matches the code
@@ -534,7 +538,8 @@ one.
 - [ ] DOC-12 `docs/SPEC.md` states the engine model explicitly: an engine is a witness of what it has synthesized, not a namespace; primordials are the same constants everywhere; identity is engine-independent by construction; ids carry no origin and are not scoped to an application; an unregistered distinction reaching `synthesize` is a caller error caught before any state change
 - [ ] DOC-13 `docs/SPEC.md` records the outcome and reasoning of every closed `DEC-*` item, so a reader finds the limits stated rather than discovering them
 
-- [ ] DOC-14 `docs/MIGRATION_JS.md` stops describing the subsystem classes as retired, since FFIJS-* restores them, and documents their new shape
+- [ ] DOC-14 `docs/MIGRATION_JS.md` stops describing the subsystem classes as retired, since FFIJS-* restores them, and documents their new shape *(not blocking: scaffolding, not the published artifact.)*
+  - reclassified: Same document, and the item's premise is also void: it asks the guide to stop calling the subsystem classes retired because FFIJS restores them, and FFIJS is below the line.
 - [ ] DOC-15 README and rustdoc carry a "lifting your data" section: a domain value folded to a root, then used to advance an agent — the path a stranger needs and cannot currently find
 
 ## LAND — The published artifact

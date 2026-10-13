@@ -78,7 +78,8 @@ Two consequences, both observed rather than predicted:
   the engine it held. Two others redefined a shipped three-type cluster
   for genuinely different functions. Meanwhile others found and used the
   shipped types. Nothing signposted which was intended. (Who is not
-  recorded here; see the note in `DESIGN.md` on why the substrate does
+  recorded here; see the note in the repository's `DESIGN.md` on why the
+  substrate does
   not name its consumers.)
 - **Anything that wanted to change had to change the crate identity depends
   on.** Release 1.1.0 is one commit that touched `Cargo.toml`, `ffi.rs`,

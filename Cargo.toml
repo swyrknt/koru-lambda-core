@@ -54,6 +54,15 @@ exclude = [
     "proptest-regressions/*",
     "scripts/*",
     "experiments/*",
+    # DESIGN.md is "the v2.0 plan" — a planning document for the release being
+    # made. Shipping it hands a consumer 749 lines about how 2.0.0 was going to
+    # be built, which is the same class as the gate scripts and API review
+    # snapshots excluded above; it was missed because that pass looked at
+    # directories and not at .md files.
+    "/DESIGN.md",
+    # A migration guide for the npm package deferred to the agent layer. It now
+    # describes an artifact 2.0.0 does not publish.
+    "docs/MIGRATION_JS.md",
 ]
 
 [package.metadata.docs.rs]

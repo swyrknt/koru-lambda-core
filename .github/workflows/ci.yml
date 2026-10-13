@@ -30,6 +30,7 @@ jobs:
       - run: ./scripts/gates/spec_vectors.sh
       - run: ./scripts/gates/no_consumer_names.sh
       - run: ./scripts/gates/doc_links.sh
+      - run: ./scripts/gates/package_links.sh
 
   fmt:
     name: Format
