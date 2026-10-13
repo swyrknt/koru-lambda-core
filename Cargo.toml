@@ -54,6 +54,7 @@ exclude = [
     "proptest-regressions/*",
     "scripts/*",
     "experiments/*",
+    "**/__pycache__/*",
     # DESIGN.md is "the v2.0 plan" — a planning document for the release being
     # made. Shipping it hands a consumer 749 lines about how 2.0.0 was going to
     # be built, which is the same class as the gate scripts and API review

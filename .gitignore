@@ -105,3 +105,6 @@ tests/large_data/
 
 # Local configuration overrides
 config/local.toml
+# Python bytecode from the conformance reference implementation.
+__pycache__/
+*.pyc
