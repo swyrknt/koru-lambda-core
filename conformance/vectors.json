@@ -227,6 +227,48 @@
             }
           ],
           "id": "c5f853eea7642741e32204b59d637a16"
+        },
+        {
+          "$comment": "A composite whose parts are themselves folds of VARIABLE-LENGTH byte sequences, which is the shape \u00a74.4 exists for. Paired with the case below: both carry the bytes 01 02 03 split differently, so they concatenate identically and must not share an identity. With a single variable-length field at the end, concatenation is already injective because a fixed-width prefix makes the boundary unambiguous; two of them is where it fails, and that is the collision class ByteFold closed for sequences, relocated one level up. An element written {fold_of_bytes: [...]} is `fold(anchor, bytes)` taken with this case's own anchor.",
+          "name": "composite_of_variable_length_parts_1_23",
+          "anchor": {
+            "case_history": "d"
+          },
+          "elements": [
+            {
+              "fold_of_bytes": [
+                1
+              ]
+            },
+            {
+              "fold_of_bytes": [
+                2,
+                3
+              ]
+            }
+          ],
+          "id": "987cd8abea5eaaab20de9edbcda62c09"
+        },
+        {
+          "$comment": "The same three bytes, split after the second instead of the first. Concatenates to 01 02 03 exactly as the case above does, and must give a different distinction.",
+          "name": "composite_of_variable_length_parts_12_3",
+          "anchor": {
+            "case_history": "d"
+          },
+          "elements": [
+            {
+              "fold_of_bytes": [
+                1,
+                2
+              ]
+            },
+            {
+              "fold_of_bytes": [
+                3
+              ]
+            }
+          ],
+          "id": "2200de11166e3eb4c7d5fb2e21133018"
         }
       ]
     },

@@ -27,3 +27,18 @@ fn a_distinction_cannot_be_made_without_an_engine() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/trybuild/distinction_has_no_hatches.rs");
 }
+
+/// A batch lift over borrows compiles. TST-7's pass case.
+///
+/// The trait defect it guards was expressible rather than runtime: with
+/// `to_canonical_structure(self, &DistinctionEngine)` the loop in
+/// `tests/trybuild/batch_lift_compiles.rs` does not compile, because
+/// `for record in &batch` yields `&Record` and a by-value method needs a
+/// clone. The only real consumer stopped using the trait for exactly that
+/// reason, and nothing caught it — compile-fail probes assert the absence of
+/// paths, and no probe asserted the presence of this one.
+#[test]
+fn a_batch_lift_over_borrows_compiles() {
+    let t = trybuild::TestCases::new();
+    t.pass("tests/trybuild/batch_lift_compiles.rs");
+}

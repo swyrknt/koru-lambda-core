@@ -521,8 +521,12 @@ bytes avoid colliding:
 | `0x7f` | `d9777980de7d16296c3e99c0111663dd` |
 | `0xff` | `747f49abc60bafa407beae2089934331` |
 
-Composites (§4.4), folded over their parts' own tips. The last two
-carry the same parts in the same order and differ only in grouping:
+Composites (§4.4), folded over their parts' own tips. Two pairs here
+carry the discriminating cases: `inner_1_2`/`nested_1_2_then_3` differ
+only in grouping, and the two `variable_length_parts` cases carry the
+bytes `01 02 03` split differently, so they concatenate identically.
+`fold(..)` names a part that is itself a sequence folded from this
+case's anchor.
 
 | Case | Parts | Result |
 |---|---|---|
@@ -530,6 +534,8 @@ carry the same parts in the same order and differ only in grouping:
 | `inner_1_2` | tip(0x01), tip(0x02) — anchored at `d` | `e5602c8da1b26ebdc71b3154778af74d` |
 | `nested_1_2_then_3` | `inner_1_2`, tip(0x03) — anchored at `d` | `30abdef870bea83aea4efa221a68b506` |
 | `flat_1_2_3_under_domain_01` | tip(0x01), tip(0x02), tip(0x03) — anchored at domain 0x01 | `c5f853eea7642741e32204b59d637a16` |
+| `composite_of_variable_length_parts_1_23` | fold(01), fold(02 03) — anchored at `d` | `987cd8abea5eaaab20de9edbcda62c09` |
+| `composite_of_variable_length_parts_12_3` | fold(01 02), fold(03) — anchored at `d` | `2200de11166e3eb4c7d5fb2e21133018` |
 
 ### 10.3 A worked projection
 

@@ -121,8 +121,12 @@ def render(fx: dict) -> str:
     for case in fx["lift"]["domain_anchors"]["cases"]:
         add(f"| `0x{case['label']:02x}` | `{case['id']}` |")
     add("")
-    add("Composites (§4.4), folded over their parts' own tips. The last two")
-    add("carry the same parts in the same order and differ only in grouping:")
+    add("Composites (§4.4), folded over their parts' own tips. Two pairs here")
+    add("carry the discriminating cases: `inner_1_2`/`nested_1_2_then_3` differ")
+    add("only in grouping, and the two `variable_length_parts` cases carry the")
+    add("bytes `01 02 03` split differently, so they concatenate identically.")
+    add("`fold(..)` names a part that is itself a sequence folded from this")
+    add("case's anchor.")
     add("")
     add("| Case | Parts | Result |")
     add("|---|---|---|")
@@ -131,6 +135,9 @@ def render(fx: dict) -> str:
         for el in case["elements"]:
             if "tip_of_byte" in el:
                 parts.append(f"tip(0x{el['tip_of_byte']:02x})")
+            elif "fold_of_bytes" in el:
+                seq = " ".join(f"{b:02x}" for b in el["fold_of_bytes"])
+                parts.append(f"fold({seq})")
             else:
                 parts.append(f"`{el['case']}`")
         anchor = case["anchor"]

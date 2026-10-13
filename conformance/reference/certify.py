@@ -122,6 +122,10 @@ for c in V["lift"]["composites"]["cases"]:
     for el in c["elements"]:
         if "tip_of_byte" in el:
             parts.append(tip_of_byte(E_C, el["tip_of_byte"]))
+        elif "fold_of_bytes" in el:
+            # A part that is itself a variable-length sequence, folded from
+            # this case's own anchor. The shape §4.4 exists for.
+            parts.append(fold_bytes(E_C, anchor, bytes(el["fold_of_bytes"])))
         elif "case" in el:
             parts.append(by_case[el["case"]])
         else:

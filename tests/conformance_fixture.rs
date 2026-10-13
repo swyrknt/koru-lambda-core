@@ -440,6 +440,14 @@ fn the_composite_fold_is_what_a_live_engine_produces() {
             .map(|el| {
                 if let Some(b) = el.get("tip_of_byte").and_then(Value::as_u64) {
                     fold.tip(u8::try_from(b).expect("a byte"))
+                } else if let Some(bytes) = el.get("fold_of_bytes").and_then(Value::as_array) {
+                    // A part that is itself a variable-length sequence,
+                    // folded from this case's own anchor.
+                    let raw: Vec<u8> = bytes
+                        .iter()
+                        .map(|b| u8::try_from(b.as_u64().expect("a byte")).expect("a byte"))
+                        .collect();
+                    fold.fold(anchor, &raw, &e)
                 } else if let Some(prior) = el.get("case").and_then(Value::as_str) {
                     *by_name.get(prior).unwrap_or_else(|| {
                         panic!("{name}: references case `{prior}`, which is not listed before it")
@@ -463,6 +471,14 @@ fn the_composite_fold_is_what_a_live_engine_produces() {
     let flat = by_name["flat_1_2_3"];
     let nested = by_name["nested_1_2_then_3"];
     assert_ne!(flat, nested, "grouping must be part of the value, or nesting carries nothing");
+
+    // And the variable-length pair: identical concatenations, different values.
+    let a = by_name["composite_of_variable_length_parts_1_23"];
+    let b = by_name["composite_of_variable_length_parts_12_3"];
+    assert_ne!(
+        a, b,
+        "01 02 03 split two ways concatenates the same; the composite rule must separate them"
+    );
 }
 
 /// What constructing the byte alphabet does to an engine.
