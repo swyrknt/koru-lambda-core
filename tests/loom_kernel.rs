@@ -194,3 +194,117 @@ fn mutant_parent_degree_relaxed_writer_loses_publication_visibility() {
         reader.join().expect("reader joins (invariant)");
     });
 }
+
+/// Kernel 5 — the check-then-insert that decides novelty.
+///
+/// TST-3a. Kernels 1 to 4 all model one thing: `parent.degree`
+/// Release/Acquire publication. None of them modelled the decision that
+/// makes the bump happen at all — `nodes.entry(k)` returning `Vacant` to
+/// exactly one racing writer, which is what "exactly one caller observes
+/// `Novel`" rests on, and what keeps `sum(degree) == 2 × non-primordials`
+/// true under contention.
+///
+/// `DashMap` is not loom-compatible, so the slot is modelled as the thing
+/// its `Entry` API provides: an atomic claim. `compare_exchange` is the
+/// kernel — the check and the insert are one operation, so exactly one
+/// writer can win no matter how the two are interleaved.
+///
+/// The invariant is not "the degree is at least one". It is **exactly** one:
+/// a second bump would be as wrong as none, because it would make the
+/// structural law `r = 2d − 3` false while every individual operation
+/// looked fine.
+#[test]
+fn entry_vacant_grants_novelty_to_exactly_one_writer() {
+    loom::model(|| {
+        // Production proxy: the shard slot for `new_bytes` in `nodes`.
+        let claimed = Arc::new(AtomicBool::new(false));
+        // One of the two parents whose degree a novel insert bumps.
+        let parent_degree = Arc::new(AtomicUsize::new(0));
+        // How many writers believed they were the novel one.
+        let novel_count = Arc::new(AtomicUsize::new(0));
+
+        let mut handles = Vec::new();
+        for _ in 0..2 {
+            let claimed = Arc::clone(&claimed);
+            let degree = Arc::clone(&parent_degree);
+            let novel = Arc::clone(&novel_count);
+            handles.push(thread::spawn(move || {
+                // The kernel: check and claim are one operation. This is
+                // `dashmap::Entry::Vacant` — the shard write-lock makes the
+                // test-and-set atomic, and only the winner inserts.
+                let won = claimed
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok();
+                if won {
+                    novel.fetch_add(1, Ordering::Relaxed);
+                    // Release, pairing with `degree()`'s Acquire, exactly as
+                    // kernel 1 models.
+                    degree.fetch_add(1, Ordering::Release);
+                }
+            }));
+        }
+        for h in handles {
+            h.join().expect("writer joins (invariant)");
+        }
+
+        assert_eq!(
+            novel_count.load(Ordering::Acquire),
+            1,
+            "exactly one writer may observe Novel for one child"
+        );
+        assert_eq!(
+            parent_degree.load(Ordering::Acquire),
+            1,
+            "and the parent is bumped exactly once — twice would make r = 2d - 3 false"
+        );
+    });
+}
+
+/// Kernel 6 — Regression sentinel: check-then-insert split into two steps.
+///
+/// Compiled only under `--cfg loom_mutant`. The claim is a `load` followed
+/// by a separate `store` instead of a `compare_exchange`, which is what a
+/// contributor writes when replacing `nodes.entry(k)` with a `contains_key`
+/// test and a later `insert`. Under loom's exhaustive scheduler both writers
+/// MUST be able to observe `false` and both proceed, bumping the parent
+/// twice.
+///
+/// `#[should_panic]`: if loom cannot find that interleaving, the atomicity
+/// of the entry claim has stopped being load-bearing in this model and the
+/// kernel above is no longer testing anything.
+#[cfg(loom_mutant)]
+#[test]
+#[should_panic(expected = "bumped exactly once")]
+fn mutant_split_check_then_insert_double_counts_the_parent() {
+    loom::model(|| {
+        let claimed = Arc::new(AtomicBool::new(false));
+        let parent_degree = Arc::new(AtomicUsize::new(0));
+        let novel_count = Arc::new(AtomicUsize::new(0));
+
+        let mut handles = Vec::new();
+        for _ in 0..2 {
+            let claimed = Arc::clone(&claimed);
+            let degree = Arc::clone(&parent_degree);
+            let novel = Arc::clone(&novel_count);
+            handles.push(thread::spawn(move || {
+                // BUG (intentional): the check and the claim are separate.
+                let already = claimed.load(Ordering::Acquire);
+                if !already {
+                    claimed.store(true, Ordering::Release);
+                    novel.fetch_add(1, Ordering::Relaxed);
+                    degree.fetch_add(1, Ordering::Release);
+                }
+            }));
+        }
+        for h in handles {
+            h.join().expect("writer joins (invariant)");
+        }
+
+        assert_eq!(
+            parent_degree.load(Ordering::Acquire),
+            1,
+            "the parent must be bumped exactly once"
+        );
+        let _ = novel_count.load(Ordering::Acquire);
+    });
+}

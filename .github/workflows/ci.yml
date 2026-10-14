@@ -130,6 +130,12 @@ jobs:
       - run: cargo test --test loom_kernel --release
         env:
           RUSTFLAGS: --cfg loom
+      # The regression sentinels. Without this step the mutant kernels never
+      # execute, so a sentinel that stopped detecting its own bug would be
+      # indistinguishable from one that still did.
+      - run: cargo test --test loom_kernel --release
+        env:
+          RUSTFLAGS: --cfg loom --cfg loom_mutant
 
   miri:
     name: Miri (subset)

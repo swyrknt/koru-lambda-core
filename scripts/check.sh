@@ -73,6 +73,15 @@ cargo clippy -p koru-lambda-wasm --target wasm32-unknown-unknown --all-features 
 step "loom model check"
 RUSTFLAGS="--cfg loom" cargo test --test loom_kernel --release
 
+step "loom regression sentinels"
+# The mutant kernels are `#[should_panic]`: each breaks one property of the
+# production kernel and must make loom find a violating interleaving. They
+# are the proof that the kernels above test something, and until 2026-10-13
+# nothing ran them — neither this script nor CI passed `--cfg loom_mutant`,
+# so a sentinel that had stopped firing would have looked exactly like one
+# that still did.
+RUSTFLAGS="--cfg loom --cfg loom_mutant" cargo test --test loom_kernel --release
+
 step "wasm bindings"
 (cd crates/koru-lambda-wasm && wasm-pack test --node)
 
