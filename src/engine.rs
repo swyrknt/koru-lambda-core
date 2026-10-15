@@ -1103,6 +1103,32 @@ impl DistinctionEngine {
     /// reconstructs a byte-identical engine on any machine
     /// (engine-independence, Law 8) in any input order (Law 9).
     ///
+    /// # Quiescence is a precondition of that guarantee
+    ///
+    /// "Byte-identical" holds for a dump taken while **no other thread is
+    /// synthesizing**. This is not a lock the caller forgot to take; it is
+    /// a property of reading many shards without one.
+    ///
+    /// The iteration holds one shard's lock at a time, so it can visit a
+    /// parent's shard before that parent is inserted and a child's shard
+    /// after the child is. The result is a dump containing a child whose
+    /// own parentage entry is absent. Causality does not prevent it —
+    /// `A` is always inserted before `C = synthesize(A, B)`, but the
+    /// *iterator* may reach `A`'s shard earlier than `A` and `C`'s shard
+    /// later than `C`. Replaying such a dump returns
+    /// [`ReplayError::Unreachable`](crate::replay::ReplayError), because
+    /// the entry can never become ready.
+    ///
+    /// What **does** hold concurrently is per-entry well-formedness: every
+    /// pair in the dump satisfies `child == H(min‖max)`, since each entry
+    /// is written once under one shard lock and never mutated. A caller
+    /// without quiescence gets a set of valid parentage facts that may be
+    /// incomplete — usable for sampling, not for persistence.
+    ///
+    /// `tests/snapshot_quiescence.rs` asserts both halves: the
+    /// byte-identical reconstruction at quiescence, and per-entry
+    /// well-formedness under eight concurrent writers.
+    ///
     /// O(N) where N is `distinction_count()` — iterates all nodes and
     /// filters to those with parents.
     #[must_use]
@@ -1129,6 +1155,21 @@ impl DistinctionEngine {
     /// Intended for traversal probes (Coding Law degree-vs-frequency
     /// in scale probes, Fold Law dominance tests, diagnostic dumps). Not
     /// intended for the synthesis hot path.
+    ///
+    /// # Concurrent writers
+    ///
+    /// Taken while other threads synthesize, the result is **not** a
+    /// point-in-time snapshot: the iteration holds one shard's lock at a
+    /// time, so it may include a distinction inserted after the walk began
+    /// and omit one inserted before it finished. Every element is a
+    /// distinction this engine really holds — nothing fabricated, nothing
+    /// removed, since the engine is append-only — but the set corresponds
+    /// to no single instant, and its length need not equal any value
+    /// [`Self::distinction_count`] returned.
+    ///
+    /// For a dump that reconstructs an engine, see
+    /// [`Self::snapshot_parentage`], whose byte-identical guarantee has the
+    /// same quiescence precondition for the same reason.
     #[must_use]
     pub fn snapshot_distinctions(&self) -> Vec<Distinction> {
         self.nodes.iter().map(|entry| Distinction(*entry.key())).collect()

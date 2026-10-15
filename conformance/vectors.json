@@ -135,7 +135,7 @@
           "bytes": "0100000000000000"
         },
         {
-          "$comment": "Pins the width as 8 bytes little-endian independent of target pointer size \u2014 a wasm32 producer and an x86_64 consumer must agree.",
+          "$comment": "Pins the width as 8 bytes little-endian independent of target pointer size — a wasm32 producer and an x86_64 consumer must agree.",
           "type": "usize",
           "value": 4294967296,
           "bytes": "0000000001000000"
@@ -158,7 +158,7 @@
       ]
     },
     "composites": {
-      "$comment": "The composite rule of `docs/SPEC.md` \u00a74.4: the \u00a74.2 fold with the caller's own already-lifted distinctions as the alphabet. Every element is *derived* rather than listed \u2014 `{tip_of_byte: n}` is the tip in `lift.tips`, and `{case: name}` is the result of an earlier case here \u2014 so no value in this block is written down twice and none can be copied in wrong. The anchor is `d` from `projections.history` unless a case names a domain. The pair that matters is `flat_1_2_3` against `nested_1_2_then_3`: same leaves, same order, different grouping, so an implementation that flattens structure disagrees with them while reproducing every other value in this file.",
+      "$comment": "The composite rule of `docs/SPEC.md` §4.4: the §4.2 fold with the caller's own already-lifted distinctions as the alphabet. Every element is *derived* rather than listed — `{tip_of_byte: n}` is the tip in `lift.tips`, and `{case: name}` is the result of an earlier case here — so no value in this block is written down twice and none can be copied in wrong. The anchor is `d` from `projections.history` unless a case names a domain. The pair that matters is `flat_1_2_3` against `nested_1_2_then_3`: same leaves, same order, different grouping, so an implementation that flattens structure disagrees with them while reproducing every other value in this file.",
       "cases": [
         {
           "name": "flat_1_2_3",
@@ -229,7 +229,7 @@
           "id": "c5f853eea7642741e32204b59d637a16"
         },
         {
-          "$comment": "A composite whose parts are themselves folds of VARIABLE-LENGTH byte sequences, which is the shape \u00a74.4 exists for. Paired with the case below: both carry the bytes 01 02 03 split differently, so they concatenate identically and must not share an identity. With a single variable-length field at the end, concatenation is already injective because a fixed-width prefix makes the boundary unambiguous; two of them is where it fails, and that is the collision class ByteFold closed for sequences, relocated one level up. An element written {fold_of_bytes: [...]} is `fold(anchor, bytes)` taken with this case's own anchor.",
+          "$comment": "A composite whose parts are themselves folds of VARIABLE-LENGTH byte sequences, which is the shape §4.4 exists for. Paired with the case below: both carry the bytes 01 02 03 split differently, so they concatenate identically and must not share an identity. With a single variable-length field at the end, concatenation is already injective because a fixed-width prefix makes the boundary unambiguous; two of them is where it fails, and that is the collision class ByteFold closed for sequences, relocated one level up. An element written {fold_of_bytes: [...]} is `fold(anchor, bytes)` taken with this case's own anchor.",
           "name": "composite_of_variable_length_parts_1_23",
           "anchor": {
             "case_history": "d"
@@ -273,7 +273,7 @@
       ]
     },
     "engine_state": {
-      "$comment": "What constructing the byte alphabet does to an engine, which is the only way to check \u00a74.3's rule that every lift step is witnessed. Two implementations can agree on every other value in this file and differ here by an order of magnitude, because no projection case follows a lift: one that materialises the 256 tips through the engine reaches 513 distinctions, one that computes them privately reaches 41 after a two-byte fold. Found by an implementation written from docs/SPEC.md alone, which took the second reading.",
+      "$comment": "What constructing the byte alphabet does to an engine, which is the only way to check §4.3's rule that every lift step is witnessed. Two implementations can agree on every other value in this file and differ here by an order of magnitude, because no projection case follows a lift: one that materialises the 256 tips through the engine reaches 513 distinctions, one that computes them privately reaches 41 after a two-byte fold. Found by an implementation written from docs/SPEC.md alone, which took the second reading.",
       "after_byte_alphabet": {
         "$comment": "A fresh engine holds 2 distinctions. Build all 256 byte tips and nothing else.",
         "distinction_count": 513,
@@ -289,8 +289,8 @@
       "",
       "IMPORTANT: a projection vector is only meaningful relative to a stated",
       "engine history, and this is why. Only four of these eighteen are",
-      "invariant under appending \u2014 Upstream crossed with {Adjacency,",
-      "HopDistance} \u2014 because ancestry is fixed at creation. Degree grows as",
+      "invariant under appending — Upstream crossed with {Adjacency,",
+      "HopDistance} — because ancestry is fixed at creation. Degree grows as",
       "children appear, and the Downstream and Undirected node sets grow. So",
       "the other fourteen are reproducible only against exactly the history",
       "below, and an implementation that builds anything else first will",
@@ -509,7 +509,7 @@
         "canonical_bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea01000000000000000002ef620945309fc353e2d8f8cbb1d39076050000000000000000000000000000000000000000000000080000000100000000000000010000000000000000000000000000000800000001000000000000003309377e376d6ca3c2e3bf98859002600800000001000000000000005f02c8386c05dc7311e0c73a011e18be0800000002000000000000006cc4f0e930b34481d03a4134331852ea080000000000000000000000"
       },
       {
-        "$comment": "Rooted at a primordial, which the other eighteen are not \u2014 they all root at `c`. That uniformity hid a question the specification could not answer: \u00a76.1 defines degree over an edge set that includes a genesis edge between d0 and d1, and \u00a75 did not say whether traversal walks it. An implementation that walks it returns four entries here and still reproduces every other value in this file, with the same projection identity, because \u00a78 hashes the specification and not the output. Three entries is the answer: the genesis edge is not a parent or child edge. Found by an implementation written from the specification alone.",
+        "$comment": "Rooted at a primordial, which the other eighteen are not — they all root at `c`. That uniformity hid a question the specification could not answer: §6.1 defines degree over an edge set that includes a genesis edge between d0 and d1, and §5 did not say whether traversal walks it. An implementation that walks it returns four entries here and still reproduces every other value in this file, with the same projection identity, because §8 hashes the specification and not the output. Three entries is the answer: the genesis edge is not a parent or child edge. Found by an implementation written from the specification alone.",
         "name": "adjacency_undirected_hops1_from_d0",
         "root": "00000000000000000000000000000000",
         "signal": "Adjacency",
@@ -564,7 +564,7 @@
     "$comment": [
       "The trust boundary is REJECTION semantics, and a fixture of values to",
       "reproduce cannot express it. Without this section, 'conforming' means",
-      "'agrees on good input' \u2014 and an implementation that accepts a",
+      "'agrees on good input' — and an implementation that accepts a",
       "well-formed forgery passes the rest of this suite perfectly.",
       "",
       "Each case is the valid adjacency_upstream_hops2 wire form with one",
@@ -576,7 +576,7 @@
       "Restoring is verification, not deserialisation: a restored projection",
       "is re-materialised from the receiver's own state and compared.",
       "",
-      "Note on `any_rejection`: for a truncation, which check fires depends on where the shift lands, so the specification fixes only that the input is refused. Demanding a particular error there would fail a conforming implementation \u2014 this was found by the suite doing exactly that."
+      "Note on `any_rejection`: for a truncation, which check fires depends on where the shift lands, so the specification fixes only that the input is refused. Demanding a particular error there would fail a conforming implementation — this was found by the suite doing exactly that."
     ],
     "cases": [
       {
@@ -654,16 +654,25 @@
         }
       },
       {
-        "$comment": "The entry array's own length field, which nothing probed. The valid adjacency_upstream_hops2 form with the first entry's u32 output_len incremented. \u00a77's per-entry framing is length-prefixed, so a wrong length shifts every byte after it and the re-materialised comparison fails.",
-        "name": "tampered_entry_output_len",
+        "$comment": "An entry's node identifier. This case was named tampered_entry_output_len and changed byte 63, which SPEC.md §7 places inside the first entry's 16-byte identifier (55..71), not its u32 output_len (71..75) — the header is 55 bytes, not 47, because the entry count follows the signal identity. Both implementations rejected it and neither probed the length field. Renamed to what it is; the length field is covered by the case below.",
+        "name": "tampered_entry_identifier",
         "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000010000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
+        "why": "an entry naming a distinction this engine would not have produced must be refused",
+        "expect": {
+          "kind": "any_rejection"
+        }
+      },
+      {
+        "$comment": "The entry array's own length field, which nothing probed until now. The valid adjacency_upstream_hops2 form with the first entry's u32 output_len at offset 71 incremented. §7's per-entry framing is length-prefixed, so a wrong length shifts every byte after it and the re-materialised comparison fails. Which check catches it is not fixed by the specification.",
+        "name": "tampered_entry_output_len",
+        "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000002000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
         "why": "an entry's declared output length must match the output that follows it",
         "expect": {
           "kind": "any_rejection"
         }
       },
       {
-        "$comment": "An entry's output payload, which nothing probed either. The last byte of the valid form inverted \u2014 a well-formed wire shape whose per-node value is wrong. This is the case that shows restore is re-derivation rather than parsing: nothing about the framing is invalid, and it is refused because this engine would not have produced that value.",
+        "$comment": "An entry's output payload, which nothing probed either. The last byte of the valid form inverted — a well-formed wire shape whose per-node value is wrong. This is the case that shows restore is re-derivation rather than parsing: nothing about the framing is invalid, and it is refused because this engine would not have produced that value.",
         "name": "tampered_entry_payload",
         "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea00020000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea210000000100000000000000000000000000000000010000000000000000000000000000ff",
         "why": "a per-node output that this engine would not produce must be refused",

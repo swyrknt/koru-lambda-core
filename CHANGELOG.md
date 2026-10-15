@@ -55,12 +55,33 @@ without extra state.
 
 ### Changed
 
-- **`Distinction::from_hex` retained for backward compatibility.**
-  `Distinction::from_hex` still parses bytes but makes no
-  engine-membership claim (see rustdoc). Consumers should migrate to
-  `RawDistinctionId::from_hex` + `engine.verify()`, the two-type-safe
-  path. The direct hex constructor stays for the v1.x → v2.0 migration
-  window; a future major release may deprecate it.
+- **BREAKING: `Distinction::from_hex` is removed**, along with
+  `impl FromStr`, `bytemuck::Pod` and `bytemuck::Zeroable`. External
+  bytes enter as `RawDistinctionId` and become a `Distinction` only
+  through `engine.verify()`. The `serde` adapter for `Distinction` is
+  serialize-only; `RawDistinctionId` carries the deserializing half.
+
+  This entry previously said `from_hex` was "retained for backward
+  compatibility" and "makes no engine-membership claim". Both halves
+  were a problem: the claim was enforced by a `debug_assert!` at the
+  next `synthesize`, so it did not hold in release builds at all, and
+  the entry went stale when ENG-4 removed the path. A parse cannot
+  establish membership, which is why the parse now lives on the
+  unverified type.
+
+- **BREAKING: `CanonicalBytes` requires `write_canonical(&self, &mut
+  Vec<u8>)`** instead of `canonical_bytes(&self) -> Vec<u8>`.
+  `canonical_bytes` remains as a provided method, so callers are
+  unaffected; implementors move one line. The owned return allocated
+  once per node in the cone, which measured 557–592 µs of a
+  20,000-entry `Projection::canonical_bytes` against 104–118 µs
+  writing in place — about 5×.
+
+  The buffer passed to an implementation is a scratch buffer, not the
+  wire frame. Given the frame, an encoder calling `out.clear()` would
+  discard every entry already written and underflow the length
+  arithmetic; the scratch copy costs one `memcpy` per entry and keeps
+  that unreachable.
 
 ### Fixed
 
@@ -129,6 +150,22 @@ release build, ~5min thermal idle):**
 - 101 tests across the workspace; release suite + fmt + clippy clean.
 
 ### Substrate
+
+- **`conformance/vectors.json` digest repinned** (`9acd5c50…` →
+  `749a8d15…`), and no published identifier moved. The change is in
+  `reject.cases` only: the case named `tampered_entry_output_len`
+  altered byte 63, which `docs/SPEC.md` §7 places inside the first
+  entry's 16-byte identifier (55..71), not its `u32 output_len`
+  (71..75) — the header is 55 bytes, not 47, because the entry count
+  follows the signal identity.
+
+  Both implementations rejected it, so both looked correct, and the
+  entry array's own length field had nothing probing it in either one.
+  The case is renamed `tampered_entry_identifier` — which is what it
+  tests — and a real length probe at offset 71 added beside it. The
+  Rust test carried the same wrong offset with a `47 + 16` comment and
+  now asserts both. Reject cases 10 → 11; the reference
+  implementation reproduces 103/103.
 
 - **Single-map storage refactor** — `DistinctionEngine` storage layout
   changed from three side-by-side `DashMap`s

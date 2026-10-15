@@ -77,38 +77,77 @@ pub(crate) mod private {
 /// consumer-managed guarantee for consumer types; substrate-shipped
 /// impls (`usize`, `bool`, `Option<ParentPair>`) close Cond D by
 /// construction.
+///
+/// # Why writing, and why not into the frame
+///
+/// The required method writes rather than returns, because an owned
+/// return was the dominant cost of wire serialization: one heap allocation
+/// per node in the cone, decided by the trait's shape rather than by the
+/// consumer. Measured on a 20,000-entry saturated projection, three runs
+/// each: [`Projection::canonical_bytes`] took 557–592 µs returning owned
+/// bytes and 104–118 µs writing them, **about 5×**. In isolation the
+/// allocations alone were 400–460 µs against 8 µs for the same encoding
+/// appended to one buffer.
+///
+/// The buffer handed over is a **scratch buffer, not the wire frame**, and
+/// that is deliberate. `out` arrives cleared, holding only what this call
+/// writes; the substrate reads its length and copies it into the frame.
+/// Given the frame itself, an implementation could call `out.clear()` or
+/// `out.truncate(0)` and destroy every entry already written — a fault in
+/// one consumer's encoder becoming corruption of the whole stream, with
+/// the length arithmetic computed from a delta that no longer holds. A
+/// scratch buffer costs one `memcpy` of the entry's own bytes — 45 µs at
+/// 20,000 entries, against 400–460 µs to allocate, so most of the saving
+/// survives — and leaves an implementation able to mangle only the bytes it
+/// already owns.
+/// This is the same boundary [`crate::RawDistinctionId`] draws in the other
+/// direction: a consumer's bytes are inspected, never trusted in place.
 pub trait CanonicalBytes {
-    /// Return this value as canonical bytes. Owned `Vec<u8>` because
-    /// outputs may require construction (e.g., serializing
-    /// `Option<ParentPair>` needs a tag byte).
+    /// Write this value's canonical bytes into `out`.
+    ///
+    /// `out` arrives empty. Implementations append and do not otherwise
+    /// read, clear or reorder it — see the type-level note on why this is
+    /// a scratch buffer. The encoding written here is the one the wire
+    /// format carries and the one `conformance/vectors.json` pins.
+    fn write_canonical(&self, out: &mut Vec<u8>);
+
+    /// This value's canonical bytes, allocated.
+    ///
+    /// A convenience for callers who want them owned; the substrate's own
+    /// serialization path does not use it. **Do not override** —
+    /// [`Self::write_canonical`] is the single definition of the encoding,
+    /// and an override that disagreed with it would be a second answer
+    /// that nothing on the wire ever consults.
     #[must_use]
-    fn canonical_bytes(&self) -> Vec<u8>;
+    fn canonical_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        self.write_canonical(&mut out);
+        out
+    }
 }
 
 impl CanonicalBytes for usize {
-    fn canonical_bytes(&self) -> Vec<u8> {
+    fn write_canonical(&self, out: &mut Vec<u8>) {
         // 8-byte little-endian, target-independent (Cond D — a wasm32
         // producer and an x86_64 consumer must agree on width).
-        (*self as u64).to_le_bytes().to_vec()
+        out.extend_from_slice(&(*self as u64).to_le_bytes());
     }
 }
 
 impl CanonicalBytes for bool {
-    fn canonical_bytes(&self) -> Vec<u8> {
-        vec![u8::from(*self)]
+    fn write_canonical(&self, out: &mut Vec<u8>) {
+        out.push(u8::from(*self));
     }
 }
 
 impl CanonicalBytes for Option<ParentPair> {
-    fn canonical_bytes(&self) -> Vec<u8> {
+    fn write_canonical(&self, out: &mut Vec<u8>) {
         match self {
-            None => vec![0u8],
+            None => out.push(0u8),
             Some((min, max)) => {
-                let mut v = Vec::with_capacity(1 + 32);
-                v.push(1);
-                v.extend_from_slice(min.as_bytes());
-                v.extend_from_slice(max.as_bytes());
-                v
+                out.push(1);
+                out.extend_from_slice(min.as_bytes());
+                out.extend_from_slice(max.as_bytes());
             },
         }
     }
@@ -828,12 +867,20 @@ impl<'e, S: Signal> Projection<'e, S> {
         out.extend_from_slice(&entry_count.to_le_bytes());
 
         // Entries in `BTreeMap` order (canonical `Distinction::Ord`).
+        //
+        // One scratch buffer for the whole frame, cleared per entry so its
+        // capacity is reused: `clear` drops the length, not the allocation.
+        // A `Vec` per entry was 87% of this function's cost at 20,000
+        // entries — see the note on `CanonicalBytes` for the measurement and
+        // for why a signal's encoder is handed this buffer and not `out`.
+        let mut scratch = Vec::new();
         for (d, v) in &self.output.inner {
             out.extend_from_slice(d.as_bytes());
-            let vbytes = v.canonical_bytes();
-            let output_len = narrow_output_len(*d, vbytes.len())?;
+            scratch.clear();
+            v.write_canonical(&mut scratch);
+            let output_len = narrow_output_len(*d, scratch.len())?;
             out.extend_from_slice(&output_len.to_le_bytes());
-            out.extend_from_slice(&vbytes);
+            out.extend_from_slice(&scratch);
         }
 
         Ok(out)

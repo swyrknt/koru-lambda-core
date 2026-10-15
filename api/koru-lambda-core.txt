@@ -575,12 +575,16 @@ impl<'e> !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_core::projecti
 impl<'e> !core::panic::unwind_safe::UnwindSafe for koru_lambda_core::projection::SignalContext<'e>
 pub trait koru_lambda_core::projection::CanonicalBytes
 pub fn koru_lambda_core::projection::CanonicalBytes::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn koru_lambda_core::projection::CanonicalBytes::write_canonical(&self, &mut alloc::vec::Vec<u8>)
 impl koru_lambda_core::projection::CanonicalBytes for bool
 pub fn bool::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn bool::write_canonical(&self, &mut alloc::vec::Vec<u8>)
 impl koru_lambda_core::projection::CanonicalBytes for core::option::Option<koru_lambda_core::engine::ParentPair>
 pub fn core::option::Option<koru_lambda_core::engine::ParentPair>::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn core::option::Option<koru_lambda_core::engine::ParentPair>::write_canonical(&self, &mut alloc::vec::Vec<u8>)
 impl koru_lambda_core::projection::CanonicalBytes for usize
 pub fn usize::canonical_bytes(&self) -> alloc::vec::Vec<u8>
+pub fn usize::write_canonical(&self, &mut alloc::vec::Vec<u8>)
 pub trait koru_lambda_core::projection::CoreSignal: koru_lambda_core::projection::Signal + koru_lambda_core::projection::private::Sealed
 impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Adjacency
 impl koru_lambda_core::projection::CoreSignal for koru_lambda_core::projection::Degree

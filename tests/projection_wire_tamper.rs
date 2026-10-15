@@ -11,8 +11,10 @@
 //! `conformance/vectors.json`, so the independent Python implementation
 //! checks them too. The third is accepted, and that is the finding.
 
-use koru_lambda_core::projection::{Adjacency, Boundary, Direction};
-use koru_lambda_core::DistinctionEngine;
+use koru_lambda_core::projection::{
+    Adjacency, Boundary, CanonicalBytes, Direction, Signal, SignalContext,
+};
+use koru_lambda_core::{Distinction, DistinctionEngine};
 
 /// `docs/SPEC.md` §10.1's history, which the fixture's cases are taken over.
 fn history() -> (DistinctionEngine, koru_lambda_core::Distinction) {
@@ -107,9 +109,25 @@ fn tampering_an_entry_is_refused() {
         .materialize()
         .canonical_bytes();
 
-    // The first entry's u32 output_len sits at 47 + 16.
+    // The header is **55** bytes, not 47: §7 puts the 8-byte entry count
+    // after the signal identity. So the first entry's identifier spans
+    // 55..71 and its u32 output_len 71..75.
+    //
+    // This test and the fixture case both used 63, with a comment reading
+    // "47 + 16" — which is inside the identifier, not the length field. Both
+    // rejected, so both looked right, and the entry array's own length field
+    // had nothing probing it in either implementation. The fixture case is
+    // renamed `tampered_entry_identifier` and a real length probe added
+    // beside it; both offsets are asserted here.
+    let mut bad_id = wire.clone();
+    bad_id[63] = bad_id[63].wrapping_add(1);
+    assert!(
+        e.restore_projection(&bad_id, Adjacency).is_err(),
+        "an entry naming a distinction this engine would not produce must be refused"
+    );
+
     let mut bad_len = wire.clone();
-    bad_len[63] = bad_len[63].wrapping_add(1);
+    bad_len[71] = bad_len[71].wrapping_add(1);
     assert!(
         e.restore_projection(&bad_len, Adjacency).is_err(),
         "a declared length that does not match the output must be refused"
@@ -123,6 +141,115 @@ fn tampering_an_entry_is_refused() {
         e.restore_projection(&bad_payload, Adjacency).is_err(),
         "a per-node value this engine would not produce must be refused"
     );
+}
+
+// -------------------------------------------------------------------------
+// PRJ-1 — a consumer's encoder cannot reach bytes it does not own
+// -------------------------------------------------------------------------
+
+/// An output type whose encoder is hostile to the buffer it is given.
+///
+/// `CanonicalBytes::write_canonical` takes `&mut Vec<u8>`, so the obvious
+/// question about the signature is what happens when an implementation
+/// treats that buffer as its own. This one clears it first and writes
+/// trailing padding after, which is the shape that would corrupt a frame:
+/// given the wire buffer, the `clear` would discard the header and every
+/// entry already written, and the entry length — computed as a delta — would
+/// underflow.
+struct Greedy(usize);
+
+impl CanonicalBytes for Greedy {
+    fn write_canonical(&self, out: &mut Vec<u8>) {
+        out.clear(); // would destroy the header and all prior entries
+        out.extend_from_slice(&(self.0 as u64).to_le_bytes());
+        out.extend_from_slice(&[0xAA; 4]); // and then overrun
+    }
+}
+
+#[derive(Clone)]
+struct GreedySignal;
+
+impl Signal for GreedySignal {
+    type Output = Greedy;
+
+    fn compute(&self, ctx: &SignalContext<'_>, node: Distinction) -> Greedy {
+        Greedy(ctx.engine.degree(node))
+    }
+
+    fn canonical_bytes(&self) -> &[u8] {
+        b"test:greedy"
+    }
+}
+
+/// The frame survives it, because what the encoder receives is scratch.
+///
+/// Every entry is present and correctly framed, the header is intact, and
+/// the projection restores. The hostile `clear` reached only the twelve
+/// bytes this entry had written itself — which it is entitled to, since it
+/// decides its own encoding anyway.
+///
+/// This is the invariant the signature's safety rests on. If
+/// `try_canonical_bytes` is ever changed to pass `out` directly — the
+/// obvious "optimization", worth one `memcpy` per entry — this test fails
+/// instead of the corruption being discovered on a wire.
+#[test]
+fn a_hostile_encoder_cannot_reach_bytes_it_did_not_write() {
+    let (e, c) = history();
+    let proj = e
+        .project(c)
+        .direction(Direction::Undirected)
+        .saturated()
+        .signal(GreedySignal)
+        .materialize();
+
+    let wire = proj.canonical_bytes();
+    let entries = proj.output().iter().count();
+
+    assert_eq!(&wire[..4], b"KPRJ", "the header survived an encoder that cleared its buffer");
+    assert_eq!(wire[4], 0x02, "and so did the version byte after it");
+    assert_eq!(&wire[5..21], c.as_bytes(), "and the root");
+
+    // 55-byte header (§7), then per entry: 16 id + 4 len + 12 payload.
+    assert_eq!(
+        wire.len(),
+        55 + entries * (16 + 4 + 12),
+        "every entry is framed at its own declared length"
+    );
+
+    // And the declared length is this entry's twelve bytes, not a delta
+    // against a buffer the encoder had emptied.
+    let first_len = u32::from_le_bytes(wire[71..75].try_into().unwrap());
+    assert_eq!(first_len, 12, "the length is what the encoder wrote, measured in isolation");
+
+    let restored = e
+        .restore_projection(&wire, GreedySignal)
+        .expect("a frame written through scratch buffers round-trips");
+    assert_eq!(restored.canonical_bytes(), wire);
+}
+
+/// `canonical_bytes` is the provided method over the same encoding.
+///
+/// It exists for callers who want the bytes owned; nothing on the wire
+/// consults it. Asserted so the two cannot drift apart silently.
+#[test]
+fn the_provided_method_agrees_with_the_required_one() {
+    for v in [0usize, 1, 255, 256, usize::MAX] {
+        let mut written = Vec::new();
+        v.write_canonical(&mut written);
+        assert_eq!(written, v.canonical_bytes(), "usize");
+    }
+    for v in [true, false] {
+        let mut written = Vec::new();
+        v.write_canonical(&mut written);
+        assert_eq!(written, v.canonical_bytes(), "bool");
+    }
+
+    let (e, c) = history();
+    for v in [None, e.parents_of(c)] {
+        let mut written = Vec::new();
+        v.write_canonical(&mut written);
+        assert_eq!(written, v.canonical_bytes(), "Option<ParentPair>");
+    }
 }
 
 /// `RestoreError::IntegerOverflow` cannot fire on this target, by arithmetic.

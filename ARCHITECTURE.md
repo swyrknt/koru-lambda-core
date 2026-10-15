@@ -87,10 +87,17 @@ pub struct Distinction(pub(crate) [u8; 16]);
 
 Sixteen bytes. `Copy`. `repr(transparent)` for zero-copy FFI/WASM. The
 field is `pub(crate)` — there is no public constructor. The only way to
-obtain a `Distinction` is via the engine itself (`synthesize`,
-`get_distinction_by_id`) or by parsing one with `from_hex` (whose output
-is debug-asserted at the next `synthesize` to belong to the engine
-receiving it). Foreign-byte injection is closed structurally.
+obtain a `Distinction` is from the engine itself: `synthesize`,
+`get_distinction_by_id`, or `verify` on a `RawDistinctionId`. Foreign
+bytes have no other entrance, which is what makes the boundary
+type-level rather than a convention.
+
+This paragraph used to name `from_hex` as a fourth way, "whose output is
+debug-asserted at the next `synthesize`". That was the hole, not the
+boundary: a `debug_assert!` is absent in release, so the claim on the
+next line held only in debug builds. ENG-4 removed `from_hex`, `FromStr`,
+`Pod` and `Zeroable` from `Distinction`; external bytes now enter as
+`RawDistinctionId` and become a `Distinction` only by passing `verify`.
 
 `DistinctionEngine` carries one indexed `nodes` map. Each value is an
 `EngineNode` carrying both parents and degree per distinction. The
@@ -323,9 +330,16 @@ problem is closed by construction.
 
 ### `distinction_hex.rs` — the hex display boundary
 
-`to_hex`, `from_hex`, `Display`, `Debug`, and a `serde` adapter live
-here. Hex is not theory. It is the human/wire-format rendering of bytes.
-The substrate is byte-canonical; hex is a boundary concern.
+`to_hex`, `Display`, `Debug`, and a `serde` adapter live here, plus
+`RawDistinctionId::from_hex` — the parse direction belongs to the
+unverified type, since parsing cannot establish membership. Hex is not
+theory. It is the human/wire-format rendering of bytes. The substrate is
+byte-canonical; hex is a boundary concern.
+
+The serde adapter is **serialize-only** for `Distinction`. A derived
+`Deserialize` produced one straight from hex, which is the trust
+boundary bypassed by an attribute; `RawDistinctionId` carries the
+deserializing half, and `verify` is the only crossing.
 
 ### `replay.rs` — the parentage-sufficiency theorem
 
