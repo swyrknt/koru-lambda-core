@@ -805,13 +805,19 @@ impl DistinctionEngine {
     /// route through this function so their semantics stay in sync.
     /// Panic unless `d` is registered in this engine.
     ///
+    /// `operation` and `subject` name the caller, because this guard is no
+    /// longer only `synthesize`'s. `project` needs it for the same reason
+    /// and did not have it: a `Distinction` is `Copy` and carries no engine
+    /// tag, and Law 8 positively encourages holding values produced
+    /// elsewhere, so every entry point that vouches for one has to check.
+    ///
     /// `#[inline]` because it sits on the synthesis path; the body is one
     /// `contains_key` whose shard read lock is released before returning.
     #[inline]
-    fn assert_registered(&self, d: Distinction, position: &str) {
+    pub(crate) fn assert_registered(&self, d: Distinction, operation: &str, subject: &str) {
         assert!(
             self.nodes.contains_key(&d.0),
-            "synthesize: parent `{position}` is not registered in this engine — it was not \
+            "{operation}: {subject} is not registered in this engine — it was not \
              produced by this engine's operator. Cross-engine values and unverified bytes must \
              pass through `verify` first."
         );
@@ -822,7 +828,7 @@ impl DistinctionEngine {
         // engine must still refuse to vouch for a value it has never
         // witnessed, so the guard applies here too.
         if a == b {
-            self.assert_registered(a, "a");
+            self.assert_registered(a, "synthesize", "parent `a`");
             return (a, false);
         }
 
@@ -865,8 +871,8 @@ impl DistinctionEngine {
         //
         // Both guards release their shard read locks immediately, so neither
         // is held into the entry-gated insert below.
-        self.assert_registered(first, "a");
-        self.assert_registered(second, "b");
+        self.assert_registered(first, "synthesize", "parent `a`");
+        self.assert_registered(second, "synthesize", "parent `b`");
 
         let new_d = Distinction(new_bytes);
 

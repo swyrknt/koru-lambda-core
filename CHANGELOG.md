@@ -69,6 +69,35 @@ without extra state.
   establish membership, which is why the parse now lives on the
   unverified type.
 
+- **BREAKING: `project` and `project_arc` panic on a root this engine has
+  not witnessed**, matching `synthesize`'s treatment of a foreign parent.
+  Previously they accepted one and produced an empty cone, which serialized
+  to a well-formed 55-byte §7 frame that `restore_projection` refused on
+  every engine **including the one that produced it**. §7 defines canonical
+  bytes as what this engine would produce, so emitting a frame the engine
+  cannot reproduce broke the definition rather than merely answering oddly.
+
+  Reachable in intended use, not only through misuse: a `Distinction` is
+  `Copy` and carries no engine tag, and Law 8 makes holding a value another
+  engine produced the designed case. The guard tests witness state rather
+  than provenance — a root both engines have witnessed still projects, which
+  is what content addressing requires.
+
+  Found by a Python/Rust differential campaign
+  (`experiments/python/diff_harness.py`), not by review.
+
+- **`conformance/vectors.json` digest repinned** (`749a8d15…` →
+  `bd8bdad3…`), and again no published identifier moved — one added
+  `reject.cases` entry, `saturated_with_nonzero_boundary_payload`. §7 pins
+  offset 22 to zero when the boundary tag is saturated, and nothing probed
+  that byte. `conformance/reference/substrate.py` **accepted** such a frame:
+  it rebuilt the projection from the payload it parsed and re-serialized the
+  tampered byte, so its own comparison could not see it. The accepted frame
+  carried a §8 identity no legitimate specification produces, so the two
+  sides held different identities over bytes the receiver had accepted.
+  Fixed there and pinned here, so both implementations are gated rather than
+  one being fixed: reject cases 11 → 12, reference implementation 103 → 104.
+
 - **BREAKING: `CanonicalBytes` requires `write_canonical(&self, &mut
   Vec<u8>)`** instead of `canonical_bytes(&self) -> Vec<u8>`.
   `canonical_bytes` remains as a provided method, so callers are
@@ -95,11 +124,28 @@ without extra state.
 
 A dedicated consumer migration guide is planned for v2.1. That guide
 will ship the "delete your wrapper" playbook for consumers carrying
-hand-rolled projection / novelty / verify shims. Until then: v2.0.0 is API-additive; nothing in the substrate's
-shipped surface (`synthesize`, `parents_of`, `degree`, `has`,
-`distinction_count`, hex round-trip) changed in a signature-breaking
-way. Novel consumers pick up the new APIs directly; existing consumers
-migrate at their own pace.
+hand-rolled projection / novelty / verify shims.
+
+**v2.0.0 is not API-additive.** This section said it was, and that it was
+safe to "migrate at their own pace" — both were written before the three
+breaking changes in *Changed* above landed, and neither was revisited. What
+actually breaks:
+
+- `Distinction::from_hex`, `impl FromStr`, `Pod` and `Zeroable` are gone.
+  Hex parsing moves to `RawDistinctionId::from_hex` followed by
+  `engine.verify()`. The `serde` adapter for `Distinction` is
+  serialize-only.
+- `CanonicalBytes` implementors move from `canonical_bytes(&self) ->
+  Vec<u8>` to `write_canonical(&self, &mut Vec<u8>)`. *Callers* are
+  unaffected — `canonical_bytes` remains as a provided method.
+- `project` and `project_arc` now panic on a root the engine has not
+  witnessed. Code that passed a foreign root was already producing frames
+  nothing would accept, so nothing working breaks — but it fails loudly now
+  instead of quietly.
+
+What genuinely did not change in signature: `synthesize`, `parents_of`,
+`degree`, `has`, `distinction_count` (each verified present in
+`api/koru-lambda-core.txt`). A consumer using only those is unaffected.
 
 #### npm breaking changes
 

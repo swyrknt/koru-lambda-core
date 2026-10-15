@@ -272,3 +272,77 @@ fn a_consumer_signal_can_delegate_to_hop_distance() {
         assert_eq!(*v, usize::MAX, "a node outside the cone has no hop count");
     }
 }
+
+// -------------------------------------------------------------------------
+// A foreign root reaches `project`, and used to produce bytes nobody accepts
+// -------------------------------------------------------------------------
+
+/// Found by the Python/Rust differential harness.
+///
+/// `synthesize` has always guarded a foreign parent with
+/// `assert_registered`, and `restore_projection` rejects a foreign root
+/// through `verify`. `project` guarded nothing. A `Distinction` is `Copy`
+/// and carries no engine tag, and Law 8 means engines agree without
+/// communicating — so holding a value another engine produced is the
+/// designed case, not misuse, and passing one to `project` was an easy
+/// mistake to make.
+///
+/// What it produced was worse than a wrong answer: an empty cone, which
+/// serialized to a well-formed 55-byte §7 frame that **no engine would
+/// accept, including the one that produced it**, because restore
+/// re-materializes and the root fails `verify`. §7 defines canonical bytes
+/// as what this engine would produce, so an engine that cannot reproduce
+/// its own output has broken the definition rather than merely answered
+/// oddly.
+#[test]
+#[should_panic(expected = "not registered in this engine")]
+fn projecting_a_foreign_root_panics() {
+    let holder = DistinctionEngine::new();
+    let a = holder.synthesize(holder.d0(), holder.d1());
+    let b = holder.synthesize(a, holder.d0());
+    // `b` is two hops from the primordials, so no fresh engine holds it.
+    let stranger = DistinctionEngine::new();
+    assert_eq!(stranger.distinction_count(), 2, "the stranger holds only d₀ and d₁");
+
+    let _ = stranger.project(b);
+}
+
+/// `project_arc` too — a guard on one entry point only moves the hole.
+#[test]
+#[should_panic(expected = "not registered in this engine")]
+fn projecting_a_foreign_root_through_arc_panics() {
+    let holder = DistinctionEngine::new();
+    let a = holder.synthesize(holder.d0(), holder.d1());
+    let b = holder.synthesize(a, holder.d0());
+
+    let stranger = std::sync::Arc::new(DistinctionEngine::new());
+    let _ = DistinctionEngine::project_arc(&stranger, b);
+}
+
+/// And the legitimate cross-engine case still works, which is the point.
+///
+/// This is the half that must not regress. Law 8 says two engines
+/// performing the same operations agree without communicating, so a
+/// distinction obtained from one engine and projected in another is correct
+/// *when that engine has also witnessed it*. The guard tests witness state,
+/// not provenance — which is the only thing it could test, since content
+/// addressing makes the two engines' values byte-identical.
+#[test]
+fn a_root_witnessed_by_both_engines_still_projects() {
+    let one = DistinctionEngine::new();
+    let c_one = one.synthesize(one.d0(), one.d1());
+
+    let two = DistinctionEngine::new();
+    let c_two = two.synthesize(two.d0(), two.d1());
+    assert_eq!(c_one, c_two, "Law 8: the same operation yields the same identity");
+
+    // A value from `one`, projected in `two`.
+    let p =
+        two.project(c_one).direction(Direction::Upstream).hops(1).signal(Adjacency).materialize();
+
+    assert!(p.output().iter().count() > 0, "the cone is not empty");
+    assert!(
+        two.restore_projection(&p.canonical_bytes(), Adjacency).is_ok(),
+        "and the frame it produced is one its own engine accepts"
+    );
+}

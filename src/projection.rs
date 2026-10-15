@@ -1345,7 +1345,33 @@ fn special_dispatch<S: Signal>(
 impl DistinctionEngine {
     /// Start a projection anchored at `root`. Returns a builder in the
     /// `NeedsDirection` typestate.
+    ///
+    /// # Panics
+    ///
+    /// If `root` is not registered in this engine, for the same reason
+    /// [`DistinctionEngine::synthesize`] panics on a foreign parent: a
+    /// `Distinction` is `Copy` and carries no engine tag, so nothing in the
+    /// type prevents one engine's value reaching another's reads.
+    ///
+    /// This guard was missing, and the consequence was worse than a wrong
+    /// answer. A foreign root produced an empty cone, which serialized to a
+    /// well-formed 55-byte §7 frame that **no engine would accept — not
+    /// even the one that produced it**, because `restore_projection`
+    /// re-materializes and the root fails `verify`. §7 defines canonical
+    /// bytes as what this engine would produce; an engine that cannot
+    /// reproduce its own output has broken that definition. §5 does not
+    /// settle what the read should *answer* for an unwitnessed root — its
+    /// axis table admits "any witnessed distinction", so such a root is
+    /// outside the axis's domain rather than an input with a prescribed
+    /// result — but §7 settles that there must be no frame.
+    ///
+    /// Panicking rather than returning an error keeps this identical to
+    /// `synthesize`'s treatment of the same mistake, and keeps
+    /// `materialize` infallible. Like `synthesize`'s, the panic is not
+    /// `RefUnwindSafe` through `&DistinctionEngine`, so a caller catching it
+    /// needs `AssertUnwindSafe` — nothing is mutated before it fires.
     pub fn project(&self, root: Distinction) -> ProjectionBuilder<'_, NeedsDirection> {
+        self.assert_registered(root, "project", "root");
         ProjectionBuilder {
             engine: self,
             root,
@@ -1363,10 +1389,17 @@ impl DistinctionEngine {
     /// carrying the `Arc` by value would move it, breaking the
     /// caller's ability to keep it. `&'a Arc<Self>` derefs to
     /// `&'a Self`, which coerces to `&'a (dyn ReadOnlyEngine + Send + Sync)`.
+    ///
+    /// # Panics
+    ///
+    /// If `root` is not registered in this engine — see
+    /// [`Self::project`], which this mirrors. Both entry points need the
+    /// guard; having it on one would just move the hole.
     pub fn project_arc<'a>(
         self: &'a Arc<Self>,
         root: Distinction,
     ) -> ProjectionBuilder<'a, NeedsDirection> {
+        self.assert_registered(root, "project_arc", "root");
         ProjectionBuilder {
             engine: &**self,
             root,

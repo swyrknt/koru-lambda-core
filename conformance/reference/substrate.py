@@ -363,6 +363,21 @@ def restore(engine: Engine, data: bytes, signal) -> Projection:
     if boundary_tag not in (0x00, 0x01):
         raise Refused("bad boundary tag at offset 21")
     boundary_payload = int.from_bytes(data[22:30], "little")
+    if boundary_tag == 0x01 and boundary_payload != 0:
+        # §7, offset 22: "hop count; `0` when saturated". No conforming
+        # producer emits a saturated frame with a payload, so it is refused.
+        #
+        # SECOND LATER ADDITION, marked like `build_byte_alphabet` above.
+        # Found by the Python/Rust differential harness, not by reading §7:
+        # this restore reconstructs the Projection with the payload it
+        # parsed and then re-serialises it, so the tampered byte came back
+        # out and the self-comparison below could never see it. Rust's
+        # `Boundary::Saturated` carries no payload, so its re-materialisation
+        # normalises to 0 and the comparison caught it. An accepted frame
+        # here carried a §8 identity no legitimate specification produces,
+        # so sender and receiver held different identities for bytes the
+        # receiver had accepted.
+        raise Refused("saturated boundary with a non-zero payload at offset 22")
     direction = data[30]
     if direction not in (0x00, 0x01, 0x02):
         raise Refused("bad direction tag at offset 30")

@@ -679,6 +679,15 @@
         "expect": {
           "kind": "ForeignEngine"
         }
+      },
+      {
+        "$comment": "The boundary payload, which §7 pins to zero when the tag says saturated and which nothing probed. Taken from adjacency_upstream_saturated with offset 22 set to 1. Found by a Python/Rust differential campaign rather than by reading the specification: the Rust engine refused it because Boundary::Saturated carries no payload, so re-materialisation normalises to zero and the byte comparison fails, while conformance/reference/substrate.py reconstructed the projection from the payload it parsed and re-serialised the tampered byte straight back out, so its own comparison could not see it. An accepted frame carries a §8 identity no legitimate specification produces, so the two sides hold different identities over bytes the receiver accepted.",
+        "name": "saturated_with_nonzero_boundary_payload",
+        "bytes": "4b50524a026cc4f0e930b34481d03a4134331852ea01010000000000000000d0b9d2562fdb2c3f3fa4b8a3258b778103000000000000000000000000000000000000000000000001000000000100000000000000000000000000000001000000006cc4f0e930b34481d03a4134331852ea21000000010000000000000000000000000000000001000000000000000000000000000000",
+        "why": "§7 offset 22 is the hop count and is zero when the boundary tag is saturated; no conforming producer emits anything else",
+        "expect": {
+          "kind": "any_rejection"
+        }
       }
     ]
   }
