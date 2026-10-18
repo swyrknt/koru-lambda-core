@@ -173,7 +173,13 @@ jobs:
       # change, and a date-dependent generator makes every nightly bump look
       # like one. Bumping the pin is a deliberate act that regenerates the
       # snapshot in the same commit, which is exactly the review the gate wants.
-      - uses: dtolnay/rust-toolchain@nightly-2026-06-27
+      # `@<ref>` is a git ref in the action's repository — `stable`, `nightly`,
+      # `master`, or a version tag. A dated nightly is NOT a ref: pinning it as
+      # `@nightly-2026-06-27` is a 404 and the job dies at "Set up job", before
+      # checkout, which is worse than the drift it was meant to fix. The dated
+      # toolchain goes in the `toolchain:` input against `@master`.
+      - uses: dtolnay/rust-toolchain@master
+        with: { toolchain: nightly-2026-06-27 }
       - run: cargo install cargo-public-api --locked
       - run: ./scripts/gates/api_snapshot.sh
 
