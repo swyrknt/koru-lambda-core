@@ -12,6 +12,21 @@ fast=0
 
 step() { printf '\n=== %s\n' "$1"; }
 
+# A skip is not a pass. `api snapshot` used to print "skipped:" and fall
+# through, so this script reported "all checks passed" for a week while the
+# API snapshot job was red in CI — the same defect class as the loom
+# sentinels that never ran and the entry-length field nothing probed.
+#
+# Skips are now recorded and the run exits non-zero at the end. Failing at
+# the end rather than at the step is deliberate: it keeps every later step
+# running, which is what let `scripts/check-linux.sh` localise the `Tests`
+# failure, while still making the exit code tell the truth.
+SKIPPED=()
+skip() {
+    SKIPPED+=("$1")
+    printf 'SKIPPED: %s\n' "$1"
+}
+
 step "repository gates"
 ./scripts/gates/no_suppression.sh
 ./scripts/gates/crate_boundary.sh
@@ -34,7 +49,7 @@ step "api snapshot"
 if command -v cargo-public-api >/dev/null 2>&1; then
     ./scripts/gates/api_snapshot.sh
 else
-    echo "skipped: cargo-public-api not installed"
+    skip "api snapshot: cargo-public-api is not installed. Install it with \`cargo install cargo-public-api --locked\` (it needs a nightly toolchain for rustdoc JSON), or run scripts/check-api.sh."
 fi
 
 step "format"
@@ -92,5 +107,11 @@ done
 
 step "js demos"
 (cd examples/wasm-demos && npm run typecheck && npm run demo:all >/dev/null)
+
+if [ ${#SKIPPED[@]} -gt 0 ]; then
+    printf '\n%d step(s) SKIPPED — that is a failure, not a pass:\n' "${#SKIPPED[@]}"
+    for s in "${SKIPPED[@]}"; do printf '  - %s\n' "$s"; done
+    exit 1
+fi
 
 printf '\nall checks passed\n'
