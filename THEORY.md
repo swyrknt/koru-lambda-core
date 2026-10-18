@@ -413,13 +413,20 @@ The reference pattern is the **local causal agent**: a consumer anchored to a
 local root, advancing it by synthesizing the root with the canonical structure
 of the action being taken.
 
-**Derived — and this is the correction the previous version needed.** The
-pattern is not a type some consumers have. *Every* non-primordial distinction
-is an advance of each of its parents: set `root = a` and `action = b` in
-`synth(a, b)`, and the advance holds with `a` as the root; set `root = b` and
-it holds again. Agent-ness is therefore a **reading of the graph**, available
-everywhere, and a trait asserting that only some types have it is the wrong
-shape.
+**Derived, for all consumers that advance — and this is the correction the
+previous version needed.** The pattern is not a type some consumers have.
+*Every* non-primordial distinction is an advance of each of its parents: set
+`root = a` and `action = b` in `synth(a, b)`, and the advance holds with `a`
+as the root; set `root = b` and it holds again. Agent-ness is therefore a
+**reading of the graph**, available everywhere, and a trait asserting that
+only some types have it is the wrong shape.
+
+The qualifier is the whole claim. `docs/SPEC.md` §2a defines an advance as
+`synthesize(r, x)` for an `x` the same engine has witnessed and which is not
+`r` itself, so a consumer that advances *is* anchoring at a root whether or
+not it says so — the shape is forced by what synthesis is, not chosen. A
+consumer that advances nothing is doing no synthesis, and the derivation says
+nothing about it.
 
 That resolves a contradiction the previous version carried without noticing:
 it described this construct as both "a pattern, not an axiom" and "a
@@ -433,11 +440,20 @@ candidate's parents either include the root it replaces or they do not. The
 substrate does not need to name that comparison to make it available, and the
 contract that *chooses* to advance belongs to consumers, who ship with it.
 
-**Encoding.** Nothing requires a consumer to carry one root. Multi-root
-consumers, consumers that synthesize from non-root state, and consumers that
-ignore perspective entirely are all legal and all get the substrate's
+**Encoding, for non-advancing consumers only.** Nothing requires a
+*non-advancing* consumer to carry one root. Multi-root consumers, consumers
+that synthesize from non-root state, and consumers that ignore perspective
+entirely are all legal *as consumers*, and all get the substrate's
 guarantees, because those flow from the axioms and not from the consumer's
-shape.
+shape. They cannot claim agent status, because agent status is a reading of
+the graph that requires advancing.
+
+*Scope corrected 2026-10-18.* This block previously read "Nothing requires a
+consumer to carry one root" without qualification, which contradicted the
+Derived claim above it: if every advance is an anchoring, then a consumer
+that advances does carry a root, and the only question is whether it names
+it. The Encoding is real but narrower than it was written — it is a debt only
+for consumers that do not advance.
 
 ---
 
