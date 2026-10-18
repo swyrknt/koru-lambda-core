@@ -16,7 +16,18 @@ jobs:
     name: Repository gates
     runs-on: ubuntu-latest
     steps:
+      # Full history, because `checklist_evidence.sh` verifies every commit SHA
+      # cited in an evidence line with `git cat-file -e`. `actions/checkout@v4`
+      # defaults to `fetch-depth: 1`, so the clone held exactly one commit and
+      # every cited SHA — `699a872`, `1e4c6ea`, `57d892f`, and the rest — was
+      # reported as nonexistent. Reproduced locally with
+      # `git clone --depth 1`: the gate emits one failure per citation.
+      #
+      # This is why the job has been red since the branch was first gated on
+      # 2026-10-11: checkout has always been shallow, so the gate has never
+      # once had the history it checks against.
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - run: ./scripts/gates/no_suppression.sh
       - run: ./scripts/gates/crate_boundary.sh
       - run: ./scripts/gates/dep_pins.sh
