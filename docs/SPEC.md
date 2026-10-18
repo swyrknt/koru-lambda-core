@@ -66,6 +66,27 @@ Three properties follow from the definition rather than from any check:
 - **Deterministic and engine-independent** — the result is a function of
   the two inputs alone.
 
+### 2a. Advance
+
+An **advance** of a distinction `r` is any `synthesize(r, x)` where `x` is
+any distinction witnessed by the same engine, other than `r`. The result has
+`r` among its parents, so `r`'s participation is recoverable from the
+result's parentage. Advance is not a separate operation: it is synthesis read
+with one parent designated the prior state. A consumer that designates one
+such parent per step and replaces it with the result is advancing a single
+root.
+
+Two exclusions in that sentence are load-bearing. `x` may not equal `r`,
+because §2's operator returns `a` unchanged when `a == b` — so
+`synthesize(r, r)` produces no new distinction, puts nothing new in `r`'s
+parentage, and advances nothing. And `x` must be witnessed by *the same*
+engine, because passing a distinction an engine has not witnessed is a
+programmer error (§3), not an advance.
+
+This defines a reading, not a requirement. A consumer that advances no root
+is still a conforming consumer: nothing in this specification obliges a
+consumer to advance anything.
+
 ### 2.1 What an engine is
 
 An engine is a **witness**, not a namespace. It records which
