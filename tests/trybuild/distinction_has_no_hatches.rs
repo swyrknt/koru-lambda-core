@@ -15,7 +15,17 @@ fn main() {
     let _ = Distinction::from_hex(hex);
 
     // Was: `FromStr`, so a string became a distinction by inference alone.
-    let _: Distinction = hex.parse().unwrap();
+    //
+    // Called explicitly rather than via `hex.parse()`. `parse` is generic
+    // over `FromStr`, so the unsatisfied bound is reported *at* its
+    // definition in `core/src/str/mod.rs` — and rustc renders that source
+    // snippet only when the `rust-src` component is installed. A developer
+    // machine with `rust-src` and a CI container without it then produce
+    // stderr differing by three lines, which is a property of the
+    // toolchain's components rather than of this crate's surface. Calling
+    // `from_str` directly reports the same missing impl with no reference
+    // into the standard library's source.
+    let _: Distinction = <Distinction as std::str::FromStr>::from_str(hex).unwrap();
 
     // Was: `Pod`, so any sixteen bytes could be cast into one.
     let bytes = [7u8; 16];
