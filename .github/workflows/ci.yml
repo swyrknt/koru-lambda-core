@@ -162,7 +162,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      # Pinned, not `@nightly`. `cargo public-api` reads rustdoc's JSON output,
+      # whose format drifts between nightlies — so an unpinned toolchain
+      # regenerates the surface in a different shape and the gate fails against
+      # a committed artifact that never changed. The committed `api/*.txt` were
+      # generated with nightly-2026-06-27; the job has to use the same one or
+      # compare two things that were never comparable.
+      #
+      # Reproducible beats current here: this gate exists to notice a *surface*
+      # change, and a date-dependent generator makes every nightly bump look
+      # like one. Bumping the pin is a deliberate act that regenerates the
+      # snapshot in the same commit, which is exactly the review the gate wants.
+      - uses: dtolnay/rust-toolchain@nightly-2026-06-27
       - run: cargo install cargo-public-api --locked
       - run: ./scripts/gates/api_snapshot.sh
 
