@@ -114,12 +114,23 @@ jobs:
           RUSTDOCFLAGS: -D warnings
 
   msrv:
-    name: MSRV 1.80
+    name: MSRV 1.80 (substrate)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.80.0
-      - run: cargo check --workspace --all-targets --all-features
+      # Scoped to the substrate, which is the witness with consumers. The job
+      # used to run `--workspace --all-targets --all-features`, which asserts
+      # far more than the promise: it builds `koru-lambda-agents` (whose `lru`
+      # pulls `hashbrown 0.17`, requiring edition2024 and Rust 1.85) and every
+      # dev-dependency, none of which reach a consumer of this crate. It was
+      # passing — by whichever versions CI happened to resolve — while
+      # asserting the wrong thing, which is the same defect class as a gate
+      # that never runs.
+      #
+      # The workspace-wide check at current stable already exists in the
+      # `features` job, so nothing is lost by narrowing this one.
+      - run: cargo check -p koru-lambda-core --all-features
 
   loom:
     name: Loom model check

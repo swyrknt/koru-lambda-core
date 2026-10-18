@@ -2,7 +2,15 @@
 name = "koru-lambda-agents"
 version = "2.0.0"
 edition = "2021"
-rust-version = "1.80"
+# 1.85, not 1.80. The 1.80 claim was false: this crate's `lru` dependency
+# pulls `hashbrown 0.17`, whose manifest requires `edition2024` and therefore
+# Rust 1.85. Verified on a real 1.80.0 toolchain — `cargo check -p
+# koru-lambda-agents --all-features` fails with "failed to download
+# `hashbrown v0.17.1` … feature `edition2024` is required", while
+# `koru-lambda-core`, `koru-lambda-wasm` and `koru-experiments-runner` all
+# pass. A declared MSRV nothing checks is a claim, so this states the truth
+# rather than keeping a number that matched the substrate's.
+rust-version = "1.85"
 description = "Agents built on the koru-lambda-core substrate: the local-causal-agent contract, batch validation and commitments, plus the consumer patterns the substrate deliberately does not carry"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/swyrknt/koru-lambda-core"
