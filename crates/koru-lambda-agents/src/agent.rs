@@ -11,19 +11,38 @@
 //! 3. The LCA **updates its perspective forward** as its causal chain
 //!    advances.
 //!
-//! `LocalCausalAgent` lives at substrate level (not `subsystems/`)
-//! because the trait IS the canonical consumer contract — it formalizes
-//! what it means to "use" the substrate. See `THEORY.md` §13-15 and
-//! DESIGN.md Decision 2.
+//! # Where this trait lives, and what it is
+//!
+//! This trait is **one witness** of the local-causal-agent pattern, in
+//! Rust. It lives here, in `koru-lambda-agents`, and the substrate does
+//! not depend on it: `scripts/gates/crate_boundary.sh` asserts there is no
+//! path from `koru-lambda-core` to any workspace member, and
+//! `api/koru-lambda-core.txt` contains no occurrence of "agent".
+//!
+//! The pattern itself is described in `THEORY.md#using-the-substrate`,
+//! which is explicit that it is **not a type**: "Agent-ness is therefore a
+//! reading of the graph, available everywhere, and a trait asserting that
+//! only some types have it is the wrong shape." So this trait is a
+//! convenience for consumers who want the shape named, not the definition
+//! of the shape.
+//!
+//! *Three claims stood here until 2026-10-18 and all three were false.*
+//! It said this trait "lives at substrate level", which `crate_boundary.sh`
+//! forbids; it cited `THEORY.md` §13-15, and that document's highest
+//! numbered unit is Law 12 — those section numbers exist in a *different*
+//! repository's theory document; and it cited "DESIGN.md Decision 2", which
+//! `DESIGN.md` does not contain. None were caught by a gate, because
+//! `scripts/gates/doc_anchors.sh` reads `git ls-files '*.md'` and never
+//! rustdoc.
 //!
 //! # Not the only legal pattern
 //!
-//! The axioms constrain `synthesize`, not consumer shape —
-//! multi-perspective and non-root-anchored consumers can use the
-//! substrate directly. LCA is the **reference** because every consumer
-//! we've shipped uses
-//! it, and it captures "time is what consumers do" as a composable
-//! trait.
+//! The axioms constrain `synthesize`, not consumer shape.
+//! `THEORY.md#using-the-substrate` names three legal shapes that do not
+//! follow this one — multi-root consumers, consumers synthesizing from
+//! non-root state, and consumers ignoring perspective entirely — and says
+//! all of them "get the substrate's guarantees, because those flow from the
+//! axioms and not from the consumer's shape."
 
 use koru_lambda_core::primitives::{ByteFold, Canonicalizable};
 use koru_lambda_core::{Distinction, DistinctionEngine};
