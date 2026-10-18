@@ -35,7 +35,19 @@ for crate in "${CRATES[@]}"; do
     # three public functions. A semver break in the serde surface would not
     # have tripped it, and `crates/koru-lambda-agents` depends on that path,
     # so it is live surface rather than dormant.
-    cargo public-api --simplified --all-features -p "$crate" >"$current" 2>/dev/null
+    # stderr is captured, not discarded. It used to go to /dev/null, which
+    # meant a tool failure produced an empty snapshot file and `set -e` killed
+    # the script with no message at all — the `api-surface` job failed for days
+    # saying nothing. The tool's own diagnostics are the only explanation
+    # available when rustdoc JSON cannot be built, so they are printed on
+    # failure and stay quiet on success.
+    if ! cargo public-api --simplified --all-features -p "$crate" \
+            >"$current" 2>"$tmp/${crate}.err"; then
+        echo "api_snapshot: cargo public-api failed for $crate" >&2
+        sed 's/^/    /' "$tmp/${crate}.err" >&2
+        fail=1
+        continue
+    fi
 
     if [ "$update" -eq 1 ]; then
         cp "$current" "$committed"
