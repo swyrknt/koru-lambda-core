@@ -3,6 +3,12 @@
 # will have compiled files and executables
 /target/
 **/target/
+# Container build output. `scripts/check-linux.sh` and `scripts/check-api.sh`
+# redirect CARGO_TARGET_DIR here so a Linux container build does not fight the
+# host's macOS `target/` for the same directory. The rules above do NOT match
+# these — `/target/` and `**/target/` require the exact name — so 19,491 files
+# showed as untracked until this line existed.
+target-linux*/
 **/*.rs.bk
 
 # Local tooling state — editor and assistant configuration, not project
