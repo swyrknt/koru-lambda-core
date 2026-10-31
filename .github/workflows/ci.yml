@@ -143,6 +143,23 @@ jobs:
       # `features` job, so nothing is lost by narrowing this one.
       - run: cargo check -p koru-lambda-core --all-features
 
+  msrv-agents:
+    name: MSRV 1.85 (agents)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      # `crates/koru-lambda-agents/Cargo.toml` declares `rust-version = "1.85"`
+      # and records why: its `lru` dependency pulls `hashbrown 0.17`, whose
+      # manifest requires `edition2024`. Nothing checked it. Scoping the
+      # `msrv` job above to the substrate was right — a workspace-wide 1.80
+      # check asserted far more than the substrate's promise — but it left
+      # this crate's declared floor with no job behind it, which is the same
+      # defect the scoping fixed, one crate over. A declared MSRV nothing
+      # verifies is a claim, and this crate's own manifest comment says so
+      # about the `1.80` it used to carry.
+      - run: cargo check -p koru-lambda-agents --all-features
+
   loom:
     name: Loom model check
     runs-on: ubuntu-latest
