@@ -98,7 +98,13 @@ step "loom regression sentinels"
 RUSTFLAGS="--cfg loom --cfg loom_mutant" cargo test --test loom_kernel --release
 
 step "wasm bindings"
-(cd crates/koru-lambda-wasm && wasm-pack test --node)
+# Both commands, because `ci.yml`'s `wasm` job runs both: the `--node` test
+# suite and a release build for the bundler target. Running only the test
+# meant a build-only failure — a `cdylib` that compiles under test but not
+# under `--release --target bundler` — could not be seen locally.
+(cd crates/koru-lambda-wasm \
+    && wasm-pack test --node \
+    && wasm-pack build --release --target bundler)
 
 step "examples"
 for ex in 01_hello_synth 02_novelty_and_chain 03_projection_composition 04_wire_format_roundtrip; do
@@ -106,7 +112,17 @@ for ex in 01_hello_synth 02_novelty_and_chain 03_projection_composition 04_wire_
 done
 
 step "js demos"
-(cd examples/wasm-demos && npm run typecheck && npm run demo:all >/dev/null)
+# All four commands `ci.yml`'s `examples` job runs, in its order. This step
+# used to be `typecheck && demo:all` only, which assumed `pkg-node/` and
+# `node_modules/` were already present and correct — so on a clean checkout it
+# failed for the wrong reason, and in a Linux container it ran the demos
+# against whatever the host had built. `build:pkg` regenerates the wasm the
+# demos import; `npm install` resolves the platform's own binaries.
+(cd examples/wasm-demos \
+    && npm run build:pkg \
+    && npm install \
+    && npm run typecheck \
+    && npm run demo:all >/dev/null)
 
 if [ ${#SKIPPED[@]} -gt 0 ]; then
     printf '\n%d step(s) SKIPPED — that is a failure, not a pass:\n' "${#SKIPPED[@]}"
