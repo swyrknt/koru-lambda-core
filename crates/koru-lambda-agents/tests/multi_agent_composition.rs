@@ -33,7 +33,8 @@
 //!
 //! Public API only. No internal access, no test-only constructors.
 
-use koru_lambda_agents::agent::{synthesize_causal_action, LocalCausalAgent};
+use koru_lambda_agents::agent::synthesize_causal_action;
+use koru_lambda_agents::lca::Lca;
 use koru_lambda_core::engine::ParentPair;
 use koru_lambda_core::primitives::{domain_anchor, ByteFold, DomainLabel};
 use koru_lambda_core::{Distinction, DistinctionEngine};
@@ -44,34 +45,13 @@ use std::sync::Arc;
 // Fixture
 // ---------------------------------------------------------------------------
 
-/// Minimal LCA. Carries one root and advances it; the trait's default
-/// `synthesize_action` supplies the discipline, so this adds no behaviour
-/// of its own. That matters for the suite's conclusions: anything these
-/// tests observe is a property of the substrate plus the default advance,
-/// not of a bespoke agent.
-struct Lca {
-    root: Distinction,
-}
-
-impl LocalCausalAgent for Lca {
-    type ActionData = u8;
-
-    fn get_current_root(&self) -> Distinction {
-        self.root
-    }
-
-    fn update_local_root(&mut self, new_root: Distinction) {
-        self.root = new_root;
-    }
-}
-
 /// Shared setup. Built from a seed so a fresh engine can reconstruct the
 /// identical roots — which is what makes replay testable at all: the
 /// "history" of an agent is the operations that produced its root plus the
 /// actions it applied, and nothing else.
 struct Fixture {
     engine: Arc<DistinctionEngine>,
-    fold: ByteFold,
+    fold: Arc<ByteFold>,
     roots: Vec<Distinction>,
 }
 
@@ -85,7 +65,7 @@ const ACTIONS: [[u8; 3]; 3] = [[10, 11, 12], [20, 21, 22], [30, 31, 32]];
 
 fn setup() -> Fixture {
     let engine = Arc::new(DistinctionEngine::new());
-    let fold = ByteFold::new(&engine);
+    let fold = Arc::new(ByteFold::new(&engine));
     let roots = SEEDS.iter().map(|&s| root_for(&engine, &fold, s)).collect();
     Fixture { engine, fold, roots }
 }
@@ -101,15 +81,16 @@ fn root_for(engine: &Arc<DistinctionEngine>, fold: &ByteFold, seed: u8) -> Disti
 /// `plan` is a list of agent indices; each entry advances that agent by one
 /// action from its own sequence.
 fn run_plan(fx: &Fixture, plan: &[usize]) -> Vec<Distinction> {
-    let mut agents: Vec<Lca> = fx.roots.iter().map(|&r| Lca { root: r }).collect();
+    let mut agents: Vec<Lca> =
+        fx.roots.iter().map(|&r| Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), r)).collect();
     let mut next = [0usize; 3];
     for &i in plan {
         let step = next[i];
         assert!(step < ACTIONS[i].len(), "plan overruns agent {i}'s actions");
-        let _ = agents[i].synthesize_action(ACTIONS[i][step], &fx.fold, &fx.engine);
+        let _ = agents[i].advance(ACTIONS[i][step]);
         next[i] = step + 1;
     }
-    agents.iter().map(|a| a.root).collect()
+    agents.iter().map(|a| a.root()).collect()
 }
 
 /// Every index, three times, agent-major: 0 0 0 1 1 1 2 2 2.
@@ -263,12 +244,13 @@ fn agent_history_replays_byte_identically() {
     let replay_engine = Arc::new(DistinctionEngine::new());
     let replay_fold = ByteFold::new(&replay_engine);
     for (i, &seed) in SEEDS.iter().enumerate() {
-        let mut agent = Lca { root: root_for(&replay_engine, &replay_fold, seed) };
+        let mut agent = Lca::new(&replay_engine, root_for(&replay_engine, &replay_fold, seed));
         for &action in &ACTIONS[i] {
-            let _ = agent.synthesize_action(action, &replay_fold, &replay_engine);
+            let _ = agent.advance(action);
         }
         assert_eq!(
-            agent.root, originals[i],
+            agent.root(),
+            originals[i],
             "agent {i} replayed to a different final root: history was not \
              sufficient state"
         );
@@ -304,15 +286,16 @@ fn agent_history_replays_byte_identically() {
 #[test]
 fn advance_is_local_not_confining() {
     let fx = setup();
-    let mut agents: Vec<Lca> = fx.roots.iter().map(|&r| Lca { root: r }).collect();
+    let mut agents: Vec<Lca> =
+        fx.roots.iter().map(|&r| Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), r)).collect();
     let mut next = [0usize; 3];
 
     for &acting in &plan_round_robin() {
-        let before: Vec<Distinction> = agents.iter().map(|a| a.root).collect();
+        let before: Vec<Distinction> = agents.iter().map(|a| a.root()).collect();
         let step = next[acting];
-        let _ = agents[acting].synthesize_action(ACTIONS[acting][step], &fx.fold, &fx.engine);
+        let _ = agents[acting].advance(ACTIONS[acting][step]);
         next[acting] = step + 1;
-        let after: Vec<Distinction> = agents.iter().map(|a| a.root).collect();
+        let after: Vec<Distinction> = agents.iter().map(|a| a.root()).collect();
 
         for i in 0..agents.len() {
             if i == acting {
@@ -397,10 +380,10 @@ fn interleavings_converge_to_one_state() {
 #[test]
 fn shared_engine_needs_no_transfer_api() {
     let fx = setup();
-    let mut a1 = Lca { root: fx.roots[0] };
-    let a2 = Lca { root: fx.roots[1] };
+    let mut a1 = Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), fx.roots[0]);
+    let a2 = Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), fx.roots[1]);
 
-    let produced = a1.synthesize_action(ACTIONS[0][0], &fx.fold, &fx.engine);
+    let produced = a1.advance(ACTIONS[0][0]);
 
     // Agent 2 holds only the identifier. Nothing was handed over.
     assert!(
@@ -432,16 +415,8 @@ fn shared_engine_needs_no_transfer_api() {
         2,
         "a leaf node's degree is not its two parent edges (SPEC §6.1)"
     );
-    assert_eq!(
-        a1.get_current_root(),
-        produced,
-        "agent 1's root did not advance to what it produced"
-    );
-    assert_ne!(
-        a2.get_current_root(),
-        produced,
-        "agent 2's own perspective must be untouched by the read"
-    );
+    assert_eq!(a1.root(), produced, "agent 1's root did not advance to what it produced");
+    assert_ne!(a2.root(), produced, "agent 2's own perspective must be untouched by the read");
     invariant_holds(&fx.engine);
 }
 
@@ -470,8 +445,8 @@ fn separate_engines_agree_without_reading() {
     let e2 = Arc::new(DistinctionEngine::new());
     let f2 = ByteFold::new(&e2);
 
-    let mut a1 = Lca { root: root_for(&e1, &f1, SEEDS[0]) };
-    let produced = a1.synthesize_action(ACTIONS[0][0], &f1, &e1);
+    let mut a1 = Lca::new(&e1, root_for(&e1, &f1, SEEDS[0]));
+    let produced = a1.advance(ACTIONS[0][0]);
 
     assert!(
         !e2.has(produced),
@@ -479,8 +454,8 @@ fn separate_engines_agree_without_reading() {
          witness boundary leaked"
     );
 
-    let mut a2 = Lca { root: root_for(&e2, &f2, SEEDS[0]) };
-    let reproduced = a2.synthesize_action(ACTIONS[0][0], &f2, &e2);
+    let mut a2 = Lca::new(&e2, root_for(&e2, &f2, SEEDS[0]));
+    let reproduced = a2.advance(ACTIONS[0][0]);
 
     assert_eq!(
         produced, reproduced,
@@ -564,12 +539,12 @@ fn composition_is_associative() {
 #[test]
 fn agent_handoff_needs_no_protocol() {
     let fx = setup();
-    let mut a1 = Lca { root: fx.roots[0] };
-    let child_a = a1.synthesize_action(ACTIONS[0][0], &fx.fold, &fx.engine);
+    let mut a1 = Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), fx.roots[0]);
+    let child_a = a1.advance(ACTIONS[0][0]);
 
     // The hand-off is a value assignment. No API mediates it.
-    let mut a2 = Lca { root: child_a };
-    let a2_advance = a2.synthesize_action(ACTIONS[1][0], &fx.fold, &fx.engine);
+    let mut a2 = Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), child_a);
+    let a2_advance = a2.advance(ACTIONS[1][0]);
 
     let p2 = fx.engine.parents_of(a2_advance).expect("agent 2's advance must have parents");
     assert!(
@@ -578,7 +553,7 @@ fn agent_handoff_needs_no_protocol() {
     );
 
     // Agent 1 keeps going from the same node it handed off.
-    let a1_next = a1.synthesize_action(ACTIONS[0][1], &fx.fold, &fx.engine);
+    let a1_next = a1.advance(ACTIONS[0][1]);
     let p1 = fx.engine.parents_of(a1_next).expect("agent 1's next advance must have parents");
     assert!(
         p1.0 == child_a || p1.1 == child_a,
@@ -593,11 +568,11 @@ fn agent_handoff_needs_no_protocol() {
     let fresh = Arc::new(DistinctionEngine::new());
     let fresh_fold = ByteFold::new(&fresh);
     let rebuilt_root = root_for(&fresh, &fresh_fold, SEEDS[0]);
-    let mut rebuilt_a1 = Lca { root: rebuilt_root };
-    let rebuilt_child = rebuilt_a1.synthesize_action(ACTIONS[0][0], &fresh_fold, &fresh);
+    let mut rebuilt_a1 = Lca::new(&fresh, rebuilt_root);
+    let rebuilt_child = rebuilt_a1.advance(ACTIONS[0][0]);
     assert_eq!(rebuilt_child, child_a, "the handed-off node is not reproducible from operations");
-    let mut rebuilt_a2 = Lca { root: rebuilt_child };
-    let rebuilt_advance = rebuilt_a2.synthesize_action(ACTIONS[1][0], &fresh_fold, &fresh);
+    let mut rebuilt_a2 = Lca::new(&fresh, rebuilt_child);
+    let rebuilt_advance = rebuilt_a2.advance(ACTIONS[1][0]);
     assert_eq!(
         rebuilt_advance, a2_advance,
         "agent 2's history did not replay byte-identically from the \
@@ -653,9 +628,9 @@ fn chain_is_forward_and_idempotence_is_keyed() {
     assert_ne!(first, other, "two different actions from one root collapsed to one identifier");
 
     // (b) Non-idempotent in sequence, and strictly forward.
-    let mut agent = Lca { root };
-    let s1 = agent.synthesize_action(7u8, &fx.fold, &fx.engine);
-    let s2 = agent.synthesize_action(7u8, &fx.fold, &fx.engine);
+    let mut agent = Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), root);
+    let s1 = agent.advance(7u8);
+    let s2 = agent.advance(7u8);
     assert_eq!(s1, first, "the agent's first advance left the keyed result");
     assert_ne!(
         s1, s2,
@@ -750,16 +725,17 @@ fn composition_is_deterministic() {
 #[test]
 fn every_agent_root_is_a_graph_node() {
     let fx = setup();
-    let mut agents: Vec<Lca> = fx.roots.iter().map(|&r| Lca { root: r }).collect();
+    let mut agents: Vec<Lca> =
+        fx.roots.iter().map(|&r| Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), r)).collect();
     let mut next = [0usize; 3];
 
     for &acting in &plan_round_robin() {
         let step = next[acting];
-        let _ = agents[acting].synthesize_action(ACTIONS[acting][step], &fx.fold, &fx.engine);
+        let _ = agents[acting].advance(ACTIONS[acting][step]);
         next[acting] = step + 1;
 
         for (i, agent) in agents.iter().enumerate() {
-            let r = agent.get_current_root();
+            let r = agent.root();
             assert!(fx.engine.has(r), "agent {i}'s root is not a node in the shared engine");
             assert!(
                 reaches_primordial(&fx.engine, r),
@@ -1014,8 +990,8 @@ fn handoff_chain_is_associative() {
     /// This is the `→` the bracketings group.
     fn link(action: u8) -> impl Fn(&Fixture, Distinction) -> Distinction {
         move |fx: &Fixture, root: Distinction| {
-            let mut agent = Lca { root };
-            agent.synthesize_action(action, &fx.fold, &fx.engine)
+            let mut agent = Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), root);
+            agent.advance(action)
         }
     }
 
@@ -1120,4 +1096,118 @@ fn handoff_chain_is_associative() {
     assert_eq!(nodes_l, nodes_m, "joining two segments in the middle produced a different chain");
     assert_eq!(graph_l, graph_m, "segment-joining produced a different graph");
     assert_eq!(count_l, count_m, "segment-joining produced a different node count");
+}
+
+// ---------------------------------------------------------------------------
+// Purity
+// ---------------------------------------------------------------------------
+
+/// **`Lca` is a wrapper, not a second implementation. Category: GUARD.**
+///
+/// For 50 `(root, action)` pairs, [`Lca::advance`] must produce the same
+/// distinction as the direct algebra call it stands for; for 50
+/// `(root, other)` pairs, [`Lca::observe`] must match `synthesize(root,
+/// other)`.
+///
+/// This is the load-bearing test behind every other claim in this file. The
+/// 20 tests above were written against a local six-line struct and now run
+/// against the real type with their assertions unchanged, which is good
+/// evidence; this is the direct check. Three things would break purity and
+/// all three are tempting — caching projections by root, registering
+/// unwitnessed inputs instead of letting the assertion fire, and rebuilding
+/// the fold per call. The first two change results, the third changes only
+/// cost, and this test catches the first two.
+///
+/// *Passes* → the consumer surface adds discipline and no behaviour. Anything
+/// the composition tests establish through `Lca` is a property of the
+/// algebra, and the two-witness claim is untouched because the witness
+/// implements the algebra.
+///
+/// *Fails* → `Lca` is a divergent implementation, and every property above
+/// is a property of the wrapper rather than of the substrate. Worse than no
+/// wrapper.
+///
+/// Pairs come from a seeded LCG rather than a generator, so a failure names
+/// one reproducible case instead of a shrink.
+#[test]
+fn lca_matches_algebra() {
+    const CASES: usize = 50;
+    let fx = setup();
+
+    // Reproducible, and not uniform — the point is coverage of distinct
+    // (root, action) shapes, not statistical quality.
+    let mut state: u64 = 0x2026_1031;
+    let mut next = || {
+        state =
+            state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (state >> 33) as u32
+    };
+
+    // --- advance ---------------------------------------------------------
+    for case in 0..CASES {
+        let action = (next() % 256) as u8;
+        // Walk the root forward so the pairs are not all rooted at the seed.
+        let root = if case == 0 {
+            fx.roots[case % fx.roots.len()]
+        } else {
+            let mut warm =
+                Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), fx.roots[case % fx.roots.len()]);
+            for _ in 0..(case % 4) {
+                let _ = warm.advance((next() % 256) as u8);
+            }
+            warm.root()
+        };
+
+        let direct = synthesize_causal_action(root, action, &fx.fold, &fx.engine);
+
+        let mut agent = Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), root);
+        let wrapped = agent.advance(action);
+
+        assert_eq!(
+            wrapped, direct,
+            "case {case}: Lca::advance and the direct algebra call disagree — \
+             the wrapper is a second implementation"
+        );
+        assert_eq!(
+            agent.root(),
+            wrapped,
+            "case {case}: advance returned a distinction it did not adopt as the root"
+        );
+    }
+
+    // --- observe ---------------------------------------------------------
+    for case in 0..CASES {
+        let root = fx.roots[case % fx.roots.len()];
+        // `other` must be witnessed, so it is built by operations.
+        let other =
+            fx.fold.fold(fx.engine.d0(), &[(next() % 256) as u8, (next() % 256) as u8], &fx.engine);
+
+        let direct = fx.engine.synthesize(root, other);
+
+        let mut agent = Lca::with_fold(&fx.engine, Arc::clone(&fx.fold), root);
+        let wrapped = agent.observe(other);
+
+        assert_eq!(
+            wrapped, direct,
+            "case {case}: Lca::observe and synthesize(root, other) disagree"
+        );
+        // The load-bearing half of R3: observe must NOT lift its argument.
+        // If it did, `other` would not be a parent — a lift of its bytes
+        // would be — and the observation would be unrecoverable from the
+        // graph.
+        let parents = fx.engine.parents_of(wrapped).expect("an observation must have parents");
+        assert!(
+            parents.0 == other || parents.1 == other,
+            "case {case}: the observed distinction is not a parent of the \
+             observation — observe lifted its argument instead of \
+             synthesizing with it"
+        );
+        assert!(
+            parents.0 == root || parents.1 == root,
+            "case {case}: the observer's prior root is not a parent of the \
+             observation"
+        );
+    }
+
+    invariant_holds(&fx.engine);
 }

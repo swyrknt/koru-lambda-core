@@ -26,10 +26,12 @@
 //!   non-empty. Enforced in pre-validation AND at deserialize-time.
 
 use crate::agent::LocalCausalAgent;
+use crate::lca::Lca;
 use crate::DOMAIN_TRANSACTION;
 use koru_lambda_core::domain_anchor;
 use koru_lambda_core::primitives::{ByteFold, Canonicalizable};
 use koru_lambda_core::{Distinction, DistinctionEngine, RawDistinctionId};
+use std::sync::Arc;
 
 // --- Constants ---------------------------------------------------------
 
@@ -93,8 +95,8 @@ impl TransactionAction {
     /// one fold and call [`Canonicalizable::to_canonical_structure`]
     /// directly, which is what `compute_batch_root` does — the 256-tip
     /// table would otherwise dominate a thousand-transaction batch.
-    pub(crate) fn canonicalize(&self, engine: &DistinctionEngine) -> Distinction {
-        self.to_canonical_structure(&ByteFold::new(engine), engine)
+    pub(crate) fn canonicalize(&self, fold: &ByteFold, engine: &DistinctionEngine) -> Distinction {
+        self.to_canonical_structure(fold, engine)
     }
 }
 
@@ -257,15 +259,36 @@ fn at_tx_suffix(at: Option<usize>) -> String {
 /// Implements the LCA pattern: carries a local root and advances it
 /// forward when a batch is accepted.
 pub struct ConsensusValidator {
-    local_root: Distinction,
+    lca: Lca,
     expected_nonce: u64,
 }
 
 impl ConsensusValidator {
     /// Fresh validator rooted at `engine.d0()` with `expected_nonce = 0`.
+    ///
+    /// Takes the engine by `Arc` and keeps it: the validator holds an [`Lca`],
+    /// so it is bound to one witness for its lifetime. That is the point —
+    /// an identifier from another engine is not comparable without `verify`,
+    /// and a validator that accepted a different engine per call would make
+    /// the trust boundary a convention again. No longer `const`, because
+    /// building the fold is work.
     #[must_use]
-    pub const fn new(engine: &DistinctionEngine) -> Self {
-        Self { local_root: engine.d0(), expected_nonce: 0 }
+    pub fn new(engine: &Arc<DistinctionEngine>) -> Self {
+        Self { lca: Lca::new(engine, engine.d0()), expected_nonce: 0 }
+    }
+
+    /// Fresh validator sharing an existing fold, for several agents on one
+    /// engine. See [`Lca::with_fold`].
+    #[must_use]
+    pub fn with_fold(engine: &Arc<DistinctionEngine>, fold: Arc<ByteFold>) -> Self {
+        let seed = engine.d0();
+        Self { lca: Lca::with_fold(engine, fold, seed), expected_nonce: 0 }
+    }
+
+    /// This validator's agent surface, for reads and projections.
+    #[must_use]
+    pub const fn lca(&self) -> &Lca {
+        &self.lca
     }
 
     /// The nonce the next transaction must carry.
@@ -277,7 +300,7 @@ impl ConsensusValidator {
     /// The validator's current local root (LCA perspective).
     #[must_use]
     pub const fn state_root_id(&self) -> Distinction {
-        self.local_root
+        self.lca.root()
     }
 
     /// **Atomic** restore of both root and nonce (V6).
@@ -286,7 +309,7 @@ impl ConsensusValidator {
     /// restoration (updating one field but not the other) is
     /// structurally impossible.
     pub fn restore_state(&mut self, root: Distinction, nonce: u64) {
-        self.local_root = root;
+        self.lca.restore_root(root);
         self.expected_nonce = nonce;
     }
 
@@ -307,9 +330,10 @@ impl ConsensusValidator {
     /// `NonceMismatch`, `DataTooLarge`, `EmptyBatch`, `EmptyData`.
     pub fn validate_batch(
         &mut self,
-        engine: &DistinctionEngine,
         batch: &TransactionBatch,
     ) -> Result<Distinction, ValidatorError> {
+        let engine = Arc::clone(self.lca.engine());
+        let engine = engine.as_ref();
         // ---- Pre-validation (pure, no engine mutation) --------------
 
         // The claimed root crosses the trust boundary here, and this is the
@@ -319,8 +343,8 @@ impl ConsensusValidator {
         let claimed = engine
             .verify(batch.previous_root)
             .map_err(|_| ValidatorError::UnwitnessedRoot { got: batch.previous_root.to_hex() })?;
-        if claimed != self.local_root {
-            return Err(ValidatorError::RootMismatch { expected: self.local_root, got: claimed });
+        if claimed != self.lca.root() {
+            return Err(ValidatorError::RootMismatch { expected: self.lca.root(), got: claimed });
         }
         if batch.transactions.is_empty() {
             return Err(ValidatorError::EmptyBatch);
@@ -352,14 +376,27 @@ impl ConsensusValidator {
 
         // ---- Commit phase (engine mutations, provably safe) ---------
 
-        let mut current = self.local_root;
+        // Computed locally and assigned once, rather than through
+        // `Lca::advance` per transaction. That is V5: pre-validation has
+        // already proved this loop cannot fail, but advancing incrementally
+        // would mean a future fallible step here could leave the root
+        // partially moved. One assignment keeps the atomicity structural
+        // instead of relying on the loop staying infallible.
+        //
+        // The fold comes from the agent rather than being rebuilt: the
+        // previous code called `ByteFold::new` once per transaction, which
+        // reconstructed the 256-tip table every time. Identical result —
+        // folds are content-addressed, so two are equal tip for tip — and
+        // one table instead of N.
+        let fold = Arc::clone(self.lca.fold());
+        let mut current = self.lca.root();
         for tx in &batch.transactions {
-            let tx_d = tx.canonicalize(engine);
+            let tx_d = tx.canonicalize(&fold, engine);
             current = engine.synthesize(current, tx_d);
         }
 
         // Atomic update
-        self.local_root = current;
+        self.lca.restore_root(current);
         self.expected_nonce = expected;
         Ok(current)
     }
@@ -369,11 +406,11 @@ impl LocalCausalAgent for ConsensusValidator {
     type ActionData = TransactionAction;
 
     fn get_current_root(&self) -> Distinction {
-        self.local_root
+        self.lca.root()
     }
 
     fn update_local_root(&mut self, new_root: Distinction) {
-        self.local_root = new_root;
+        self.lca.restore_root(new_root);
     }
 }
 
@@ -409,7 +446,7 @@ mod tests {
             previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![tx(0, b"hello"), tx(1, b"world")],
         };
-        let new_root = v.validate_batch(&engine, &batch).expect("valid batch");
+        let new_root = v.validate_batch(&batch).expect("valid batch");
         assert_ne!(new_root, engine.d0());
         assert_eq!(v.state_root_id(), new_root);
         assert_eq!(v.expected_nonce(), 2);
@@ -417,17 +454,17 @@ mod tests {
 
     #[test]
     fn sequential_batches_chain_correctly() {
-        let (engine, mut v) = fresh();
+        let (_engine, mut v) = fresh();
         let b1 = TransactionBatch {
             previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![tx(0, b"a")],
         };
-        let root1 = v.validate_batch(&engine, &b1).expect("b1 valid");
+        let root1 = v.validate_batch(&b1).expect("b1 valid");
         let b2 = TransactionBatch {
             previous_root: RawDistinctionId::from_bytes(*root1.as_bytes()),
             transactions: vec![tx(1, b"b")],
         };
-        let root2 = v.validate_batch(&engine, &b2).expect("b2 valid");
+        let root2 = v.validate_batch(&b2).expect("b2 valid");
         assert_ne!(root1, root2);
         assert_eq!(v.expected_nonce(), 2);
     }
@@ -436,14 +473,14 @@ mod tests {
 
     #[test]
     fn v3_data_cap_rejects_oversized_tx() {
-        let (engine, mut v) = fresh();
+        let (_engine, mut v) = fresh();
         let oversized = vec![0u8; MAX_DATA_LEN + 1];
         // Bypass ctor to test the pre-validation path directly.
         let batch = TransactionBatch {
             previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![TransactionAction { nonce: 0, data: oversized }],
         };
-        let err = v.validate_batch(&engine, &batch).expect_err("oversized data must reject");
+        let err = v.validate_batch(&batch).expect_err("oversized data must reject");
         assert!(matches!(err, ValidatorError::DataTooLarge { .. }));
     }
 
@@ -488,7 +525,7 @@ mod tests {
     fn v3_batch_cardinality_cap_rejects_oversized_batch() {
         // Complements v3_data_cap_rejects_oversized_tx — that one covers
         // per-tx data size; this covers batch count.
-        let (engine, mut v) = fresh();
+        let (_engine, mut v) = fresh();
         let mut txs = Vec::with_capacity(MAX_TRANSACTIONS_PER_BATCH + 1);
         for i in 0..=MAX_TRANSACTIONS_PER_BATCH as u64 {
             txs.push(tx(i, b"x"));
@@ -497,7 +534,7 @@ mod tests {
             previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: txs,
         };
-        let err = v.validate_batch(&engine, &batch).expect_err("oversized batch must reject");
+        let err = v.validate_batch(&batch).expect_err("oversized batch must reject");
         assert!(matches!(err, ValidatorError::BatchTooLarge { .. }));
     }
 
@@ -525,7 +562,7 @@ mod tests {
             previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![tx(0, b"ok"), tx(5, b"bad nonce")],
         };
-        let err = v.validate_batch(&engine, &batch).expect_err("batch must reject");
+        let err = v.validate_batch(&batch).expect_err("batch must reject");
         assert!(matches!(err, ValidatorError::NonceMismatch { .. }));
 
         // Engine state UNCHANGED — both count AND set-of-IDs.
@@ -562,7 +599,7 @@ mod tests {
             previous_root: RawDistinctionId::from_bytes(*engine.d1().as_bytes()), // wrong root
             transactions: vec![tx(0, b"ok")],
         };
-        let _ = v.validate_batch(&engine, &batch).expect_err("wrong root");
+        let _ = v.validate_batch(&batch).expect_err("wrong root");
         assert_eq!(engine.distinction_count(), count_before);
         assert_eq!(
             v.expected_nonce(),
@@ -600,13 +637,13 @@ mod tests {
 
     #[test]
     fn v8_empty_data_rejected_at_validation() {
-        let (engine, mut v) = fresh();
+        let (_engine, mut v) = fresh();
         // Bypass ctor to test pre-validation path.
         let batch = TransactionBatch {
             previous_root: RawDistinctionId::from_bytes(*v.state_root_id().as_bytes()),
             transactions: vec![TransactionAction { nonce: 0, data: vec![] }],
         };
-        let err = v.validate_batch(&engine, &batch).expect_err("empty data must reject");
+        let err = v.validate_batch(&batch).expect_err("empty data must reject");
         assert!(matches!(err, ValidatorError::EmptyData { .. }));
     }
 
@@ -671,9 +708,10 @@ mod tests {
 
     fn root_of(nonce: u64, data: &[u8]) -> [u8; 16] {
         let e = DistinctionEngine::new();
+        let fold = ByteFold::new(&e);
         *TransactionAction::new(nonce, data.to_vec())
             .expect("valid action")
-            .canonicalize(&e)
+            .canonicalize(&fold, &e)
             .as_bytes()
     }
 

@@ -17,6 +17,7 @@
 //!   recomputed hash won't match the stored `commitment_hash`.
 
 use crate::agent::LocalCausalAgent;
+use crate::lca::Lca;
 use crate::validator::TransactionBatch;
 use crate::DOMAIN_COMMITMENT;
 use koru_lambda_core::domain_anchor;
@@ -373,7 +374,7 @@ type BatchCache = LruCache<[u8; 32], CachedBatch>;
 /// An LCA that processes commitments + caches (batch, commitment)
 /// pairs for Stage-2 fetch.
 pub struct CommitmentAgent {
-    local_root: Distinction,
+    lca: Lca,
     cache: BatchCache,
     commitments_processed: u64,
 }
@@ -382,7 +383,7 @@ impl CommitmentAgent {
     /// Fresh agent rooted at `engine.d0()`, cache capacity
     /// [`COMMITMENT_CACHE_CAP`].
     #[must_use]
-    pub fn new(engine: &DistinctionEngine) -> Self {
+    pub fn new(engine: &Arc<DistinctionEngine>) -> Self {
         Self::with_capacity(engine, COMMITMENT_CACHE_CAP)
     }
 
@@ -393,12 +394,19 @@ impl CommitmentAgent {
     /// Panics if `capacity == 0` — an LRU cache with zero capacity is
     /// a category error.
     #[must_use]
-    pub fn with_capacity(engine: &DistinctionEngine, capacity: usize) -> Self {
+    pub fn with_capacity(engine: &Arc<DistinctionEngine>, capacity: usize) -> Self {
+        let seed = engine.d0();
         Self {
-            local_root: engine.d0(),
+            lca: Lca::new(engine, seed),
             cache: LruCache::new(NonZeroUsize::new(capacity).expect("capacity > 0 (invariant)")),
             commitments_processed: 0,
         }
+    }
+
+    /// This agent's surface, for reads and projections.
+    #[must_use]
+    pub const fn lca(&self) -> &Lca {
+        &self.lca
     }
 
     /// Cache a (batch, commitment) pair for later Stage-2 fetch.
@@ -429,7 +437,7 @@ impl CommitmentAgent {
     /// Current local root (LCA perspective).
     #[must_use]
     pub const fn local_root(&self) -> Distinction {
-        self.local_root
+        self.lca.root()
     }
 
     /// Advance the LCA by folding a commitment into the local root.
@@ -438,13 +446,8 @@ impl CommitmentAgent {
     /// Delegates to the [`LocalCausalAgent::synthesize_action`] default
     /// so the canonicalize + synthesize + update_local_root sequence
     /// stays consistent with the LCA contract.
-    pub fn advance(
-        &mut self,
-        commitment: BatchCommitment,
-        fold: &ByteFold,
-        engine: &Arc<DistinctionEngine>,
-    ) {
-        let _new_root = self.synthesize_action(commitment, fold, engine);
+    pub fn advance(&mut self, commitment: BatchCommitment) {
+        let _new_root = self.lca.advance(commitment);
         self.commitments_processed = self.commitments_processed.wrapping_add(1);
     }
 }
@@ -453,11 +456,11 @@ impl LocalCausalAgent for CommitmentAgent {
     type ActionData = BatchCommitment;
 
     fn get_current_root(&self) -> Distinction {
-        self.local_root
+        self.lca.root()
     }
 
     fn update_local_root(&mut self, new_root: Distinction) {
-        self.local_root = new_root;
+        self.lca.restore_root(new_root);
     }
 }
 
@@ -724,7 +727,7 @@ mod tests {
         let (engine, mut agent) = fresh();
         let r0 = agent.local_root();
         let commit = sample_commitment(&engine);
-        agent.advance(commit, &ByteFold::new(&engine), &engine);
+        agent.advance(commit);
         assert_eq!(agent.commitments_processed(), 1);
         assert_ne!(agent.local_root(), r0);
     }

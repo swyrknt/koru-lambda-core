@@ -24,29 +24,13 @@
 //!
 //! Public API only.
 
-use koru_lambda_agents::agent::LocalCausalAgent;
+use koru_lambda_agents::lca::Lca;
 use koru_lambda_core::primitives::ByteFold;
 use koru_lambda_core::{Distinction, DistinctionEngine};
 use std::collections::HashSet;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
-
-struct Lca {
-    root: Distinction,
-}
-
-impl LocalCausalAgent for Lca {
-    type ActionData = u8;
-
-    fn get_current_root(&self) -> Distinction {
-        self.root
-    }
-
-    fn update_local_root(&mut self, new_root: Distinction) {
-        self.root = new_root;
-    }
-}
 
 const AGENTS: usize = 4;
 const STEPS: u8 = 25;
@@ -59,12 +43,13 @@ fn root_for(engine: &Arc<DistinctionEngine>, fold: &ByteFold, seed: u8) -> Disti
 /// Drive one agent's whole chain. Shared by the threaded and the sequential
 /// arms, so the comparison is between schedulers and not between two
 /// different pieces of code.
-fn drive(engine: &Arc<DistinctionEngine>, fold: &ByteFold, seed: u8) -> Distinction {
-    let mut agent = Lca { root: root_for(engine, fold, seed) };
+fn drive(engine: &Arc<DistinctionEngine>, fold: &Arc<ByteFold>, seed: u8) -> Distinction {
+    let seed_root = root_for(engine, fold, seed);
+    let mut agent = Lca::with_fold(engine, Arc::clone(fold), seed_root);
     for step in 0..STEPS {
-        let _ = agent.synthesize_action(seed.wrapping_mul(31).wrapping_add(step), fold, engine);
+        let _ = agent.advance(seed.wrapping_mul(31).wrapping_add(step));
     }
-    agent.root
+    agent.root()
 }
 
 fn invariant_holds(engine: &DistinctionEngine) {
@@ -116,7 +101,7 @@ fn concurrent_multi_agent_converges() {
 
     // The same 100 advances, one thread, fresh engine.
     let seq_engine = Arc::new(DistinctionEngine::new());
-    let seq_fold = ByteFold::new(&seq_engine);
+    let seq_fold = Arc::new(ByteFold::new(&seq_engine));
     let sequential: Vec<Distinction> =
         (0..AGENTS).map(|i| drive(&seq_engine, &seq_fold, i as u8 + 1)).collect();
 
@@ -235,8 +220,8 @@ fn hand_off_under_concurrency() {
         let engine = Arc::clone(&engine);
         let fold = Arc::clone(&fold);
         producers.push(thread::spawn(move || {
-            let mut a = Lca { root: origin };
-            a.synthesize_action(77u8, &fold, &engine)
+            let mut a = Lca::with_fold(&engine, Arc::clone(&fold), origin);
+            a.advance(77u8)
         }));
     }
     let produced: HashSet<Distinction> =
@@ -255,8 +240,8 @@ fn hand_off_under_concurrency() {
         let engine = Arc::clone(&engine);
         let fold = Arc::clone(&fold);
         consumers.push(thread::spawn(move || {
-            let mut a = Lca { root: handoff };
-            a.synthesize_action(100u8 + i as u8, &fold, &engine)
+            let mut a = Lca::with_fold(&engine, Arc::clone(&fold), handoff);
+            a.advance(100u8 + i as u8)
         }));
     }
     let advances: Vec<Distinction> =
@@ -282,18 +267,18 @@ fn hand_off_under_concurrency() {
 
     // Stage 3: replay the whole structure single-threaded.
     let fresh = Arc::new(DistinctionEngine::new());
-    let fresh_fold = ByteFold::new(&fresh);
+    let fresh_fold = Arc::new(ByteFold::new(&fresh));
     let fresh_origin = root_for(&fresh, &fresh_fold, 1);
-    let mut p = Lca { root: fresh_origin };
-    let fresh_handoff = p.synthesize_action(77u8, &fresh_fold, &fresh);
+    let mut p = Lca::new(&fresh, fresh_origin);
+    let fresh_handoff = p.advance(77u8);
     assert_eq!(
         fresh_handoff, handoff,
         "the concurrently produced hand-off node is not reproducible \
          single-threaded"
     );
     for (i, &adv) in advances.iter().enumerate() {
-        let mut c = Lca { root: fresh_handoff };
-        let replayed = c.synthesize_action(100u8 + i as u8, &fresh_fold, &fresh);
+        let mut c = Lca::with_fold(&fresh, Arc::clone(&fresh_fold), fresh_handoff);
+        let replayed = c.advance(100u8 + i as u8);
         assert_eq!(replayed, adv, "consumer {i}'s concurrent advance did not replay identically");
     }
     invariant_holds(&fresh);
@@ -346,12 +331,17 @@ fn concurrent_stress_converges() {
         (((agent as u16) * 7 + step * 11) % 251) as u8
     }
 
-    fn drive_stress(engine: &Arc<DistinctionEngine>, fold: &ByteFold, agent: usize) -> Distinction {
-        let mut lca = Lca { root: root_for(engine, fold, agent as u8 + 1) };
+    fn drive_stress(
+        engine: &Arc<DistinctionEngine>,
+        fold: &Arc<ByteFold>,
+        agent: usize,
+    ) -> Distinction {
+        let seed_root = root_for(engine, fold, agent as u8 + 1);
+        let mut lca = Lca::with_fold(engine, Arc::clone(fold), seed_root);
         for step in 0..STRESS_STEPS {
-            let _ = lca.synthesize_action(stress_action(agent, step), fold, engine);
+            let _ = lca.advance(stress_action(agent, step));
         }
-        lca.root
+        lca.root()
     }
 
     let engine = Arc::new(DistinctionEngine::new());
@@ -393,7 +383,7 @@ fn concurrent_stress_converges() {
 
     // The same 8,000 advances, one thread.
     let seq_engine = Arc::new(DistinctionEngine::new());
-    let seq_fold = ByteFold::new(&seq_engine);
+    let seq_fold = Arc::new(ByteFold::new(&seq_engine));
     let sequential: Vec<Distinction> =
         (0..STRESS_AGENTS).map(|agent| drive_stress(&seq_engine, &seq_fold, agent)).collect();
 

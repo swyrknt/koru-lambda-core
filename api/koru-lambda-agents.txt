@@ -122,14 +122,15 @@ impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::commitment:
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::commitment::BatchDataResponse
 pub struct koru_lambda_agents::commitment::CommitmentAgent
 impl koru_lambda_agents::commitment::CommitmentAgent
-pub fn koru_lambda_agents::commitment::CommitmentAgent::advance(&mut self, koru_lambda_agents::commitment::BatchCommitment, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>)
+pub fn koru_lambda_agents::commitment::CommitmentAgent::advance(&mut self, koru_lambda_agents::commitment::BatchCommitment)
 pub fn koru_lambda_agents::commitment::CommitmentAgent::cache_batch(&mut self, koru_lambda_agents::validator::TransactionBatch, koru_lambda_agents::commitment::BatchCommitment)
 pub const fn koru_lambda_agents::commitment::CommitmentAgent::commitments_processed(&self) -> u64
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_cached_batch(&mut self, &[u8; 32]) -> core::option::Option<&koru_lambda_agents::commitment::CachedBatch>
 pub fn koru_lambda_agents::commitment::CommitmentAgent::has_cached(&self, &[u8; 32]) -> bool
+pub const fn koru_lambda_agents::commitment::CommitmentAgent::lca(&self) -> &koru_lambda_agents::lca::Lca
 pub const fn koru_lambda_agents::commitment::CommitmentAgent::local_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::commitment::CommitmentAgent::new(&koru_lambda_core::engine::DistinctionEngine) -> Self
-pub fn koru_lambda_agents::commitment::CommitmentAgent::with_capacity(&koru_lambda_core::engine::DistinctionEngine, usize) -> Self
+pub fn koru_lambda_agents::commitment::CommitmentAgent::new(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> Self
+pub fn koru_lambda_agents::commitment::CommitmentAgent::with_capacity(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, usize) -> Self
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::commitment::CommitmentAgent
 pub type koru_lambda_agents::commitment::CommitmentAgent::ActionData = koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
@@ -140,11 +141,35 @@ impl core::marker::Send for koru_lambda_agents::commitment::CommitmentAgent
 impl core::marker::Sync for koru_lambda_agents::commitment::CommitmentAgent
 impl core::marker::Unpin for koru_lambda_agents::commitment::CommitmentAgent
 impl core::marker::UnsafeUnpin for koru_lambda_agents::commitment::CommitmentAgent
-impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::commitment::CommitmentAgent
-impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::commitment::CommitmentAgent
+impl !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::commitment::CommitmentAgent
+impl !core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::commitment::CommitmentAgent
 pub const koru_lambda_agents::commitment::COMMITMENT_CACHE_CAP: usize
 pub const koru_lambda_agents::commitment::MAX_LEADER_ID_LEN: usize
 pub type koru_lambda_agents::commitment::CachedBatch = (koru_lambda_agents::validator::TransactionBatch, koru_lambda_agents::commitment::BatchCommitment)
+pub mod koru_lambda_agents::lca
+pub struct koru_lambda_agents::lca::Lca
+impl koru_lambda_agents::lca::Lca
+pub fn koru_lambda_agents::lca::Lca::advance<A: koru_lambda_core::primitives::Canonicalizable>(&mut self, A) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::lca::Lca::ancestry(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
+pub fn koru_lambda_agents::lca::Lca::degree(&self) -> usize
+pub const fn koru_lambda_agents::lca::Lca::engine(&self) -> &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>
+pub const fn koru_lambda_agents::lca::Lca::fold(&self) -> &alloc::sync::Arc<koru_lambda_core::primitives::ByteFold>
+pub fn koru_lambda_agents::lca::Lca::new(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, koru_lambda_core::engine::Distinction) -> Self
+pub fn koru_lambda_agents::lca::Lca::observe(&mut self, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::lca::Lca::parents(&self) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_agents::lca::Lca::project(&self) -> koru_lambda_core::projection::ProjectionBuilder<'_, koru_lambda_core::projection::NeedsDirection>
+pub fn koru_lambda_agents::lca::Lca::restore_root(&mut self, koru_lambda_core::engine::Distinction)
+pub const fn koru_lambda_agents::lca::Lca::root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::lca::Lca::with_fold(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, alloc::sync::Arc<koru_lambda_core::primitives::ByteFold>, koru_lambda_core::engine::Distinction) -> Self
+impl core::fmt::Debug for koru_lambda_agents::lca::Lca
+pub fn koru_lambda_agents::lca::Lca::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for koru_lambda_agents::lca::Lca
+impl core::marker::Send for koru_lambda_agents::lca::Lca
+impl core::marker::Sync for koru_lambda_agents::lca::Lca
+impl core::marker::Unpin for koru_lambda_agents::lca::Lca
+impl core::marker::UnsafeUnpin for koru_lambda_agents::lca::Lca
+impl !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::lca::Lca
+impl !core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::lca::Lca
 pub mod koru_lambda_agents::recorder
 pub struct koru_lambda_agents::recorder::SynthesisRecorder
 impl koru_lambda_agents::recorder::SynthesisRecorder
@@ -202,10 +227,12 @@ impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::validator::Val
 pub struct koru_lambda_agents::validator::ConsensusValidator
 impl koru_lambda_agents::validator::ConsensusValidator
 pub const fn koru_lambda_agents::validator::ConsensusValidator::expected_nonce(&self) -> u64
-pub const fn koru_lambda_agents::validator::ConsensusValidator::new(&koru_lambda_core::engine::DistinctionEngine) -> Self
+pub const fn koru_lambda_agents::validator::ConsensusValidator::lca(&self) -> &koru_lambda_agents::lca::Lca
+pub fn koru_lambda_agents::validator::ConsensusValidator::new(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> Self
 pub fn koru_lambda_agents::validator::ConsensusValidator::restore_state(&mut self, koru_lambda_core::engine::Distinction, u64)
 pub const fn koru_lambda_agents::validator::ConsensusValidator::state_root_id(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::validator::ConsensusValidator::validate_batch(&mut self, &koru_lambda_core::engine::DistinctionEngine, &koru_lambda_agents::validator::TransactionBatch) -> core::result::Result<koru_lambda_core::engine::Distinction, koru_lambda_agents::validator::ValidatorError>
+pub fn koru_lambda_agents::validator::ConsensusValidator::validate_batch(&mut self, &koru_lambda_agents::validator::TransactionBatch) -> core::result::Result<koru_lambda_core::engine::Distinction, koru_lambda_agents::validator::ValidatorError>
+pub fn koru_lambda_agents::validator::ConsensusValidator::with_fold(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, alloc::sync::Arc<koru_lambda_core::primitives::ByteFold>) -> Self
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::validator::ConsensusValidator
 pub type koru_lambda_agents::validator::ConsensusValidator::ActionData = koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::ConsensusValidator::get_current_root(&self) -> koru_lambda_core::engine::Distinction
@@ -216,8 +243,8 @@ impl core::marker::Send for koru_lambda_agents::validator::ConsensusValidator
 impl core::marker::Sync for koru_lambda_agents::validator::ConsensusValidator
 impl core::marker::Unpin for koru_lambda_agents::validator::ConsensusValidator
 impl core::marker::UnsafeUnpin for koru_lambda_agents::validator::ConsensusValidator
-impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::validator::ConsensusValidator
-impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::validator::ConsensusValidator
+impl !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::validator::ConsensusValidator
+impl !core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::validator::ConsensusValidator
 pub struct koru_lambda_agents::validator::TransactionAction
 pub koru_lambda_agents::validator::TransactionAction::data: alloc::vec::Vec<u8>
 pub koru_lambda_agents::validator::TransactionAction::nonce: u64
@@ -409,14 +436,15 @@ impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::commitment:
 impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::commitment::BatchDataResponse
 pub struct koru_lambda_agents::CommitmentAgent
 impl koru_lambda_agents::commitment::CommitmentAgent
-pub fn koru_lambda_agents::commitment::CommitmentAgent::advance(&mut self, koru_lambda_agents::commitment::BatchCommitment, &koru_lambda_core::primitives::ByteFold, &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>)
+pub fn koru_lambda_agents::commitment::CommitmentAgent::advance(&mut self, koru_lambda_agents::commitment::BatchCommitment)
 pub fn koru_lambda_agents::commitment::CommitmentAgent::cache_batch(&mut self, koru_lambda_agents::validator::TransactionBatch, koru_lambda_agents::commitment::BatchCommitment)
 pub const fn koru_lambda_agents::commitment::CommitmentAgent::commitments_processed(&self) -> u64
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_cached_batch(&mut self, &[u8; 32]) -> core::option::Option<&koru_lambda_agents::commitment::CachedBatch>
 pub fn koru_lambda_agents::commitment::CommitmentAgent::has_cached(&self, &[u8; 32]) -> bool
+pub const fn koru_lambda_agents::commitment::CommitmentAgent::lca(&self) -> &koru_lambda_agents::lca::Lca
 pub const fn koru_lambda_agents::commitment::CommitmentAgent::local_root(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::commitment::CommitmentAgent::new(&koru_lambda_core::engine::DistinctionEngine) -> Self
-pub fn koru_lambda_agents::commitment::CommitmentAgent::with_capacity(&koru_lambda_core::engine::DistinctionEngine, usize) -> Self
+pub fn koru_lambda_agents::commitment::CommitmentAgent::new(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> Self
+pub fn koru_lambda_agents::commitment::CommitmentAgent::with_capacity(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, usize) -> Self
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::commitment::CommitmentAgent
 pub type koru_lambda_agents::commitment::CommitmentAgent::ActionData = koru_lambda_agents::commitment::BatchCommitment
 pub fn koru_lambda_agents::commitment::CommitmentAgent::get_current_root(&self) -> koru_lambda_core::engine::Distinction
@@ -427,15 +455,17 @@ impl core::marker::Send for koru_lambda_agents::commitment::CommitmentAgent
 impl core::marker::Sync for koru_lambda_agents::commitment::CommitmentAgent
 impl core::marker::Unpin for koru_lambda_agents::commitment::CommitmentAgent
 impl core::marker::UnsafeUnpin for koru_lambda_agents::commitment::CommitmentAgent
-impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::commitment::CommitmentAgent
-impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::commitment::CommitmentAgent
+impl !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::commitment::CommitmentAgent
+impl !core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::commitment::CommitmentAgent
 pub struct koru_lambda_agents::ConsensusValidator
 impl koru_lambda_agents::validator::ConsensusValidator
 pub const fn koru_lambda_agents::validator::ConsensusValidator::expected_nonce(&self) -> u64
-pub const fn koru_lambda_agents::validator::ConsensusValidator::new(&koru_lambda_core::engine::DistinctionEngine) -> Self
+pub const fn koru_lambda_agents::validator::ConsensusValidator::lca(&self) -> &koru_lambda_agents::lca::Lca
+pub fn koru_lambda_agents::validator::ConsensusValidator::new(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>) -> Self
 pub fn koru_lambda_agents::validator::ConsensusValidator::restore_state(&mut self, koru_lambda_core::engine::Distinction, u64)
 pub const fn koru_lambda_agents::validator::ConsensusValidator::state_root_id(&self) -> koru_lambda_core::engine::Distinction
-pub fn koru_lambda_agents::validator::ConsensusValidator::validate_batch(&mut self, &koru_lambda_core::engine::DistinctionEngine, &koru_lambda_agents::validator::TransactionBatch) -> core::result::Result<koru_lambda_core::engine::Distinction, koru_lambda_agents::validator::ValidatorError>
+pub fn koru_lambda_agents::validator::ConsensusValidator::validate_batch(&mut self, &koru_lambda_agents::validator::TransactionBatch) -> core::result::Result<koru_lambda_core::engine::Distinction, koru_lambda_agents::validator::ValidatorError>
+pub fn koru_lambda_agents::validator::ConsensusValidator::with_fold(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, alloc::sync::Arc<koru_lambda_core::primitives::ByteFold>) -> Self
 impl koru_lambda_agents::agent::LocalCausalAgent for koru_lambda_agents::validator::ConsensusValidator
 pub type koru_lambda_agents::validator::ConsensusValidator::ActionData = koru_lambda_agents::validator::TransactionAction
 pub fn koru_lambda_agents::validator::ConsensusValidator::get_current_root(&self) -> koru_lambda_core::engine::Distinction
@@ -446,8 +476,31 @@ impl core::marker::Send for koru_lambda_agents::validator::ConsensusValidator
 impl core::marker::Sync for koru_lambda_agents::validator::ConsensusValidator
 impl core::marker::Unpin for koru_lambda_agents::validator::ConsensusValidator
 impl core::marker::UnsafeUnpin for koru_lambda_agents::validator::ConsensusValidator
-impl core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::validator::ConsensusValidator
-impl core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::validator::ConsensusValidator
+impl !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::validator::ConsensusValidator
+impl !core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::validator::ConsensusValidator
+pub struct koru_lambda_agents::Lca
+impl koru_lambda_agents::lca::Lca
+pub fn koru_lambda_agents::lca::Lca::advance<A: koru_lambda_core::primitives::Canonicalizable>(&mut self, A) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::lca::Lca::ancestry(&self) -> alloc::vec::Vec<koru_lambda_core::engine::Distinction>
+pub fn koru_lambda_agents::lca::Lca::degree(&self) -> usize
+pub const fn koru_lambda_agents::lca::Lca::engine(&self) -> &alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>
+pub const fn koru_lambda_agents::lca::Lca::fold(&self) -> &alloc::sync::Arc<koru_lambda_core::primitives::ByteFold>
+pub fn koru_lambda_agents::lca::Lca::new(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, koru_lambda_core::engine::Distinction) -> Self
+pub fn koru_lambda_agents::lca::Lca::observe(&mut self, koru_lambda_core::engine::Distinction) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::lca::Lca::parents(&self) -> core::option::Option<koru_lambda_core::engine::ParentPair>
+pub fn koru_lambda_agents::lca::Lca::project(&self) -> koru_lambda_core::projection::ProjectionBuilder<'_, koru_lambda_core::projection::NeedsDirection>
+pub fn koru_lambda_agents::lca::Lca::restore_root(&mut self, koru_lambda_core::engine::Distinction)
+pub const fn koru_lambda_agents::lca::Lca::root(&self) -> koru_lambda_core::engine::Distinction
+pub fn koru_lambda_agents::lca::Lca::with_fold(&alloc::sync::Arc<koru_lambda_core::engine::DistinctionEngine>, alloc::sync::Arc<koru_lambda_core::primitives::ByteFold>, koru_lambda_core::engine::Distinction) -> Self
+impl core::fmt::Debug for koru_lambda_agents::lca::Lca
+pub fn koru_lambda_agents::lca::Lca::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for koru_lambda_agents::lca::Lca
+impl core::marker::Send for koru_lambda_agents::lca::Lca
+impl core::marker::Sync for koru_lambda_agents::lca::Lca
+impl core::marker::Unpin for koru_lambda_agents::lca::Lca
+impl core::marker::UnsafeUnpin for koru_lambda_agents::lca::Lca
+impl !core::panic::unwind_safe::RefUnwindSafe for koru_lambda_agents::lca::Lca
+impl !core::panic::unwind_safe::UnwindSafe for koru_lambda_agents::lca::Lca
 pub struct koru_lambda_agents::SynthesisRecorder
 impl koru_lambda_agents::recorder::SynthesisRecorder
 pub fn koru_lambda_agents::recorder::SynthesisRecorder::log(&self) -> &[koru_lambda_core::engine::Distinction]
