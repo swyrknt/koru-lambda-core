@@ -976,3 +976,148 @@ fn novelty_is_engine_state_not_agent_state() {
     );
     invariant_holds(&fx.engine);
 }
+
+// ---------------------------------------------------------------------------
+// A6′ — DISCOVERY
+// ---------------------------------------------------------------------------
+
+/// **A6′ — hand-off chains are associative. Category: DISCOVERY.**
+///
+/// `composition_is_associative` above is close to free, and saying so is more
+/// useful than counting it twice: when agents advance from independent roots,
+/// each chain is a function of its own root and its own actions, so no
+/// bracketing can be observable — which `agent_order_matters_content_does_not`
+/// proves directly.
+///
+/// The non-trivial associativity is over **hand-off**, written `→`, where one
+/// agent's output becomes the next agent's root. That is the only place
+/// agents interact, and so the only place grouping could matter. Three agents
+/// admit only two bracketings, so this uses a four-link chain
+/// `A→B→C→D`, which admits several, and composes it three different ways:
+/// strictly left, strictly right, and as two segments joined in the middle.
+///
+/// Each bracketing is expressed as real composition of closures, so the
+/// grouping is in the code and not only in the comment. What must come out
+/// identical is the chain, the whole graph and the node count.
+///
+/// *Passes* → composition is an algebra in the case that matters. A hand-off
+/// pipeline can be assembled in pieces, in any grouping, by parties who never
+/// coordinate — which is the operational content of coordination-freedom.
+///
+/// *Fails* → the algebra claim is wrong exactly where it is load-bearing, and
+/// a pipeline would depend on the order it was assembled in.
+#[test]
+fn handoff_chain_is_associative() {
+    const LINK_ACTIONS: [u8; 4] = [41, 42, 43, 44];
+
+    /// One hand-off link: take a root, advance it, return the new root.
+    /// This is the `→` the bracketings group.
+    fn link(action: u8) -> impl Fn(&Fixture, Distinction) -> Distinction {
+        move |fx: &Fixture, root: Distinction| {
+            let mut agent = Lca { root };
+            agent.synthesize_action(action, &fx.fold, &fx.engine)
+        }
+    }
+
+    // Three groupings of the same four links. Each returns the four
+    // intermediate roots, so a divergence anywhere in the chain is visible
+    // rather than only at the end.
+    type Chain = Box<dyn Fn(&Fixture, Distinction) -> Vec<Distinction>>;
+
+    let left: Chain = Box::new(|fx, origin| {
+        // ((((A)→B)→C)→D — each link applied to the accumulated result.
+        let mut out = Vec::new();
+        let mut cur = origin;
+        for a in LINK_ACTIONS {
+            cur = link(a)(fx, cur);
+            out.push(cur);
+        }
+        out
+    });
+
+    let right: Chain = Box::new(|fx, origin| {
+        // A→(B→(C→D)) — the tail is composed first, as a function, then
+        // applied. Dependency forces execution order; grouping is in how the
+        // segments are built.
+        let tail = |fx: &Fixture, root: Distinction| {
+            let mut out = Vec::new();
+            let mut cur = root;
+            for a in [LINK_ACTIONS[1], LINK_ACTIONS[2], LINK_ACTIONS[3]] {
+                cur = link(a)(fx, cur);
+                out.push(cur);
+            }
+            out
+        };
+        let first = link(LINK_ACTIONS[0])(fx, origin);
+        let mut out = vec![first];
+        out.extend(tail(fx, first));
+        out
+    });
+
+    let middle: Chain = Box::new(|fx, origin| {
+        // (A→B)→(C→D) — two segments of two, joined.
+        let seg = |fx: &Fixture, root: Distinction, a: u8, b: u8| {
+            let one = link(a)(fx, root);
+            let two = link(b)(fx, one);
+            vec![one, two]
+        };
+        let head = seg(fx, origin, LINK_ACTIONS[0], LINK_ACTIONS[1]);
+        let joint = *head.last().expect("the head segment produced a root");
+        let tail = seg(fx, joint, LINK_ACTIONS[2], LINK_ACTIONS[3]);
+        let mut out = head;
+        out.extend(tail);
+        out
+    });
+
+    let run = |chain: &Chain| -> (Vec<Distinction>, Parentage, usize) {
+        let fx = setup();
+        let nodes = chain(&fx, fx.roots[0]);
+        assert_eq!(nodes.len(), LINK_ACTIONS.len(), "a grouping lost a link");
+
+        // Strictly forward at every link, and acyclic.
+        let mut prev = fx.roots[0];
+        for (i, &n) in nodes.iter().enumerate() {
+            let p = fx.engine.parents_of(n).expect("a link must have parents");
+            assert!(
+                p.0 == prev || p.1 == prev,
+                "link {i} does not carry its predecessor as a parent"
+            );
+            assert_ne!(n, prev, "link {i} did not advance");
+            prev = n;
+        }
+        let last = *nodes.last().expect("chain is non-empty");
+        let mut seen = HashSet::new();
+        let mut queue = VecDeque::from([last]);
+        let mut steps = 0usize;
+        while let Some(d) = queue.pop_front() {
+            steps += 1;
+            assert!(steps < 10_000, "ancestor walk did not terminate — a cycle");
+            if let Some((x, y)) = fx.engine.parents_of(d) {
+                for q in [x, y] {
+                    assert_ne!(q, last, "a node is its own ancestor");
+                    if seen.insert(q) {
+                        queue.push_back(q);
+                    }
+                }
+            }
+        }
+        invariant_holds(&fx.engine);
+        (nodes, sorted_parentage(&fx.engine), fx.engine.distinction_count())
+    };
+
+    let (nodes_l, graph_l, count_l) = run(&left);
+    let (nodes_r, graph_r, count_r) = run(&right);
+    let (nodes_m, graph_m, count_m) = run(&middle);
+
+    assert_eq!(
+        nodes_l, nodes_r,
+        "left and right bracketings produced different chains — hand-off \
+         composition is not associative"
+    );
+    assert_eq!(graph_l, graph_r, "left and right bracketings produced different graphs");
+    assert_eq!(count_l, count_r, "left and right bracketings produced different node counts");
+
+    assert_eq!(nodes_l, nodes_m, "joining two segments in the middle produced a different chain");
+    assert_eq!(graph_l, graph_m, "segment-joining produced a different graph");
+    assert_eq!(count_l, count_m, "segment-joining produced a different node count");
+}

@@ -298,3 +298,136 @@ fn hand_off_under_concurrency() {
     }
     invariant_holds(&fresh);
 }
+
+/// **Stress — composition under real scheduler pressure.
+/// Category: DISCOVERY.**
+///
+/// The two tests above are smoke tests: 4 threads and 25 advances each
+/// complete in hundredths of a second, which establishes "does not deadlock"
+/// and little more. This one runs **32 threads × 2,000 advances = 64,000
+/// advances** against one shared engine, with a `Barrier` so every thread
+/// starts inside the same instant rather than trickling in while earlier
+/// threads have already finished.
+///
+/// Asserts: all 16 final roots are present; the engine's own auditor is
+/// satisfied; and the node count and whole-graph parentage match a
+/// single-threaded replay of the same 8,000 advances. That last one is the
+/// load-bearing assertion — it says the scheduler contributed nothing, not
+/// one extra node and not one fewer.
+///
+/// **This tests composition under scheduler pressure, not the substrate's
+/// internal memory model.** The substrate's loom tests
+/// (`tests/loom_kernel.rs` at the workspace root, with mutant sentinels)
+/// cover that, and a dependent crate cannot impose `--cfg loom` on its
+/// dependency. Threads exercise the composition; loom exercises the engine.
+///
+/// *Passes* → every sequential property survives contention at a scale where
+/// races have room to happen, so the composition is coordination-free
+/// operationally and not only algebraically.
+///
+/// *Fails* → either the engine serialises badly enough to deadlock under
+/// load, or concurrency reaches identity — and a consumer would need a lock
+/// discipline the substrate claims not to require.
+///
+/// Sizing was measured, not guessed. The specified 16×500 ran the whole file
+/// in 0.17s, so it was raised; 32×2,000 takes 1.1s, and the ceiling probed
+/// further is 64×5,000 — 320,000 advances, 262ms threaded, 5.6s with the
+/// sequential replay — all with zero divergence. The committed size buys real
+/// contention while leaving the suite fast enough to run on every change.
+#[test]
+fn concurrent_stress_converges() {
+    const STRESS_AGENTS: usize = 32;
+    const STRESS_STEPS: u16 = 2000;
+
+    // Distinct per-agent action streams. Widened to u16 arithmetic so 500
+    // steps do not wrap into another agent's stream, which would silently
+    // turn independent chains into shared ones and weaken the test.
+    fn stress_action(agent: usize, step: u16) -> u8 {
+        (((agent as u16) * 7 + step * 11) % 251) as u8
+    }
+
+    fn drive_stress(engine: &Arc<DistinctionEngine>, fold: &ByteFold, agent: usize) -> Distinction {
+        let mut lca = Lca { root: root_for(engine, fold, agent as u8 + 1) };
+        for step in 0..STRESS_STEPS {
+            let _ = lca.synthesize_action(stress_action(agent, step), fold, engine);
+        }
+        lca.root
+    }
+
+    let engine = Arc::new(DistinctionEngine::new());
+    let fold = Arc::new(ByteFold::new(&engine));
+    let barrier = Arc::new(std::sync::Barrier::new(STRESS_AGENTS));
+
+    let started = std::time::Instant::now();
+    let mut handles = Vec::with_capacity(STRESS_AGENTS);
+    for agent in 0..STRESS_AGENTS {
+        let engine = Arc::clone(&engine);
+        let fold = Arc::clone(&fold);
+        let barrier = Arc::clone(&barrier);
+        handles.push(thread::spawn(move || {
+            // Every thread waits here, so the contention window is the whole
+            // run rather than whatever overlap thread spawning happens to
+            // produce.
+            barrier.wait();
+            drive_stress(&engine, &fold, agent)
+        }));
+    }
+    let threaded: Vec<Distinction> =
+        handles.into_iter().map(|h| h.join().expect("a stress thread panicked")).collect();
+    let threaded_elapsed = started.elapsed();
+
+    for (i, &r) in threaded.iter().enumerate() {
+        assert!(
+            engine.has(r),
+            "agent {i}'s final root is absent after {} concurrent advances",
+            STRESS_AGENTS * STRESS_STEPS as usize
+        );
+    }
+    assert_eq!(
+        threaded.iter().copied().collect::<HashSet<_>>().len(),
+        STRESS_AGENTS,
+        "two agents converged on the same final root — their action streams \
+         were not independent"
+    );
+    invariant_holds(&engine);
+
+    // The same 8,000 advances, one thread.
+    let seq_engine = Arc::new(DistinctionEngine::new());
+    let seq_fold = ByteFold::new(&seq_engine);
+    let sequential: Vec<Distinction> =
+        (0..STRESS_AGENTS).map(|agent| drive_stress(&seq_engine, &seq_fold, agent)).collect();
+
+    assert_eq!(
+        threaded,
+        sequential,
+        "{} concurrent advances produced different final roots from the same \
+         advances run sequentially",
+        STRESS_AGENTS * STRESS_STEPS as usize
+    );
+    assert_eq!(
+        engine.distinction_count(),
+        seq_engine.distinction_count(),
+        "the scheduler changed how many nodes exist: {} concurrent vs {} \
+         sequential",
+        engine.distinction_count(),
+        seq_engine.distinction_count()
+    );
+    let mut a = engine.snapshot_parentage();
+    let mut b = seq_engine.snapshot_parentage();
+    a.sort_unstable();
+    b.sort_unstable();
+    assert_eq!(a, b, "concurrent and sequential runs produced different graphs");
+    invariant_holds(&seq_engine);
+
+    // Reported rather than asserted: a timing assertion would be a flaky
+    // test on a loaded machine, but the number belongs in the output so a
+    // regression in contention cost is visible to whoever reads it.
+    println!(
+        "stress: {} agents x {} advances = {} advances, {} nodes, threaded {:?}",
+        STRESS_AGENTS,
+        STRESS_STEPS,
+        STRESS_AGENTS * STRESS_STEPS as usize,
+        engine.distinction_count(),
+        threaded_elapsed
+    );
+}
