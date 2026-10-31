@@ -375,9 +375,30 @@ and are **not published with 2.0.0**:
 ```
 crates/koru-lambda-agents/src/
   lib.rs              declarations + re-exports
+  lca.rs              Lca — the consumer surface
   validator.rs        ConsensusValidator
   commitment.rs       CommitmentAgent + BatchCommitment
 ```
+
+### The consumer surface, and where the force is
+
+Every consumer-facing function in that crate takes an `Lca` — one witness,
+one root, one discipline for advancing it — and none of them takes an engine.
+**That is the force, and it is at that crate's boundary.** It is a convention
+enforced at one API edge, not a guarantee the type system makes: the
+substrate's operator and reads stay public and undecorated, because
+`docs/SPEC.md` specifies them, a conforming implementation in another
+language implements them, and tests and tools read them directly. A consumer
+that prefers to call `synthesize` itself still can, and gets no help from the
+agents crate.
+
+`Lca` is deliberately *not* in the substrate. Two of this project's own rules
+place it outside: the membership test — delete a construct, and if two
+conforming implementations still agree on every byte it does not belong in
+the crate identity depends on — and `docs/SPEC.md` §2a, which states that a
+consumer advancing no root is still conforming. A substrate whose consumer
+API forced advancing would be stricter than its own specification. The
+substrate's published surface is unchanged by the consumer surface existing.
 
 Each subsystem is a worked example of the LCA pattern with real
 consensus-protocol semantics. They demonstrate how a productive consumer
