@@ -29,11 +29,21 @@ if [ "${CHECK_API_DOCKER:-0}" = "1" ]; then
         echo "  Start it with:  open -a Docker" >&2
         exit 127
     fi
-    echo "check-api: image=$IMAGE (installs cargo-public-api; slow first run)"
+    echo "check-api: image=$IMAGE (installs the pinned nightly and cargo-public-api; slow first run)"
+    # The image's own nightly is whatever date it was built from, and rustdoc
+    # JSON drifts between nightlies — running the gate against it reports a
+    # surface change that is really a format change (`-> SynthesisOutcome`
+    # became `-> Self` between 2026-06-27 and 2026-10-20). So the container
+    # installs the same pin CI uses and makes it the default, which is what
+    # `api_snapshot.sh` then resolves. Without this the Docker check cannot
+    # mirror the job it exists to reproduce.
     exec docker run --rm \
         -e CARGO_TARGET_DIR=/work/target-linux-api \
         -v "$PWD:/work" -w /work "$IMAGE" \
-        bash -c "cargo install cargo-public-api --locked && ./scripts/gates/api_snapshot.sh"
+        bash -c "rustup toolchain install ${PINNED_NIGHTLY} \
+            && rustup default ${PINNED_NIGHTLY} \
+            && cargo install cargo-public-api --locked \
+            && ./scripts/gates/api_snapshot.sh"
 fi
 
 if ! command -v rustup >/dev/null 2>&1; then

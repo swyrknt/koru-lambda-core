@@ -20,6 +20,47 @@ if ! command -v cargo-public-api >/dev/null 2>&1; then
     exit 127
 fi
 
+# `cargo public-api` builds rustdoc JSON, which requires a nightly toolchain,
+# and with no toolchain named it reaches for one called literally `nightly`.
+# That is the bug that kept the `api-surface` job red from the day the branch
+# was first gated: CI installs the pinned `nightly-2026-06-27`, whose rustup
+# name is *dated*, so no toolchain called `nightly` exists on the runner and
+# all three crates failed with
+#
+#   error: toolchain 'nightly-x86_64-unknown-linux-gnu' is not installed
+#   Error: Failed to build rustdoc JSON (see stderr)
+#
+# before rustdoc ran at all. It reproduced only in a container, because every
+# development machine here happens to have a plain `nightly` installed, and
+# that was the one dimension four earlier reproduction attempts never varied.
+#
+# So the toolchain is resolved here rather than left to the tool. Preferring
+# the *active default* is what keeps the pin in one place: CI sets the default
+# to the dated nightly via `dtolnay/rust-toolchain`, so this uses that pin
+# without repeating the date, and `scripts/check-api.sh` still overrides it
+# explicitly for a host whose default is stable.
+if [ -z "${RUSTUP_TOOLCHAIN:-}" ]; then
+    if ! command -v rustup >/dev/null 2>&1; then
+        echo "api_snapshot: rustup is not available, so no nightly can be selected" >&2
+        exit 127
+    fi
+    active=$(rustup show active-toolchain 2>/dev/null | head -1 | cut -d' ' -f1 || true)
+    if [ "${active#nightly}" != "$active" ]; then
+        RUSTUP_TOOLCHAIN="$active"
+    else
+        RUSTUP_TOOLCHAIN=$(rustup toolchain list 2>/dev/null \
+            | cut -d' ' -f1 | grep '^nightly' | head -1 || true)
+    fi
+    if [ -z "$RUSTUP_TOOLCHAIN" ]; then
+        echo "api_snapshot: no nightly toolchain is installed, and rustdoc JSON needs one" >&2
+        echo "  rustup toolchain install nightly-2026-06-27" >&2
+        echo "  (the date that generated the committed api/*.txt — see scripts/check-api.sh)" >&2
+        exit 127
+    fi
+    export RUSTUP_TOOLCHAIN
+fi
+echo "api_snapshot: rustdoc JSON via ${RUSTUP_TOOLCHAIN}" >&2
+
 mkdir -p api
 fail=0
 tmp=$(mktemp -d)
