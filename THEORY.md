@@ -440,20 +440,26 @@ candidate's parents either include the root it replaces or they do not. The
 substrate does not need to name that comparison to make it available, and the
 contract that *chooses* to advance belongs to consumers, who ship with it.
 
-**Encoding, for non-advancing consumers only.** Nothing requires a
-*non-advancing* consumer to carry one root. Multi-root consumers, consumers
-that synthesize from non-root state, and consumers that ignore perspective
-entirely are all legal *as consumers*, and all get the substrate's
-guarantees, because those flow from the axioms and not from the consumer's
-shape. They cannot claim agent status, because agent status is a reading of
-the graph that requires advancing.
+**Encoding, and narrower than it has been written twice.** Every consumer
+that synthesizes advances, so multi-root consumers and consumers that
+synthesize from non-root state both fall under the Derived claim above: they
+anchor at roots — several, or transient — whether or not they name them.
+Listing them here as *non-advancing* contradicted that claim. What remains
+outside the derivation is one case: a consumer that performs no synthesis. It
+is permitted and it is not a counterexample. It receives every axiom's
+guarantee about each identifier it reads, and none about whatever it
+remembers, because what it remembers is **in no graph** — neither this one,
+whether reached through a consumer crate's surface or through the operator
+directly, nor one of its own. The Encoding is the absence of a rule
+compelling a consumer to put its own state in a graph.
 
-*Scope corrected 2026-10-18.* This block previously read "Nothing requires a
+*Scope corrected twice.* On 2026-10-18 this block read "Nothing requires a
 consumer to carry one root" without qualification, which contradicted the
-Derived claim above it: if every advance is an anchoring, then a consumer
-that advances does carry a root, and the only question is whether it names
-it. The Encoding is real but narrower than it was written — it is a debt only
-for consumers that do not advance.
+Derived claim above it, and was narrowed to non-advancing consumers. That
+narrowing kept a list of three shapes, **two of which advance** — so the
+contradiction survived in the examples after being removed from the sentence.
+Corrected again 2026-10-31. The debt was never about consumer shape; it is
+about whether a consumer's own state is in a graph at all.
 
 ---
 
