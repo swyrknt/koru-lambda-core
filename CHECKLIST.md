@@ -639,7 +639,8 @@ one.
 ## LAND — The published artifact
 
 - [ ] LAND-11 A "Built on this" section names the **domains**, not the repositories — physics, cognition, space, ephemeral state, notarisation. Twenty `koru-*` repos by one author reads as a hobby; the same facts as five domains read as five independent confirmations. Same evidence, opposite verdict.
-- [ ] LAND-12 *(superseded by LAND-11)* A "Built on this" section names the downstream projects — spatial, cognitive, physical — with links. It shows the substrate's reach without shipping any of their weight, which is the whole argument for the minimal core.
+- [~] LAND-12 **[cut]** *(superseded by LAND-11)* A "Built on this" section names the downstream projects — spatial, cognitive, physical — with links. It shows the substrate's reach without shipping any of their weight, which is the whole argument for the minimal core.
+  - cut 2026-10-30: Superseded by LAND-11, which the item's own text has said since it was written. The two ask for the same section by two incompatible rules — LAND-12 names repositories, LAND-11 names domains — and naming repositories is what `scripts/gates/no_consumer_names.sh` exists to refuse. Left open it also miscounted the release: `release_ready.sh` reported 66 where the blocking set was 65.
 
 - [ ] LAND-1 README first screen, in order: the ≤25-word claim (LAND-4), a runnable example with its printed output, then the cross-runtime byte-equality claim in one sentence. Theory is linked below the fold, not led with.
 - [ ] LAND-2 DEMO-1 and DEMO-4 run against the **published** npm tarball and crates.io package in CI, with no `wasm-pack` step. Today every demo requires a Rust toolchain and a local build, so no demo is runnable by someone who installs the package. *(not blocking: deferred with the bindings — see the `JS` section below the line.)*
