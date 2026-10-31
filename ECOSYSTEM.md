@@ -178,6 +178,9 @@ measured with a two-crate repro rather than assumed.*
 pattern is a pattern and not an axiom, and it names three legal shapes that
 do not follow it: multi-root, non-root, and no-perspective consumers.
 
+Stated exactly: forced for consumers that advance, chosen for consumers that
+do not — `docs/SPEC.md` §2a defines the advance those three shapes decline.
+
 The rule: **one agent is one causal role** — one root, one discipline for
 advancing it. A need with a different advance discipline is a new agent; a
 need with the same discipline is a parameter on an existing one.
