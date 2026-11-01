@@ -11,8 +11,10 @@
 #
 #   - a commit SHA        -> must exist in this repository
 #   - a repo-relative path -> must exist on disk
+#   - a `path.rs::test_name` -> the file must exist AND define that fn
 #
-# Test names are NOT checked, and this header used to say they were — "checked
+# Bare snake_case test names are still NOT checked, and this header used to
+# say they were — "checked
 # by scripts/gates/checklist_tests.sh (separate gate)", naming a file that has
 # never existed. The token regex below also omits ':', so a `module::test_name`
 # reference was not even captured. Every evidence line citing a test went
@@ -38,6 +40,23 @@
 # would make test references checkable without guessing which tokens are
 # tests. That is a process change for the owner to accept, not something to
 # impose retroactively, so it is written down here rather than half-built.
+#
+# PROC-7's live half closed 2026-11-01, and the convention the paragraph above
+# asked for turned out to already exist. Evidence lines cite tests two ways:
+# as a bare token, which is the unclosable case analysed above, and as
+# `tests/file.rs::test_name`, which is unambiguous — the path half says which
+# file and the `::` half says which function. That form is checked now: the
+# file must be tracked and must define `fn <test_name>`. Zero exemptions,
+# because the form cannot be confused with a dependency name or a struct
+# field.
+#
+# What this does not do is run `cargo test -- --list`. A gate in the
+# `Repository gates` job must not need a compiled workspace — that job builds
+# nothing, by design, which is why it is the one that runs in seconds. So the
+# check is "a function by that name is defined in that file", not "a test by
+# that name is collected". A `#[cfg(feature)]`-gated test, or one renamed in
+# the same commit as its citation, would pass this and fail a real run. The
+# gap is narrow and named rather than hidden.
 #
 # Prose in the evidence line is fine — it is the references that are checked.
 set -euo pipefail
@@ -85,6 +104,19 @@ while IFS= read -r line_no; do
                 report "$item_id: evidence names $expanded, which does not exist"
             fi
         done
+    done
+
+    # Test citations of the form `path.rs::test_name` (PROC-7). Unambiguous,
+    # unlike a bare token, so this needs no exemption list.
+    for cite in $(printf '%s' "$next" | grep -oE '`[A-Za-z0-9_./-]+\.rs::[A-Za-z0-9_]+`' | tr -d '`' || true); do
+        cite_file="${cite%%::*}"
+        cite_fn="${cite##*::}"
+        checked_refs=$((checked_refs + 1))
+        if [ ! -e "$cite_file" ]; then
+            report "$item_id: evidence cites $cite, but $cite_file does not exist"
+        elif ! grep -qE "fn[[:space:]]+${cite_fn}[[:space:]]*\(" "$cite_file"; then
+            report "$item_id: evidence cites $cite, but $cite_file defines no fn $cite_fn"
+        fi
     done
 done < <(grep -nE '^- \[x\] ' "$CHECKLIST" | cut -d: -f1)
 

@@ -14,13 +14,17 @@
 # tree, and `version` so the published artifact names what it needs. This
 # gate checks the version half; `crate_boundary.sh` still owns direction.
 #
-# It deliberately does NOT rule on `=` against `^`. Which to use is a policy
-# question with a real trade-off — an exact pin makes a bindings crate and
-# its substrate move together, a caret lets a consumer absorb patches and be
-# the thing that notices when one breaks — and PKG-11 records a decision that
-# the manifests currently contradict. A gate that picked a side would be
-# enforcing an unmade decision. It prints the requirement instead, so the
-# shape is visible in CI output rather than only in a manifest nobody opens.
+# PKG-11's policy is `=2.0.0` for all intra-workspace edges; this gate
+# enforces it. The earlier abstention existed because the item and the
+# manifests disagreed; `c102e7d` aligned them.
+#
+# What the policy is not: a claim that a caret is wrong in general. A consumer
+# absorbing substrate patches is how anyone finds out a patch broke a
+# consumer, and that is worth having — but it is worth having in a *separate*
+# repository, which is PKG-12's job. Inside one workspace a caret buys
+# nothing, because the `path` resolves to the working tree whatever the
+# requirement says. The requirement is still printed, so the shape stays
+# visible in CI output rather than only in a manifest nobody opens.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -61,6 +65,14 @@ for p in sorted(m["packages"], key=lambda q: q["name"]):
                 "path. Local development would build against the registry "
                 "instead of the working tree."
             )
+        if req != "*" and not req.startswith("="):
+            bad.append(
+                who + " depends on " + dep + " as " + req + ", not an exact "
+                "pin. The PKG-11 policy is an exact pin for every "
+                "intra-workspace edge; a caret belongs in a separate "
+                "repository, where absorbing a patch is how a consumer "
+                "notices a break."
+            )
 
 if bad:
     print("dep_pins: intra-workspace dependencies with the wrong shape", file=sys.stderr)
@@ -69,7 +81,7 @@ if bad:
     print("    (want both: path = \"...\", version = \"...\")", file=sys.stderr)
     sys.exit(1)
 
-print("dep_pins: clean - " + str(len(rows)) + " intra-workspace dependencies, each with a path and a version")
+print("dep_pins: clean - " + str(len(rows)) + " intra-workspace dependencies, each with a path and an exact version")
 for a, b, req, _ in rows:
     print("    " + a + " -> " + b + "  " + req)
 '
