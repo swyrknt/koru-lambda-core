@@ -71,7 +71,6 @@ Three objects are constitutive: **witness** (engine + verify), **vantage** (proj
   - `cargo test` in debug and release
   - `wasm-pack test --node --features wasm`
   - loom
-  - miri subset
   - MSRV 1.80
   - `RUSTDOCFLAGS=-D warnings cargo doc`
   - `cargo audit` + `cargo deny`
@@ -425,8 +424,10 @@ check — and the first one that sits under a published guarantee.
   - evidence: `tests/public_surface.rs` pins eight messages across `ParseError`, `VerifyError`, `ReplayError` and `RestoreError`, triggered rather than constructed because `#[non_exhaustive]` stops an external crate building the variants at all. `InvariantError`'s five are covered in-crate by `src/engine.rs`'s six `auditor_catches_*` tests, which inject a specific corruption each.
   - Two were unreachable, and they needed different answers. **`SerializeError::EntryTooLarge`** was a public, documented error variant no test could construct: the guard was `u32::try_from(vbytes.len())` inside the entry loop, so reaching it needed a per-node output above four gibibytes. Extracted as `narrow_output_len`, which `narrow_output_len_refuses_above_u32_max` now calls directly with `u32::MAX as usize + 1` — a real test of the real guard, not a mock.
   - **`RestoreError::IntegerOverflow`** cannot be reached, and not for want of trying: both construction sites are `usize::try_from(u64)`, which is infallible wherever `usize` is 64 bits. The variant exists for wasm32, where `usize` is narrower than the wire's `u64` length fields, so the test that would reach it is a wasm one — deferred with the bindings (CONF-7, CONF-12). `integer_overflow_is_unreachable_where_usize_is_64_bits` states that as an assertion rather than leaving it as a gap: if it ever fails, `usize` got narrower and the variant became live.
-- [x] TST-5 The miri subset passes and is listed in CI
+- [~] TST-5 **[cut]** The miri subset passes and is listed in CI
   - evidence: `.github/workflows/ci.yml` miri job @ 699a872; `cargo +nightly miri test -p koru-lambda-core --lib` exits 0
+  - **Un-ticked and cut 2026-10-31: the job was dropped (`e30f338`).** Miri had no unsafe of ours to check — `scripts/gates/unsafe_forbidden.sh` asserts all four library roots forbid it across 60 tracked Rust files — and the threaded tests do not terminate under its interpreter: six attempts, three timeouts, the last at 45 minutes with 57 of the lib's tests run. What covers the ground is `unsafe_forbidden.sh` for the absence of unsafe and the loom model check, including its two mutant sentinels, for concurrency.
+  - `checklist_evidence.sh` passes either way — it resolves the cited path and `ci.yml` exists. No gate catches a `[x]` whose claim has become false. Same class as the shallow-clone finding. Gate-freeze in effect; reported, not fixed.
 
 ## API — Public surface
 
