@@ -124,8 +124,15 @@ same thing.
 
 Passing a distinction that the receiving engine has not witnessed to
 `synthesize` is a programmer error, not a runtime condition to handle.
+It is caught **before any state change**: the check runs ahead of
+insertion, so a rejected call leaves the engine byte-identical rather
+than partially advanced.
 
 ## 4. The lift
+
+*`THEORY.md` calls this section's subject the **Fold Law** (Law 11, a
+corollary rather than an independent law). The rule is specified here; the
+name and its probe are there.*
 
 The operator combines distinctions. Getting a value that is *not* a
 distinction into the graph is the lift, and it is the substrate's only
@@ -338,6 +345,9 @@ for any node reachable by more than one route, which `Undirected` makes
 possible on every graph and `Downstream` makes possible on any diamond.
 
 ### 6.1 Degree
+
+*`THEORY.md` calls this read's law the **Coding Law** (Law 12). The
+definition is specified here; the law and its probe are there.*
 
 The degree of a node is the number of **edges incident to it**. The edge
 set of an engine is:
