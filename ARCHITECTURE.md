@@ -520,7 +520,6 @@ cargo test --release                       # full test suite
 cargo clippy --all-targets --release       # bare lint
 cargo clippy --all-targets --features wasm --release  # wasm lint
 cargo build --release                      # rlib + cdylib + staticlib
-cargo +nightly miri test --lib             # UB check on substrate
 wasm-pack test --node --features wasm      # WASM tests
 ```
 

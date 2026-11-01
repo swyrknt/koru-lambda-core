@@ -204,8 +204,10 @@ Runs automatically on every:
 
 These four block every merge. They are the floor, not the whole pipeline:
 `ci.yml` also carries jobs for the feature matrix, the wasm bindings,
-rustdoc, MSRV, loom, miri, the API snapshot, semver, advisories, the
-package dry-run, and the examples and demos. There is no coverage job.
+rustdoc, MSRV on both the substrate and the agents crate, loom, the API
+snapshot, semver, advisories, the package dry-run, and the examples and
+demos. There is no coverage job, and no Miri job — see the comment where it
+used to be in `ci.yml` for why.
 
 #### Gate 1: Repository gates
 ```yaml

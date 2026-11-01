@@ -3,7 +3,7 @@
 # fails, that divergence is itself a bug worth fixing.
 #
 # Usage: ./scripts/check.sh [--fast]
-#   --fast skips the slow jobs (loom, miri, wasm, demos) for an inner loop.
+#   --fast skips the slow jobs (loom, wasm, demos) for an inner loop.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -74,7 +74,7 @@ step "rustdoc"
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features
 
 if [ "$fast" -eq 1 ]; then
-    printf '\nfast mode: skipped clippy/wasm32, loom, miri, wasm tests, demos\n'
+    printf '\nfast mode: skipped clippy/wasm32, loom, wasm tests, demos\n'
     exit 0
 fi
 

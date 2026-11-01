@@ -176,14 +176,13 @@ jobs:
         env:
           RUSTFLAGS: --cfg loom --cfg loom_mutant
 
-  miri:
-    name: Miri (subset)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-        with: { components: miri }
-      - run: cargo miri test -p koru-lambda-core --lib
+  # Miri is not run here. The crate forbids unsafe in all four library
+  # roots (unsafe_forbidden.sh), so Miri has no unsafe code of ours to
+  # check. Its unique value would be concurrency, and the crate's threaded
+  # tests take 45+ minutes under Miri's interpreter — beyond any CI budget.
+  # Concurrency is covered by the loom model check in this file. If a
+  # future change introduces unsafe, re-enable Miri and it will have a
+  # target.
 
   api-surface:
     name: API snapshot
