@@ -2,7 +2,7 @@
 //! `canonical_bytes()` output between native Rust builds and the wasm
 //! build for identical synthesis histories.
 //!
-//! Cond D (see `tests/cond_d_falsifier.rs`) covers cross-engine
+//! Cond D (see `tests/projection_is_engine_independent.rs`) covers cross-engine
 //! byte-equivalence within one compilation target. Cond D′ extends the
 //! guarantee into the cross-target axis: if the wasm build ever
 //! produces different canonical bytes than native for the same

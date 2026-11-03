@@ -603,17 +603,36 @@ satisfy everything above and still fail them:
 
 Stated here so that a reader finds them rather than discovers them.
 
-- **Identifier width.** 128 bits, unversioned (§1). A deliberate
+- **Identifier width** (DEC-5). 128 bits, unversioned (§1). A deliberate
   collision search is bounded near 2^64. An in-engine collision would
   present as ordinary saturation and would not be detected.
-- **Growth.** The engine is append-only. Nothing is evicted, and the
-  substrate provides no persistence of its own.
+- **Growth** (DEC-6). The engine is append-only. Nothing is evicted, and
+  the substrate provides no persistence of its own. Eviction is foreclosed
+  rather than unimplemented: removing an interior node fails the engine's
+  own structural auditor, because its children would then name a parent the
+  engine does not hold.
 - **Provenance.** Identifiers carry no origin and are not scoped to an
   application (§2.1).
 - **Merge semantics.** Combining two engines' histories is set union
   over append-only parentage. That is a grow-only set, not a general
   conflict-resolution mechanism: there are no registers, sequences or
   deletions.
+- **No domain separation inside the identifier** (DEC-4). Identity is a
+  function of content alone. There is no domain, namespace or application
+  tag inside an identifier, and none can be added within major 2: a tag in
+  the hash is the separate naming layer §2's content addressing excludes.
+  A consumer needing separation obtains it as an **anchor parameter of the
+  fold** (§4.2), which changes the values folded rather than the operator.
+  Two domains that fold the same bytes under different anchors obtain
+  different identifiers; two that use the same anchor do not.
+- **Four things a consumer cannot implement** (DEC-10). `CoreSignal` is
+  sealed, so the substrate's internal dispatch is not extensible, and
+  `Boundary` and `Direction` are closed, so there is no custom traversal
+  bound. `ReadOnlyEngine` is **not** sealed, so alternative engines remain
+  possible. What a consumer *can* do was measured from an external crate
+  against the public API alone: define its own `Signal`, materialize it,
+  obtain canonical bytes and a projection identity, and restore its own
+  type — with no escape hatch.
 - **Not a consensus protocol.** Two parties that perform the same
   operations agree on the resulting bytes. Nothing here decides which
   operations should be performed, in what order, or by whom.

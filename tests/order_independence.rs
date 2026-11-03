@@ -5,7 +5,7 @@
 //! queried at quiescence with the same `{root, direction, boundary, signal}`,
 //! must produce byte-identical `canonical_bytes`.
 //!
-//! That experiment did not exist. `cond_d_falsifier.rs` is the test that
+//! That experiment did not exist. `projection_is_engine_independent.rs` is the test that
 //! looks like it — but it drives both engines from one closure over one
 //! corpus in one order, and its own comments say "identical synthesis
 //! histories". Identical input producing identical output is Axiom 1

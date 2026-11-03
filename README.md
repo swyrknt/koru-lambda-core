@@ -79,6 +79,32 @@ console.log("child:", idToHex(verified));
 Migrating from `koru-lambda-core@1.2.0` on npm? See
 the JS migration notes in the repository (https://github.com/swyrknt/koru-lambda-core/blob/main/docs/MIGRATION_JS.md).
 
+## Check an identifier yourself, with no toolchain
+
+Identity is `SHA-256(min(a,b) ‖ max(a,b))` truncated to the first 16 bytes,
+and nothing else. The two primordials are fixed constants, so the first
+child this substrate can produce is computable with a command you already
+have:
+
+```bash
+printf '%s' \
+  '0000000000000000000000000000000001000000000000000000000000000000' \
+  | xxd -r -p | shasum -a 256 | cut -c1-32
+```
+
+```
+6cc4f0e930b34481d03a4134331852ea
+```
+
+That is `synthesize(d₀, d₁)`. The same value appears in
+[`conformance/vectors.json`](conformance/vectors.json), which every
+conforming implementation certifies against, and a live engine reproduces it
+in `tests/conformance_fixture.rs`. Three sources, one number — and you did
+not install anything to check the third against the first.
+
+`min` and `max` are over the raw bytes, which is what makes the operator
+commutative: `synthesize(a, b)` and `synthesize(b, a)` hash the same input.
+
 ## Demos
 
 Four use-cases from simple to complex, ported to both languages as

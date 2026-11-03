@@ -328,7 +328,7 @@ println!("  All final distinctions identical: {}", final_id);
 
 ```
 tests/
-├── cond_d_falsifier.rs     # Cross-engine projection independence
+├── projection_is_engine_independent.rs     # Cross-engine projection independence
 ├── cond_d_prime.rs         # Cross-target byte equivalence vs. the vectors
 ├── loom_kernel.rs          # Loom model check (needs --cfg loom)
 ├── projection_smoke.rs     # Projection surface and wire-format round trips

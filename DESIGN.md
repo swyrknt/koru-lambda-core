@@ -121,6 +121,19 @@ below is anchor-linked to [`THEORY.md`](THEORY.md), which is authoritative;
 this section describes what the code ships today plus the anchor-tagged
 targets that land in E02/E03.
 
+**The anchor and the alphabet covary in the shipped configuration.**
+`domain_anchor` derives its anchor from the fold it is handed —
+`synthesize(synthesize(d₀, d₁), fold.tip(domain))` — so the anchor is a
+child of a tip from the same alphabet. That is not an axiom violation: the
+anchor is an ordinary distinction and the fold's guard still holds for it.
+What it means is narrower and worth stating plainly: **no measurement taken
+inside this repository can separate the two factors.** Every probe that
+varies the anchor varies a node derived from the alphabet, so a result
+attributed to one is attributable to the other. That is why the Fold Law
+stood unexamined long enough to be demoted to a corollary rather than
+refuted — nothing in tree could tell the hub-tracks-anchor reading from the
+hub-tracks-alphabet one until a probe was built to vary them independently.
+
 ### The operator
 
 The substrate exposes one write-side entry point:

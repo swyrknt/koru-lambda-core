@@ -45,7 +45,7 @@ without extra state.
   injection is now closed at the type level, not just in debug builds.
   Ships in commit `10cebaf`.
 
-- **Cond D cross-engine falsifier probe** — `tests/cond_d_falsifier.rs`
+- **Cond D cross-engine falsifier probe** — `tests/projection_is_engine_independent.rs`
   ships as a `#[test]` converting `THEORY.md § The synthesis/projection
   dual` from a spec claim into a CI-attested theorem. Two independent
   engines with identical synthesis histories, queried with the same

@@ -1,17 +1,31 @@
-//! Cond D cross-engine projection falsifier — the shipping test that
-//! discharges `THEORY.md § The synthesis/projection dual` from a spec
-//! claim into a CI-attested theorem.
+//! Projection is engine-independent: two engines with identical synthesis
+//! histories produce byte-identical projection output for the same
+//! specification, at quiescence.
 //!
-//! Corresponds to the cross-engine condition in `docs/SPEC.md` §9. The probe fails
-//! loudly if two independent engines with identical synthesis histories
-//! produce byte-different projection output for the same spec at
-//! quiescence — i.e. if projection materialization turns out to be an
-//! engine-side artifact rather than a theory-forced object.
+//! That is the cross-engine condition of `docs/SPEC.md` §9, and the thing it
+//! rules out is projection materialization being an engine-side artifact —
+//! something that depends on which engine asked rather than on what the
+//! graph holds. If it were, two conforming implementations could agree on
+//! every identifier and still disagree on every projection.
 //!
-//! Shipping the §7 falsifier as a `#[test]` converts Cond D from a spec
-//! claim into a CI-attested theorem. The theory gains continuous
-//! falsifiability — every commit that touches synthesis, projection,
-//! or wire format either preserves Cond D or fails this test.
+//! Scope, so the name does not overclaim, and this is the part the old name
+//! obscured. Both engines are driven from **one closure over one corpus in
+//! one order**. So what this establishes is determinism (Axiom 1) extended
+//! across engine instances — same operations, different engine, same bytes.
+//! It does **not** establish the order-independence of Law 8 or Law 9, which
+//! its former name and position implied: nothing here shuffles the history.
+//! `tests/order_independence.rs` is the test that does, and the gap between
+//! the two went unnoticed for three months because this file's name sounded
+//! like it covered both.
+//!
+//! The other axis is one compilation target, two engines; `tests/cond_d_prime.rs`
+//! covers one history, two targets. Neither is a substitute for the other.
+//!
+//! *Renamed from `cond_d_falsifier.rs` per PRB-5. The old name required a
+//! reader to know what "Cond D" meant, and the docstring cited the condition
+//! as both §9 and §7 in consecutive paragraphs: §7 is the wire format, §9 is
+//! Conditions. One of the two was simply wrong, and a reader checking the
+//! claim would have landed in the wrong section half the time.*
 
 // Native-only: `rand = "=0.8.5"` (workspace-pinned) is not available on
 // wasm32 (moved to `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]`

@@ -400,7 +400,7 @@ makes a tractable observer possible at all.
 *Falsifier:* two engines with the same history, queried with the same
 `{root, direction, boundary, signal}` at quiescence, must produce
 byte-identical output. If not, the projection is an engine-side artifact and
-this section is wrong. Run by `tests/cond_d_falsifier.rs` for the single-order
+this section is wrong. Run by `tests/projection_is_engine_independent.rs` for the single-order
 case and `tests/order_independence.rs` across topological reorderings.
 
 ## Using the substrate

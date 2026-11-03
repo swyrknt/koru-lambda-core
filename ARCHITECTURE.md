@@ -299,6 +299,19 @@ The substrate's only free parameter, and one rule at three levels. All
 three call the same private fold; the levels differ only in which
 alphabet supplies the element tips.
 
+**The anchor and the alphabet covary in the shipped configuration.**
+`domain_anchor` derives its anchor from the fold it is handed —
+`synthesize(synthesize(d₀, d₁), fold.tip(domain))` — so the anchor is a
+child of a tip from the same alphabet. That is not an axiom violation: the
+anchor is an ordinary distinction and the fold's guard still holds for it.
+What it means is narrower and worth stating plainly: **no measurement taken
+inside this repository can separate the two factors.** Every probe that
+varies the anchor varies a node derived from the alphabet, so a result
+attributed to one is attributable to the other. That is why the Fold Law
+stood unexamined long enough to be demoted to a corollary rather than
+refuted — nothing in tree could tell the hub-tracks-anchor reading from the
+hub-tracks-alphabet one until a probe was built to vary them independently.
+
 | Level | Alphabet | Elements | Entry point |
 |---|---|---|---|
 | bits | `{d₀, d₁}` | a byte's 8 bits | `ByteMapping::map_byte_to_distinction` |

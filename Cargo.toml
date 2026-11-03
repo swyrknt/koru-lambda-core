@@ -8,7 +8,7 @@ resolver = "2"
 # carry different `rand` pins.
 [workspace.dependencies]
 # Exact pin — load-bearing for StdRng sequence stability across CI runs
-# (see tests/cond_d_falsifier.rs; a loosened requirement could silently
+# (see tests/projection_is_engine_independent.rs; a loosened requirement could silently
 # flake the cross-engine falsifier as StdRng byte output changes) and for
 # the pinned coding-law corpus (see CORPUS_PROVENANCE.md).
 rand = "=0.9.5"
@@ -18,13 +18,13 @@ name = "koru-lambda-core"
 version = "2.0.0"
 edition = "2021"
 rust-version = "1.80"
-description = "A minimal axiomatic system for distributed computation"
+description = "Content-addressed structural identity: fold values into an append-only graph whose identifiers two machines reach without coordinating"
 authors = ["Sawyer Kent <sawyerkent.me@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/swyrknt/koru-lambda-core"
-keywords = ["distributed", "consensus", "wasm", "deterministic"]
-categories = ["algorithms", "wasm"]
+keywords = ["content-addressed", "deterministic", "hash", "graph", "wasm"]
+categories = ["data-structures", "wasm"]
 # Keep the JS/TS example scaffold in the git repo, out of the crates.io
 # tarball. `examples/wasm-demos/` targets external discoverers landing
 # on npmjs.com, not crates.io consumers. The `examples/*.rs` binaries
