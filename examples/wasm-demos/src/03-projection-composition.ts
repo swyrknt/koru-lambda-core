@@ -22,8 +22,13 @@ const d0 = engine.d0();
 const d1 = engine.d1();
 
 const c = engine.synthesize(d0, d1);
+
+// `d` and the next line extend the lattice *downstream* of `c`. Every
+// projection below is upstream from `c`, so the cone is `{c, d0, d1}` with
+// or without them and all three projection ids are unchanged. Mirrors the
+// same note in examples/03_projection_composition.rs.
 const d = engine.synthesize(c, d0);
-engine.synthesize(d, c); // grows the cone; projections anchor at c
+engine.synthesize(d, c);
 
 const adjacency = engine.projectAdjacency(c, "upstream", 2);
 const degree = engine.projectDegree(c, "upstream", 2);

@@ -5,10 +5,59 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 [![Build Status](https://github.com/swyrknt/koru-lambda-core/actions/workflows/ci.yml/badge.svg)](https://github.com/swyrknt/koru-lambda-core/actions)
 
-A minimal axiomatic substrate for distinction theory. One operator, two
-primordials, four axioms enforced inline; correctness properties of
-larger distributed or stateful systems emerge as consequences of that
-kernel, not as protocol they have to layer on top.
+Fold values into an append-only graph of content-addressed identifiers;
+any two conforming runtimes compute the same sixteen bytes without
+coordinating.
+
+```rust
+use koru_lambda_core::DistinctionEngine;
+
+let engine = DistinctionEngine::new();
+let child = engine.synthesize(engine.d0(), engine.d1());
+println!("{}", child.to_hex());
+```
+
+```
+6cc4f0e930b34481d03a4134331852ea
+```
+
+Those thirty-two hex characters are not this machine's answer. The same
+synthesis prints the same value in JS/TS through the wasm bindings and in
+the [Python reference implementation](conformance/reference/substrate.py),
+and you can reproduce it below with `shasum` and no toolchain at all —
+because the identifier is a hash of its two parents and nothing else.
+
+## Which layer do you want?
+
+Most readers want the layer above this one.
+
+- **Building something that keeps state** — an agent, a validator, a log
+  that has to agree with another copy of itself: you want the agent layer,
+  [`koru-lambda-agents`](https://github.com/swyrknt/koru-lambda-core/tree/main/crates/koru-lambda-agents).
+  It carries the patterns this crate deliberately does not.
+- **Building another agent layer, a binding, or a second implementation of
+  the specification**: you want this crate directly, plus
+  [`docs/SPEC.md`](docs/SPEC.md).
+
+[`ECOSYSTEM.md`](ECOSYSTEM.md) describes how the layers divide and why the
+substrate is kept small enough to freeze.
+
+## What this is not
+
+- **Not a general CRDT.** This is a grow-only set. Merging is union and
+  nothing is ever retracted, so it needs no conflict resolution — and it
+  cannot express a counter that goes down, a register that gets
+  overwritten, or anything else that forgets.
+- **Not consensus.** Two engines that fold the same values reach the same
+  identifiers because the identifiers are Merkle-determined, not because
+  anyone voted. Nothing here decides *which* history is the real one; that
+  is the question a consensus protocol answers and this substrate does not.
+  The consensus agents in
+  [`koru-lambda-agents`](https://github.com/swyrknt/koru-lambda-core/tree/main/crates/koru-lambda-agents)
+  are reference consumers built on top, not part of the substrate.
+- **Not a 256-bit identifier.** Identifiers are 128 bits — SHA-256
+  truncated to its first 16 bytes. The collision margin is a birthday bound
+  on 128 bits, not on 256. `docs/SPEC.md` §11 records the limit.
 
 ## Install
 
@@ -78,6 +127,65 @@ console.log("child:", idToHex(verified));
 
 Migrating from `koru-lambda-core@1.2.0` on npm? See
 the JS migration notes in the repository (https://github.com/swyrknt/koru-lambda-core/blob/main/docs/MIGRATION_JS.md).
+
+## Lifting your data
+
+Your values are not distinctions, and `synthesize` will not take them. To
+get a distinction from a domain value, fold its bytes onto an anchor:
+
+```rust
+use koru_lambda_core::{domain_anchor, ByteFold, Canonicalizable, Distinction,
+                       DistinctionEngine, DomainLabel};
+
+const SENSORS: DomainLabel = DomainLabel::new(b'S');
+
+struct Reading { sensor: u8, celsius: i16 }
+
+impl Canonicalizable for Reading {
+    fn to_canonical_structure(&self, fold: &ByteFold, engine: &DistinctionEngine)
+        -> Distinction
+    {
+        let mut bytes = vec![self.sensor];
+        bytes.extend_from_slice(&self.celsius.to_be_bytes());
+        fold.fold(domain_anchor(engine, fold, SENSORS), &bytes, engine)
+    }
+}
+```
+
+Two things a stranger gets wrong here, both of which the substrate will
+tell you about loudly:
+
+- **Anchor on a synthesized root, never on an element tip.** `fold` panics
+  on a tip, because the first step could collapse through idempotence and
+  silently drop an element. `domain_anchor` returns a safe anchor.
+- **The anchor is what separates domains.** The same bytes under a
+  different `DomainLabel` fold to a different identifier. The label is a
+  parameter of the anchor, never a tag inside the hash — `docs/SPEC.md`
+  §4.2.
+
+A stateful consumer then carries one root forward, synthesizing each new
+value into it. That is the agent layer's job, not the substrate's:
+
+```rust
+use koru_lambda_agents::Lca;
+use std::sync::Arc;
+
+let engine = Arc::new(DistinctionEngine::new());
+let fold = Arc::new(ByteFold::new(&engine));
+let seed = domain_anchor(&engine, &fold, SENSORS);
+
+let mut lca = Lca::with_fold(&engine, Arc::clone(&fold), seed);
+let root = lca.advance(Reading { sensor: 1, celsius: 21 });
+println!("{}", root.to_hex());
+```
+
+```
+5cd3a11a987b003855a585697e3db48e
+```
+
+A second engine, built independently and given the same reading, advances
+to the same sixteen bytes. That is the whole point: the root is a function
+of the history, not of the process that walked it.
 
 ## Check an identifier yourself, with no toolchain
 

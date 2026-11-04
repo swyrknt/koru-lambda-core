@@ -1,8 +1,9 @@
 // Tier 4 — wire_format_roundtrip. Content addressing at two scales:
 //
 //   1. Distinction: `idToHex` → wire → `idFromHex` → `verify`.
-//   2. Projection: two engines / same history →
-//      byte-identical `canonicalBytes` (Cond D, live).
+//   2. Projection: two engines / same history → byte-identical
+//      `canonicalBytes` *and* an identical `projectionId` (Cond D, live).
+//      Both are asserted below, as in the Rust example.
 //
 //   npm run demo:4
 //

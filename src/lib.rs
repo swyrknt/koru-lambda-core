@@ -1,18 +1,48 @@
 //! # koru-lambda-core
 //!
-//! Minimal axiomatic substrate implementing distinction theory.
-//! See `THEORY.md` for the theory, `ARCHITECTURE.md` for the code structure,
-//! and `DESIGN.md` for the v2.0 plan.
+//! Fold values into an append-only graph of content-addressed identifiers;
+//! any two conforming runtimes compute the same sixteen bytes without
+//! coordinating.
 //!
 //! ## Substrate at a glance
 //!
 //! - One operator: `DistinctionEngine::synthesize`
 //! - Two primordials: `engine.d0()`, `engine.d1()`
-//! - Four axioms enforced inline: determinism, commutativity, idempotence,
+//! - Four rules enforced inline: determinism, commutativity, idempotence,
 //!   content addressing.
 //! - Three canonical O(1) projections — saturation check, parent
 //!   lookup, degree query — backed by a single `nodes` map of
 //!   `<id, EngineNode { parents, degree }>`.
+//!
+//! ## Lifting your data
+//!
+//! Your values are not distinctions. To get one, fold the value's bytes
+//! onto an anchor:
+//!
+//! ```
+//! use koru_lambda_core::{domain_anchor, ByteFold, DistinctionEngine, DomainLabel};
+//!
+//! let engine = DistinctionEngine::new();
+//! let fold = ByteFold::new(&engine);
+//!
+//! // Anchor first. `fold` rejects an element tip as the anchor, because the
+//! // first step could collapse through idempotence and drop an element.
+//! let anchor = domain_anchor(&engine, &fold, DomainLabel::new(b'S'));
+//! let root = fold.fold(anchor, b"sensor-1:21C", &engine);
+//! assert!(engine.has(root));
+//! ```
+//!
+//! The anchor is what separates domains: the same bytes under a different
+//! [`DomainLabel`] fold to a different identifier, so two domains cannot
+//! collide by accident. The label is a parameter of the anchor, never a tag
+//! inside the hash (`docs/SPEC.md` §4.2).
+//!
+//! A stateful consumer then carries one root forward, synthesizing each new
+//! value into it. That pattern is the agent layer's, not the substrate's —
+//! see the `koru-lambda-agents` crate.
+//!
+//! Further reading: `docs/SPEC.md` is the normative contract, `THEORY.md`
+//! covers the underlying theory, and `ARCHITECTURE.md` the code structure.
 //!
 //! ## Your first projection
 //!

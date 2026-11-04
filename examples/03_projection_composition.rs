@@ -20,8 +20,15 @@ fn main() {
     let d1 = engine.d1();
 
     let c = engine.synthesize(d0, d1);
+
+    // `d` and `_e` extend the lattice *downstream* of `c`. Every projection
+    // below is Upstream from `c`, so the cone is `{c, d0, d1}` with or
+    // without them and all three projection ids are unchanged. Note that
+    // `engine.degree(c)` does rise from 2 to 4 as they are created, while
+    // the Degree *signal* over this cone does not: it reports each member's
+    // degree within the cone, not its incident-edge count in the graph.
     let d = engine.synthesize(c, d0);
-    let _e = engine.synthesize(d, c); // grows the cone; projections anchor at c
+    let _e = engine.synthesize(d, c);
 
     let adjacency =
         engine.project(c).direction(Direction::Upstream).hops(2).signal(Adjacency).materialize();
