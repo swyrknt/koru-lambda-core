@@ -25,7 +25,11 @@ const c = engine.synthesize(d0, d1);
 
 // `d` and the next line extend the lattice *downstream* of `c`. Every
 // projection below is upstream from `c`, so the cone is `{c, d0, d1}` with
-// or without them and all three projection ids are unchanged. Mirrors the
+// or without them: no projection gains a member. They are not inert,
+// though — the second line raises the anchor's degree from 3 to 4, and the
+// Degree signal reports exactly that, so the Degree projection's
+// canonicalBytes differ. All three projection *ids* are identical either
+// way, because an id hashes the four axes and never the output. Mirrors the
 // same note in examples/03_projection_composition.rs.
 const d = engine.synthesize(c, d0);
 engine.synthesize(d, c);

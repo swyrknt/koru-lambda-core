@@ -23,10 +23,18 @@ fn main() {
 
     // `d` and `_e` extend the lattice *downstream* of `c`. Every projection
     // below is Upstream from `c`, so the cone is `{c, d0, d1}` with or
-    // without them and all three projection ids are unchanged. Note that
-    // `engine.degree(c)` does rise from 2 to 4 as they are created, while
-    // the Degree *signal* over this cone does not: it reports each member's
-    // degree within the cone, not its incident-edge count in the graph.
+    // without them: no projection gains a member.
+    //
+    // They are not inert, though. `_e` raises `engine.degree(c)` from 3 to 4,
+    // and the Degree signal reports exactly `engine.degree`, so the Degree
+    // projection's `canonical_bytes` differ with and without this line.
+    // Adjacency and HopDistance read no degree and their bytes do not change.
+    //
+    // All three projection *ids* are identical either way, because a
+    // projection id hashes the four axes — root, direction, boundary, signal
+    // — and never the output. The id names the question; `canonical_bytes`
+    // carries the answer. That is why the printed id below cannot move when
+    // the graph does.
     let d = engine.synthesize(c, d0);
     let _e = engine.synthesize(d, c);
 

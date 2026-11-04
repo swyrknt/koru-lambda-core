@@ -605,7 +605,17 @@ Stated here so that a reader finds them rather than discovers them.
 
 - **Identifier width** (DEC-5). 128 bits, unversioned (§1). A deliberate
   collision search is bounded near 2^64. An in-engine collision would
-  present as ordinary saturation and would not be detected.
+  present as ordinary saturation and would not be detected: the colliding
+  synthesis finds the identifier already present and returns it as
+  non-novel, so the second parent pair is never recorded, and recomputing
+  the content address over the parents an engine *did* store still
+  reproduces that identifier. An implementation's own content-address audit
+  therefore passes over a collided graph. Conformance does not require
+  detecting this, because no implementation can: detection needs the
+  history, which §2.1 does not oblige an engine to retain apart from the
+  graph. Which theory claims this conditions — and which, including engine
+  independence and order-independent reconstruction, it does not — is
+  stated under *Limits* in `THEORY.md`.
 - **Growth** (DEC-6). The engine is append-only. Nothing is evicted, and
   the substrate provides no persistence of its own. Eviction is foreclosed
   rather than unimplemented: removing an interior node fails the engine's

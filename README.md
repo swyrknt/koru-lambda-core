@@ -229,10 +229,21 @@ translations of the same behavior:
 
 Tier 4 (`wire_format_roundtrip`) live-verifies **Cond D**: two engines
 running the same synthesis history produce byte-identical
-`canonical_bytes` on the same projection. The Rust and JS/TS tier-4
-demos independently produce the same projection id byte-for-byte —
-that's **Cond D′ cross-target byte-equivalence** demonstrated at
-runtime. `tests/cond_d_prime.rs` carries the same attestation in CI.
+`canonical_bytes` on the same projection. The Rust and JS/TS tier-4 demos
+produce the same projection id byte-for-byte, and `tests/cond_d_prime.rs`
+asserts the same constants under both targets in CI.
+
+State that result narrowly, because it is easy to overstate. The JS/TS side
+is this crate compiled to `wasm32`, so the two runs are **two compilations
+of one source, not two independent witnesses**. What they establish is that
+identity survives a 32-bit pointer width and a different codegen backend —
+continuously, on every commit. They do not establish byte-order
+independence: both targets are little-endian, CI has no big-endian and no
+32-bit native target, so byte order rests on the encoding being *specified*
+(`docs/SPEC.md` §7) rather than on being tested. The claim that the
+specification alone is sufficient can only be falsified by an
+implementation written from it in another language, which is what
+`conformance/vectors.json` exists for.
 
 Running the JS/TS side:
 

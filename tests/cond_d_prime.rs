@@ -6,9 +6,17 @@
 //! byte-equivalence within one compilation target. Cond D′ extends the
 //! guarantee into the cross-target axis: if the wasm build ever
 //! produces different canonical bytes than native for the same
-//! synthesis history — endianness bug, projection ordering drift,
-//! hash-algorithm divergence, wasm-bindgen serialization drift — this
-//! test fails loudly.
+//! synthesis history — projection ordering drift, hash-algorithm
+//! divergence, wasm-bindgen serialization drift, or a width assumption
+//! that only holds at 64 bits — this test fails loudly.
+//!
+//! What it does **not** cover is byte order. Both targets are
+//! little-endian, so no arrangement of this test can catch an endianness
+//! bug; byte order is fixed by `docs/SPEC.md` §7 specifying it, not by
+//! being exercised here. Nor are the two runs independent witnesses —
+//! they are two compilations of one source, which is why conformance is
+//! certified against `conformance/vectors.json` rather than against the
+//! other target.
 //!
 //! Fixture is a small deterministic synthesis chain plus one
 //! `Adjacency` projection materialization at `hops(2)` upstream of `c`.

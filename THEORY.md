@@ -36,7 +36,8 @@ This document is upstream of `ARCHITECTURE.md`, `ECOSYSTEM.md`,
 
 Downstream references to concept-terms here (`synthesize`, `commutativity`,
 `idempotence`, `content addressing`, `Law 5`–`Law 12`, `Fold Law`,
-`Coding Law`, `local causal agent`, `synthesis-projection dual`) resolve to
+`Coding Law`, `Lift Law`, `local causal agent`, `synthesis-projection dual`)
+resolve to
 `THEORY.md#section-slug`. Section anchors survive edits; line numbers do not,
 and are rejected by `scripts/gates/doc_anchors.sh`.
 
@@ -93,8 +94,7 @@ itself. Idempotence is the property of a binary operation that `f(a, a) = a`,
 which is what is written here. The old name described a **consequence**: the
 parentage relation is irreflexive, because no distinction is its own parent.
 Spencer-Brown calls exactly this law — `αα ≈ α` — the Law of Calling, which
-is the correspondence worth keeping. Downstream documents still carry the old
-name; correcting them is tracked.*
+is the correspondence worth keeping.*
 
 **Axiom 4 — Content addressing.** A distinction's identity *is* the hash of
 its parents' canonical pair. The bytes of `c` encode how `c` was made. There
@@ -261,6 +261,38 @@ substrate, and the gate must say which workload it speaks for.
 High-attention distinctions become high-degree nodes with no ranking
 algorithm, no curator and no training — *given* workloads that do not saturate
 heavily.
+
+### The Lift Law
+
+**Derived that it exists; Encoding which one it is.** Two statuses, because
+the two halves of this claim have different standing and conflating them is
+how downstream documents get the lift wrong.
+
+The operator is closed over distinctions: `synthesize` takes two and returns
+one. Nothing in the axioms admits a byte, an integer or a struct. So any use
+of the substrate on values that are not already distinctions requires a map
+*into* the graph, and that map is not optional — it is the substrate's third
+forced object, after the operator and the primordials. **Derived:** the
+axioms give an operator and a starting pair, and neither can accept a value
+from outside; a lift is what the gap requires.
+
+Which lift, though, the axioms do not say. It is the substrate's **only free
+parameter** — everything else here is forced or chosen once and frozen — and
+it has exactly two sub-parameters:
+
+- **The seed-anchor**, which buys injectivity. Folding from an element tip can
+  collapse through idempotence at the first step and lose an element, so the
+  anchor must be a synthesized root. This is why distinct sequences get
+  distinct identifiers rather than merely usually getting them.
+- **The alphabet**, which shapes topology. Law 11 measured this: the hub
+  tracks the alphabet, not the anchor, so the alphabet decides where degree
+  concentrates and the anchor does not.
+
+`Canonicalizable` is the lift's trait and the anchored fold is its shipped
+instance. Because the lift is chosen rather than forced, its identity is
+pinned per major version rather than permanently — it moved between 1.x and
+2.0.0, and every lifted identifier changed with it. Operator-level identity
+did not move and cannot.
 
 ---
 
@@ -626,7 +658,31 @@ Nothing in the formalism. Two observations, both modest:
   wall is real and enforced.
 - **The lift is the one free parameter**, and the only thing whose identity is
   pinned per major version rather than permanently. It moved between 1.x and
-  2.0.0.
+  2.0.0. See *The Lift Law*.
+- **Identifiers are assumed injective, and an in-engine collision is
+  undetectable.** Identity is SHA-256 truncated to 16 bytes, so two distinct
+  parent pairs can in principle reach one identifier. Every law here is
+  stated over the graph an engine holds, and each stays true of that graph
+  under a collision; what a collision breaks is the correspondence between
+  the graph and the history that produced it. The claim that is conditional
+  is **Axiom 4's second sentence** — "the bytes of `c` encode how `c` was
+  made" — which holds only up to collision, and with it every read that
+  recovers structure *from* an identifier rather than from the witness
+  record.
+
+  **Laws 8 and 9 are not conditional on it.** A collision is a function of
+  content, so two engines with the same history collide identically and still
+  converge byte-for-byte. Agreement survives; faithfulness is what is at
+  risk.
+
+  It is undetectable because it presents as **Law 7 saturation**: the second
+  pair's synthesis finds the identifier already present, returns it as
+  non-novel, and never records the second parentage. Recomputing the content
+  address over the stored parents still reproduces the stored identifier, so
+  an engine's own content-address audit passes. Detecting it would require
+  the history, which an engine does not keep apart from the graph. At 128
+  bits the margin is a birthday bound, not a guarantee — `docs/SPEC.md` §11
+  records the width as a decision.
 
 ## Why the theory is small
 
