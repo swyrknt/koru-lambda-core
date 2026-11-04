@@ -82,8 +82,14 @@ while IFS= read -r line_no; do
         continue
     fi
 
-    # Commit SHAs: 7-40 hex chars appearing as a bare word or after '@'.
-    for sha in $(printf '%s' "$next" | grep -oE '\b[0-9a-f]{7,40}\b' || true); do
+    # Commit SHAs: an abbreviation of 7-12 hex chars, or a full 40.
+    #
+    # The repository's subject is 32-hex identifiers. No commit SHA in this
+    # checklist is abbreviated to 16 or 32 characters. Discriminating on width
+    # catches real SHAs without treating content-addressed identifiers as
+    # citations. If a 16-char SHA is ever written, this check will not catch
+    # it — but no such SHA has ever been written here.
+    for sha in $(printf '%s' "$next" | grep -oE '\b[0-9a-f]{7,12}\b|\b[0-9a-f]{40}\b' || true); do
         checked_refs=$((checked_refs + 1))
         if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
             report "$item_id: evidence names commit $sha, which does not exist"
