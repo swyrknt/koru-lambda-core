@@ -1,3 +1,7 @@
 node_modules
 pkg-node
 package-lock.json
+# Written by `cargo run --example 04_wire_format_roundtrip` and read by
+# `npm run demo:4`. Generated on every run of the Rust example, which is
+# the step before the JS demos in the `Examples and demos` CI job.
+handoff/

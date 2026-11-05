@@ -1,9 +1,14 @@
 # Changelog
 
 Budget-gate amendments and substrate changes land under `## Unreleased`
-so consumers see the ratchet before they migrate. The v2.0.0 section below is the coherent entry described in
-`DESIGN.md § "Path to v2.0.0"`; `## Unreleased` below it retains the
-pre-2.0.0 substrate close for provenance.
+so consumers see the ratchet before they migrate; `## Unreleased` below the
+v2.0.0 section retains the pre-2.0.0 substrate close for provenance.
+
+The breaking changes in the v2.0.0 section are derived from a mechanical
+public-API diff against the published 1.2.0, not from recollection. That diff
+is `api/DELTA-from-1.2.0.txt`, which is not part of the published package;
+regenerate it with
+`cargo public-api --simplified -p koru-lambda-core diff 1.2.0`.
 
 ## [2.0.0] - 2026-09-16
 
@@ -16,14 +21,22 @@ without extra state.
 ### Added
 
 - **Projection primitive** — `engine.project(root)` builder returning
-  `Projection` values. v2.0.0 lands the full API surface: 14 types +
-  4 traits + wire codec. Types include `Root`, `Direction { Downstream,
-  Upstream, Both }`, and the shipped `Signal` implementors `Adjacency`,
-  `Degree`, `HopDistance` (see `src/projection.rs`). The builder chain
+  `Projection` values. v2.0.0 lands the full API surface: 17 types +
+  4 traits + wire codec, counted from the repository's public-API snapshot
+  (`api/koru-lambda-core.txt`, not part of the published package). Types
+  include `Boundary`, `Direction { Upstream, Downstream, Undirected }`, and
+  the shipped `Signal` implementors `Adjacency`, `Degree`, `HopDistance`
+  (see `src/projection.rs`). The builder chain
   `engine.project(root).direction(..).hops(..).signal(..).materialize()`
-  returns a `Materialized<S: Signal>` carrying `projection_id()` +
+  returns a `Projection<'_, S: Signal>` carrying `projection_id()` +
   `canonical_bytes()`, both content-addressed on the spec
-  `{ Root, boundary, Direction, Signal }` at quiescence.
+  `{ root, boundary, direction, signal }` at quiescence.
+
+  This entry named three things that do not exist: a `Root` type (the
+  builder takes a `Distinction`), a `Materialized<S>` return type (it is
+  `Projection<'e, S>`), and a `Direction::Both` variant (it is
+  `Undirected`). The count was 14. All four were written from the design
+  rather than from the surface.
   `Signal` is object-unsafe by design (verified via `trybuild`).
   Ships in commit `8efa70c`.
 
@@ -54,6 +67,66 @@ without extra state.
   preserves Cond D or fails this test. Ships in commit `40b6d25`.
 
 ### Changed
+
+The five entries below were absent from this section until 2026-11-04. They
+are the largest breaks in the release, and they were missing because the
+section was written from memory of recent work rather than from the diff.
+Counts are unique items from `api/DELTA-from-1.2.0.txt`; the `--simplified`
+diff lists each item once per public re-export path, so the raw line count is
+roughly double.
+
+- **BREAKING: the `subsystems` module is removed in full** — six submodules
+  (`commitment`, `compactor`, `local_agent`, `network`, `parallel`,
+  `validator`) and 21 public types, including `CommitmentAgent`,
+  `ConsensusValidator`, `NetworkAgent`, `StructuralCompactor`,
+  `ParallelBatchProcessor`, `ParallelSynthesizer` and their action, stats
+  and batch types. This is ~500 of the 590 removed items on its own.
+
+  Nothing replaces them in this crate, and that is the point of the release:
+  a consensus validator, a network agent and a batch compactor are consumers
+  of the substrate, not parts of it. `scripts/gates/crate_boundary.sh`
+  asserts the dependency direction over the crate graph so the boundary is a
+  property of the build rather than a sentence in a document.
+
+- **BREAKING: the `ffi` module is removed in full** — 22 `extern "C"`
+  functions, the five `KORU_*` status constants, and the three opaque
+  `c_void` handle aliases `KoruEngine`, `KoruAgent`, `KoruValidator`.
+  2.0.0 publishes no C ABI. A C consumer stays on 1.2.0.
+
+- **BREAKING: a distinction's identity is sixteen bytes, not a `String`** —
+  `Distinction::id(&self) -> &str` and `Distinction::new(String)` are both
+  removed, and `Distinction` is now `#[repr(transparent)]` over `[u8; 16]`.
+  Every identifier that crossed an API boundary as text in 1.2.0 crosses as
+  bytes in 2.0.0; `to_hex()` and `RawDistinctionId::from_hex()` are the
+  display and parse boundaries. `Relationship`, which was
+  `pub type Relationship = (String, String)`, and `StateSnapshot` are
+  removed with it.
+
+- **BREAKING: `DistinctionEngine` loses the string-keyed and snapshot
+  accessors** — `get_distinction_by_id(&str)`,
+  `get_distinctions_snapshot()`, `get_relationships_snapshot()`,
+  `get_state_snapshot()` and `new_shared()` are removed. The replacements
+  are `has`, `snapshot_distinctions`, `snapshot_parentage` and
+  `Arc::new(DistinctionEngine::new())`.
+
+- **BREAKING: `synthesize`, `d0` and `d1` changed signature.** 1.2.0 took
+  and returned references — `synthesize(&self, &Distinction, &Distinction)`,
+  `d0(&self) -> &Distinction`. 2.0.0 takes and returns values:
+  `synthesize(&self, Distinction, Distinction) -> Distinction`,
+  `d0(&self) -> Distinction`. `Distinction` is `Copy` and sixteen bytes
+  wide, so passing it by reference costs an indirection and buys nothing.
+  Call sites drop their `&`.
+
+  `primitives::Canonicalizable::to_canonical_structure` likewise moved from
+  `&self` to `self` in the same pass, and has since gained a `&ByteFold`
+  parameter.
+
+- **BREAKING: `LocalCausalAgent` and `synthesize_causal_action` are not in
+  the substrate** — both moved to the agent layer, along with
+  `build_children_index`. The substrate ships `parents_of`, and
+  agent-ness is a reading of the graph rather than a type: every
+  non-primordial distinction is an advance of each of its parents, so a
+  trait asserting that only some types have it was the wrong shape.
 
 - **BREAKING: `Distinction::from_hex` is removed**, along with
   `impl FromStr`, `bytemuck::Pod` and `bytemuck::Zeroable`. External
@@ -143,9 +216,23 @@ actually breaks:
   nothing would accept, so nothing working breaks — but it fails loudly now
   instead of quietly.
 
-What genuinely did not change in signature: `synthesize`, `parents_of`,
-`degree`, `has`, `distinction_count` (each verified present in
-`api/koru-lambda-core.txt`). A consumer using only those is unaffected.
+- The `subsystems` and `ffi` modules are gone in full. There is no shim; a
+  consumer of either stays on 1.2.0 or moves to the agent layer.
+- `Distinction` no longer has a `String` identity. `id()` and
+  `new(String)` are gone, `Relationship` and `StateSnapshot` with them.
+- `synthesize`, `d0` and `d1` take and return `Distinction` by value.
+  Drop the `&` at the call site; the compiler points at every one.
+
+What genuinely did not change in signature: `parents_of`, `degree`, `has`
+and `distinction_count`.
+
+This list previously also named `synthesize`, and said a consumer using only
+these is unaffected. Both were wrong, and the parenthetical said why without
+noticing: the check was that each was "verified **present** in
+`api/koru-lambda-core.txt`". Present is not unchanged. `synthesize` is in the
+diff's *removed* set, because 1.2.0's took two `&Distinction` and 2.0.0's
+takes two `Distinction` — a break at every call site of the most-used
+function in the crate, reported as a compatibility guarantee.
 
 #### npm breaking changes
 
@@ -155,9 +242,14 @@ JS/wasm-bindgen surface is **not** additive. `WasmValidator`,
 replacement; `WasmEngine`'s method signatures move from string-typed to
 bytes-canonical; and `d0Id()` / `d1Id()` return different bytes than
 they did in 1.2 (16-byte primordials, not UTF-8 of `"0"` / `"1"`) — the
-one silent break in this release. See
-[docs/MIGRATION_JS.md](https://github.com/swyrknt/koru-lambda-core/blob/main/docs/MIGRATION_JS.md) for the full recipe list
-and migration checklist.
+one silent break in this release.
+
+This paragraph linked `docs/MIGRATION_JS.md` for "the full recipe list".
+That document is not in the published package and still describes an
+`init`/`initSync` surface that the npm package deferred with the bindings,
+so the link sent a reader of the shipped changelog to a file they do not
+have, for guidance that no longer applies. The three retired classes and
+the `d0Id()` / `d1Id()` byte change above are the whole of the break.
 
 ## Unreleased
 
@@ -245,7 +337,11 @@ release build, ~5min thermal idle):**
   cores) ≥ 4× ratio as regression watch, not gate. See
   `BUDGET_LOG.md` row 1 for measurement provenance and signers.
 
-### Docs — DESIGN.md v2 rewrite
+### Docs — design-document rewrite
+
+This subsection described the rewrite of `DESIGN.md`, which is not part of
+the published package. It is kept for provenance, with the file named rather
+than linked.
 
 **Removed sections:**
 

@@ -227,11 +227,19 @@ translations of the same behavior:
 | 3    | `cargo run --example 03_projection_composition` | `npm run demo:3` |
 | 4    | `cargo run --example 04_wire_format_roundtrip`  | `npm run demo:4` |
 
-Tier 4 (`wire_format_roundtrip`) live-verifies **Cond D**: two engines
-running the same synthesis history produce byte-identical
-`canonical_bytes` on the same projection. The Rust and JS/TS tier-4 demos
-produce the same projection id byte-for-byte, and `tests/cond_d_prime.rs`
-asserts the same constants under both targets in CI.
+Tier 4 (`wire_format_roundtrip`) live-verifies **Laws 8 and 9**: the same
+parent pairs replayed in a *different* topological order produce
+byte-identical `canonical_bytes` and an identical projection id. Replaying
+one fixed order twice would only show determinism, so the demo derives a new
+order and asserts it genuinely differs before comparing anything. It then
+tampers with the wire bytes at three offsets — two are refused, and the one
+that is accepted is printed and explained rather than omitted.
+
+Finally it hands off: the Rust example writes the history to a file, and
+`npm run demo:4` replays it in a separate Node process, in an order that
+process computes itself, and reproduces the same projection id. The Rust and
+JS/TS tier-4 demos print the same five identifiers byte-for-byte, and
+`tests/cond_d_prime.rs` asserts the same constants under both targets in CI.
 
 State that result narrowly, because it is easy to overstate. The JS/TS side
 is this crate compiled to `wasm32`, so the two runs are **two compilations

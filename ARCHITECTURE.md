@@ -123,6 +123,15 @@ pub struct DistinctionEngine {
 | Parent lookup | `nodes.get(id).parents` | Binary parentage (Law 5). Canonical child→parents projection used by replay, invariant checks, and parent walks. |
 | Degree query | `nodes.get(id).degree.load(Acquire)` + addend | Coding Law (Law 12), and the Fold Law corollary that `THEORY.md` withdrew from independent-law status — both stated as degree properties. The theory's central observability claim. |
 
+**A projection id names the question, not the answer.** `projection_id`
+hashes exactly the four axes — root, direction, boundary, and the
+signal's tag — so two materializations of the same projection over
+different graph states share an id while their `canonical_bytes` differ.
+The `Degree` signal is `engine.degree` with no scope-local reading, so
+appending downstream of a cone's anchor changes a `Degree` projection's
+bytes and cannot change its id. Byte-equality is the check that has
+content; an id match only says two readers asked the same question.
+
 Identity-IS-process: each distinction is one `EngineNode`. The
 `children_of` enumeration is *not* in the engine — `node.degree`
 carries the count the theory names; consumers that need to iterate

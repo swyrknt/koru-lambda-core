@@ -37,7 +37,7 @@ categories = ["data-structures", "wasm"]
 # --list` was shipping 92 files of which 32 were internal — the entire gate
 # suite (six of which read the excluded CHECKLIST.md, so they could not run
 # from an installed crate), the API review snapshots including the record of
-# 1,352 items removed since 1.2.0, proptest failure seeds, the internal
+# 590 public items removed since 1.2.0, proptest failure seeds, the internal
 # onboarding docs (one of which still prints v1.2's five-axiom set, and one of
 # which preserves deleted marketing prose verbatim), and a .gitignore naming
 # local tooling directories.
