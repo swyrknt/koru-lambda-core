@@ -59,6 +59,12 @@
 # gap is narrow and named rather than hidden.
 #
 # Prose in the evidence line is fine — it is the references that are checked.
+#
+# Known limitation, accepted rather than fixed: a GitHub Actions run ID
+# (11 digits) is indistinguishable from an abbreviated commit SHA in the 7-12
+# window, since every decimal digit is a hex digit. The convention is: commits
+# go in evidence, run IDs go in prose. If this changes, the gate needs a
+# marker.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
