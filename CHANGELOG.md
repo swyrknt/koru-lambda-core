@@ -187,6 +187,9 @@ roughly double.
 
 ### Fixed
 
+Both entries below cite repository files that are not in the published
+package, because what they record is a fix to this project's own tooling.
+
 - `clippy.toml:1` and `rustfmt.toml:1` — project name comments corrected
   from a stale `forma-core` rename artifact to `koru-lambda-core`.
 - `docs/development/GUARDRAILS.md:317-318` — CI badge URLs corrected
