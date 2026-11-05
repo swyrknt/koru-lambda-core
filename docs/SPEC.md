@@ -448,6 +448,13 @@ projection must already agree on which read it is — which they do, since
 they agreed on a `{root, direction, boundary, signal}` specification in
 order to ask for it.
 
+An identical `projection_id` is not evidence of identical bytes. §8 hashes
+the specification, not the output, so two parties holding the same id have
+agreed on the *question* — root, direction, boundary, signal — and not on
+the answer. Agreement on the answer is byte-equality of §7's
+`canonical_bytes`, and that is the comparison a conforming implementation
+must make.
+
 ## 8. Projection identity
 
 ```
