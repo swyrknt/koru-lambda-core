@@ -55,8 +55,8 @@ src/
   lib.rs              public re-exports
   engine.rs           Distinction, DistinctionEngine,
                       RawDistinctionId + verify, SynthesisOutcome
-  projection.rs       projection primitive (Root, Direction, Signal,
-                      Materialized) and its wire codec
+  projection.rs       projection primitive (Direction, Boundary, Signal,
+                      Projection) and its wire codec
   primitives.rs       Canonicalizable, ByteMapping, ByteFold,
                       DomainLabel, domain_anchor — the lift
   distinction_hex.rs  to_hex / from_hex / Display / Debug / serde
@@ -301,6 +301,41 @@ but an unrelated assignment — and that belongs in prose, where it now is.
 The contract that *chooses* to advance, and its `synthesize_causal_action`
 helper, ship in `koru-lambda-agents` with the consumers that use them. See
 [`THEORY.md § Using the substrate`](THEORY.md#using-the-substrate).
+
+### `projection.rs` — the projection primitive
+
+The read dual of `synthesize`, and the only module with a wire format.
+`docs/SPEC.md` §7 specifies its bytes and §8 its identity.
+
+What it exports: 13 structs, 4 enums, 4 traits and one free function.
+
+| Group | Items |
+|---|---|
+| The read | `Projection`, `ProjectionOutput`, `ProjectionId`, `ProjectionSpec` |
+| The builder | `ProjectionBuilder`, `ReadyBuilder`, and the typestate markers `NeedsDirection`, `NeedsBoundary`, `NeedsSignal` |
+| The axes | `Direction { Upstream, Downstream, Undirected }`, `Boundary { Hops(usize), Saturated }` — both `#[non_exhaustive]`, so a consumer's `match` needs a wildcard arm |
+| The signals | trait `Signal`, sealed `CoreSignal`, the shipped ZSTs `Adjacency`, `Degree`, `HopDistance`, plus `SignalContext` and `CanonicalBytes` |
+| Errors | `RestoreError { Malformed, SignalMismatch, ForeignEngine, IntegerOverflow }`, `SerializeError { EntryTooLarge }` |
+| Also | `ReadOnlyEngine`, and `signal_identity<S>(&S) -> [u8; 16]` |
+
+Entry points are on the engine: `project`, `project_arc` and
+`restore_projection`. A projection is specified by four axes — root,
+direction, boundary, signal — supplied through a typestate builder, so
+`engine.project(root).direction(..).hops(..).signal(..).materialize()` is the
+only path and an incomplete spec is a compile error rather than a runtime
+one. `materialize` walks the cone once and returns `Projection<'e, S>`,
+which carries `output()`, `canonical_bytes()` and `projection_id()`.
+
+`Signal` is object-unsafe by design, so there is no `dyn Signal` and a
+signal's output type is known statically; `tests/trybuild` asserts the
+compile failure. `CoreSignal` is sealed, which is what distinguishes the
+three shipped signals from a consumer's own — a consumer implements `Signal`
+and gets a restorable projection, because the restore takes the signal as an
+argument rather than recovering it from the wire.
+
+It is a separate module rather than part of `engine.rs` because it adds no
+state: every projection is computed from the engine's existing nodes at the
+time it is asked for.
 
 ### `primitives.rs` — the lift
 
