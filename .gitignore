@@ -67,6 +67,19 @@ logs/
 coverage/
 *.profraw
 
+# `cargo mutants` writes here, at the WORKSPACE ROOT rather than under
+# `target/`, so the rules above do not catch it. Untracked and unignored, its
+# 28 files (per-mutant diffs, outcomes.json, caught/missed/timeout/unviable)
+# are enumerated by `cargo package`: a `cargo mutants` run followed by a
+# publish would have shipped the mutation report to crates.io. Found by
+# running `cargo package --list` after PROC-10 and getting 91 files instead
+# of 63.
+mutants.out/
+
+# `cargo llvm-cov` keeps its instrumented build here. Same reasoning as
+# `target-linux*/` above — `/target/` and `**/target/` require the exact name.
+llvm-cov-target/
+
 # Build artifacts
 dist/
 pkg/
