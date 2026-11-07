@@ -610,19 +610,40 @@ satisfy everything above and still fail them:
 
 Stated here so that a reader finds them rather than discovers them.
 
-- **Identifier width** (DEC-5). 128 bits, unversioned (§1). A deliberate
-  collision search is bounded near 2^64. An in-engine collision would
-  present as ordinary saturation and would not be detected: the colliding
-  synthesis finds the identifier already present and returns it as
-  non-novel, so the second parent pair is never recorded, and recomputing
-  the content address over the parents an engine *did* store still
-  reproduces that identifier. An implementation's own content-address audit
-  therefore passes over a collided graph. Conformance does not require
-  detecting this, because no implementation can: detection needs the
-  history, which §2.1 does not oblige an engine to retain apart from the
-  graph. Which theory claims this conditions — and which, including engine
-  independence and order-independent reconstruction, it does not — is
-  stated under *Limits* in `THEORY.md`.
+- **Identifier collision** (DEC-5). An identifier is SHA-256(min ‖ max) truncated
+  to 128 bits. The accidental-collision probability is n²/2N: 1.5 × 10⁻²¹
+  at 10⁹ distinctions, and 0.5 at n ≈ 2.2 × 10¹⁹, which is 1.4 × 10²⁰
+  bytes at the measured 137.4 B per distinction. The adversarial case is
+  bounded by the witnessed-parent constraint: with m registered
+  distinctions an attacker addresses m(m−1)/2 candidate pairs, so a
+  collision is expected at m ≈ 7.2 × 10⁹, about 0.99 TB of registered
+  state. Depth 7 already offers 6.4 × 10¹⁶ candidates. The work factor is
+  2^64, which is out of reach of general-purpose hardware and inside the
+  reach of purpose-built SHA-256 silicon (a mining ASIC computes double-
+  SHA-256 over a fixed header and cannot be repointed here; the 2^64
+  figure measures silicon throughput, not an off-the-shelf attack). A
+  collision presents as saturation: the second pair is never recorded,
+  `parents_of` returns the pair recorded first, and the content-address
+  audit still passes. What an attacker does NOT gain: forged projection
+  bytes (`restore_projection` re-materialises locally), an unregistered
+  distinction accepted, or an already-recorded pair altered. Laws 8 and
+  9 still hold — two engines agree byte for byte, on the wrong graph. A
+  collision is a faithfulness failure, not an agreement failure.
+  Identifiers are unversioned: the wire format has a version byte (§7),
+  the identifier does not (§1), and there is no read-old/write-new path
+  because the identifier is the content address. Widening would repin
+  every published vector and invalidate every stored identifier in every
+  consumer database. DEC-5 accepts 128 bits, with this threat model
+  stated and the non-goal (no detection) explicit.
+
+  Conformance does not require detecting a collision, because no
+  implementation can: detection needs the history, which §2.1 does not
+  oblige an engine to retain apart from the graph. A deliberate collision
+  search remains bounded near 2^64 (§1); nothing here claims 128-bit
+  identifiers are collision-resistant in the 2^128 sense. Which theory
+  claims this conditions — and which, including engine independence and
+  order-independent reconstruction, it does not — is stated under *Limits*
+  in `THEORY.md`.
 - **Growth** (DEC-6). The engine is append-only. Nothing is evicted, and
   the substrate provides no persistence of its own. Eviction is foreclosed
   rather than unimplemented: removing an interior node fails the engine's
